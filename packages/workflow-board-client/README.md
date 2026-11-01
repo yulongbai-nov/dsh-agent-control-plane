@@ -26,7 +26,7 @@ return React.createElement(WorkflowBoard, {
 
 导航与 rc.5 官方 `workflow-run` 的实时成员门槛一致：投影显示为运行中、`parentSessionId` 与 `sessions.byId[childId].parentId` 精确一致、该 child 的统一 UI 状态或摘要显示正在运行，并且其 `projectionsBySession[childId].values.subagent.mode` 确认是 `one-shot` 或 `continuable`。本组件还要求来源 verified、静态拓扑完整且静态节点匹配唯一。缺任一条件就禁用按钮。由于当前持久日志投影**不会推导 running**，仅用此投影时按钮通常始终禁用；未来的宿主必须提供经过验证的实时成员状态，而不是根据 start 或 childId 猜测。调用 `openSession` 使用确认过的直接父 ID；rc.5 返回 void，无法捕获其内部异步导航失败。
 
-SVG 节点和表格行双向选择；列表按状态、阶段和模型筛选，不改变图坐标。图节点支持 Tab、Enter、Space，列表使用实际 button。颜色只引用 rc.5 `--dsw-alias-*` theme token，中文/英文界面由 `locale` prop 选择；将来 slot adapter 应从 Client locale 服务给此 prop 更新。style 是组件子节点，随卸载移除；没有全局 DOM、事件监听或计时器。与官方 UI 的 light/dark、实际焦点、屏幕阅读器体验尚待真实 GUI 验证，不能视为完成 R17。
+SVG 节点和表格行双向选择；列表按状态、阶段和模型筛选，不改变图坐标。筛选随 runId 和直接父会话隔离，同一运行的状态更新不会重置筛选；阶段或模型选项不再存在时回退为全部。图节点支持 Tab、Enter、Space，列表使用实际 button。颜色只引用 rc.5 `--dsw-alias-*` theme token，中文/英文界面由 `locale` prop 选择；将来 slot adapter 应从 Client locale 服务给此 prop 更新。style 是组件子节点，随卸载移除；没有全局 DOM、事件监听或计时器。与官方 UI 的 light/dark、实际焦点、屏幕阅读器体验尚待真实 GUI 验证，不能视为完成 R17。
 
 ## 运行测试
 

@@ -50,9 +50,7 @@ export function createWorkflowBoard(React) {
   function WorkflowBoard({ board, sessions, statuses, openSession, locale = 'zh' }) {
     const words = typeof locale === 'string' && locale.toLowerCase().startsWith('en') ? WORDS.en : WORDS.zh;
     const [selection, setSelection] = React.useState(null);
-    const [statusFilter, setStatusFilter] = React.useState('');
-    const [phaseFilter, setPhaseFilter] = React.useState('');
-    const [modelFilter, setModelFilter] = React.useState('');
+    const [filters, setFilters] = React.useState(null);
     const [openError, setOpenError] = React.useState('');
     const clipPrefix = React.useId();
     if (!board || board.version !== 1 || !board.topology || !board.layout || !Array.isArray(board.topology.nodes) || !Array.isArray(board.layout.nodes) || board.topology.nodes.some(node => !node || !validId(node.id)) || board.layout.nodes.some(node => !node || !validId(node.id))) {
@@ -98,6 +96,11 @@ export function createWorkflowBoard(React) {
     });
     const phases = [...new Set(topology.nodes.map(node => node.phase).filter(validId))];
     const models = [...new Set(topology.nodes.map(node => node.model).filter(validId))];
+    const sameRun = filters?.runId === board.runId && filters?.parentSessionId === board.parentSessionId;
+    const statusFilter = sameRun ? filters.status : '';
+    const phaseFilter = sameRun && phases.includes(filters.phase) ? filters.phase : '';
+    const modelFilter = sameRun && models.includes(filters.model) ? filters.model : '';
+    const changeFilter = (key, value) => setFilters({ runId: board.runId, parentSessionId: board.parentSessionId, status: statusFilter, phase: phaseFilter, model: modelFilter, [key]: value });
     const roster = topology.nodes.filter(node => (!statusFilter || stateOf(members[node.id]) === statusFilter) && (!phaseFilter || node.phase === phaseFilter) && (!modelFilter || node.model === modelFilter));
     const selectedNode = staticNodes.get(selected);
     const member = members[selected];
@@ -138,9 +141,9 @@ export function createWorkflowBoard(React) {
     const select = (label, all, value, change, options) => h('select', { 'aria-label': label, value, onChange: event => change(event.target.value) },
       h('option', { value: '' }, all), options.map(option => h('option', { key: option[0], value: option[0] }, option[1])));
     const table = h('section', { 'aria-label': words.roster }, h('h3', null, words.roster),
-      h('div', { className: 'filters' }, select(words.statusFilter, words.allStatuses, statusFilter, setStatusFilter, ['running', 'completed', 'failed', 'cancelled', 'unknown'].map(status => [status, words[status]])),
-        select(words.phaseFilter, words.allPhases, phaseFilter, setPhaseFilter, phases.map(phase => [phase, phase])),
-        select(words.modelFilter, words.allModels, modelFilter, setModelFilter, models.map(model => [model, model]))),
+      h('div', { className: 'filters' }, select(words.statusFilter, words.allStatuses, statusFilter, value => changeFilter('status', value), ['running', 'completed', 'failed', 'cancelled', 'unknown'].map(status => [status, words[status]])),
+        select(words.phaseFilter, words.allPhases, phaseFilter, value => changeFilter('phase', value), phases.map(phase => [phase, phase])),
+        select(words.modelFilter, words.allModels, modelFilter, value => changeFilter('model', value), models.map(model => [model, model]))),
       h('table', null, h('thead', null, h('tr', null, [words.node, words.phase, words.model, words.status].map(label => h('th', { scope: 'col', key: label }, label)))),
         h('tbody', null, roster.map(node => h('tr', { key: node.id, 'data-roster-id': node.id, 'data-selected': selected === node.id, onClick: () => setSelected(node.id) },
           h('th', { scope: 'row' }, h('button', { type: 'button', className: 'row-select', 'aria-pressed': selected === node.id, onClick: () => setSelected(node.id) }, node.label || words.unnamed)),

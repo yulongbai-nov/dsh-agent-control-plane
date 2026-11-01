@@ -85,6 +85,52 @@ test('graph and roster select same node, filters do not rearrange graph', () => 
   assert.deepEqual(rowsOf(tree).map(n => n.props['data-roster-id']), ['c']);
 });
 
+test('filters are scoped to run and parent, but survive status updates within one run', () => {
+  const board = makeBoard(), r = renderer();
+  board.statusByNode.c = { status: 'failed', seq: 1, childId: 'child' };
+  const props = { board, sessions: sampleData(), statuses: new Map(), openSession() {} };
+  const filter = (tree, name) => flatten(tree).find(node => node.type === 'select' && node.props['aria-label'] === name);
+  let tree = r.render(props);
+  for (const [name, value] of [['按状态筛选', 'failed'], ['按阶段筛选', 'two'], ['按模型筛选', 'terra']]) {
+    filter(tree, name).props.onChange({ target: { value } }); tree = r.render(props);
+  }
+  assert.deepEqual(rowsOf(tree).map(row => row.props['data-roster-id']), ['c']);
+  rowsOf(tree)[0].props.onClick();
+  tree = r.render(props);
+  const refreshed = { ...board, statusByNode: { ...board.statusByNode, c: { ...board.statusByNode.c, status: 'running' } } };
+  tree = r.render({ ...props, board: refreshed });
+  assert.deepEqual(['按状态筛选', '按阶段筛选', '按模型筛选'].map(name => filter(tree, name).props.value), ['failed', 'two', 'terra']);
+  assert.deepEqual(rowsOf(tree), []);
+  assert.equal(nodesOf(tree).find(node => node.props['data-node-id'] === 'c').props['aria-pressed'], true);
+  const otherRun = { ...board, runId: 'run-B' };
+  otherRun.topology = { ...board.topology, nodes: board.topology.nodes.map(node => ({ ...node, phase: 'new-phase', model: 'new-model' })) };
+  tree = r.render({ ...props, board: otherRun });
+  assert.deepEqual(['按状态筛选', '按阶段筛选', '按模型筛选'].map(name => filter(tree, name).props.value), ['', '', '']);
+  assert.equal(rowsOf(tree).length, 3);
+  assert.equal(rowsOf(tree).some(row => row.props['data-selected']), false);
+  filter(tree, '按阶段筛选').props.onChange({ target: { value: 'new-phase' } });
+  tree = r.render({ ...props, board: otherRun });
+  const otherParent = { ...otherRun, parentSessionId: 'another-parent' };
+  tree = r.render({ ...props, board: otherParent });
+  assert.equal(filter(tree, '按阶段筛选').props.value, '');
+  assert.equal(rowsOf(tree).length, 3);
+});
+
+test('removed phase and model options fall back without changing fixed status filter', () => {
+  const board = makeBoard(), r = renderer();
+  board.statusByNode.c = { status: 'failed', seq: 1 };
+  const props = { board };
+  const filter = (tree, name) => flatten(tree).find(node => node.type === 'select' && node.props['aria-label'] === name);
+  let tree = r.render(props);
+  for (const [name, value] of [['按状态筛选', 'failed'], ['按阶段筛选', 'two'], ['按模型筛选', 'terra']]) {
+    filter(tree, name).props.onChange({ target: { value } }); tree = r.render(props);
+  }
+  const next = { ...board, topology: { ...board.topology, nodes: board.topology.nodes.map(node => ({ ...node, phase: 'different', model: 'new' })) } };
+  tree = r.render({ board: next });
+  assert.deepEqual(['按状态筛选', '按阶段筛选', '按模型筛选'].map(name => filter(tree, name).props.value), ['failed', '', '']);
+  assert.deepEqual(rowsOf(tree).map(node => node.props['data-roster-id']), ['c']);
+});
+
 test('navigate only when rc.5 live member, identity and actual parent agree', () => {
   const board = makeBoard(), sessions = sampleData(), statuses = new Map([['child', { running: true }]]);
   const member = { status: 'running', childId: 'child' };
