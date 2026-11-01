@@ -36,6 +36,7 @@ window.__ModuleLoader__.load({
     const IMAGE_LIMIT = 250000;
 
     function validId(value) { return typeof value === 'string' && value.length > 0; }
+    function ownValue(object, key) { return object != null && Object.prototype.hasOwnProperty.call(object, key) ? object[key] : undefined; }
     function readObject(storage, key) {
       try {
         const value = JSON.parse(storage?.getItem(key) ?? '{}');
@@ -69,7 +70,7 @@ window.__ModuleLoader__.load({
       return undefined;
     }
     function avatarType(row, prefs) {
-      return prefs[row.id] ?? matchType(row.role) ?? matchType(row.agentPreset) ?? matchType(row.title) ?? 'lead';
+      return ownValue(prefs, row.id) ?? matchType(row.role) ?? matchType(row.agentPreset) ?? matchType(row.title) ?? 'lead';
     }
     function catalogOf(snapshot) {
       const entries = Array.isArray(snapshot?.values?.subagentCatalog) ? snapshot.values.subagentCatalog : undefined;
@@ -98,7 +99,7 @@ window.__ModuleLoader__.load({
       const rows = [], byId = list.byId ?? {}, projections = list.projectionsBySession ?? {};
       const listed = new Set(list.ids ?? []);
       const roots = (list.ids ?? []).filter(id => {
-        const row = byId[id];
+        const row = ownValue(byId, id);
         return validId(id) && row && row.origin !== 'subagent' && !(row.blank && !(row.retainedBy?.mainView > 0));
       });
       const incoming = new Map(), pending = [...new Set(roots)], scanned = new Set();
@@ -106,8 +107,8 @@ window.__ModuleLoader__.load({
         const id = pending[i];
         if (scanned.has(id)) continue;
         scanned.add(id);
-        const catalog = catalogOf(projections[id]);
-        if (catalog.state === 'migration-required' || byId[id]?.formatStatus === 'migration-required') continue;
+        const catalog = catalogOf(ownValue(projections, id));
+        if (catalog.state === 'migration-required' || ownValue(byId, id)?.formatStatus === 'migration-required') continue;
         for (const entry of catalog.entries) {
           if (!validId(entry?.id)) continue;
           incoming.set(entry.id, (incoming.get(entry.id) ?? 0) + 1);
@@ -118,8 +119,8 @@ window.__ModuleLoader__.load({
       for (const id of roots) rootCounts.set(id, (rootCounts.get(id) ?? 0) + 1);
       function visit(id, parentId, entry, level, ancestors, rowKey, parentKey) {
         if (!validId(id)) return;
-        const summary = byId[id];
-        const catalog = catalogOf(projections[id]);
+        const summary = ownValue(byId, id);
+        const catalog = catalogOf(ownValue(projections, id));
         const mode = entry?.mode;
         const external = mode === 'external';
         const unknownMode = parentId !== null && !external && mode !== 'one-shot' && mode !== 'continuable';
@@ -249,7 +250,7 @@ window.__ModuleLoader__.load({
       }
       function changeAvatar(id, type) {
         const next = { ...prefs };
-        if (type === '') delete next[id]; else if (TYPES.includes(type)) next[id] = type;
+        if (type === '') delete next[id]; else if (TYPES.includes(type)) Object.defineProperty(next, id, {value:type, enumerable:true, writable:true, configurable:true});
         if (!saveAvatarPrefs(getStorage(), next)) { setNotice({ key: 'preferencesError' }); return; }
         setPrefs(next); setNotice({ key: 'preferencesSaved' });
       }
@@ -318,7 +319,7 @@ window.__ModuleLoader__.load({
         const type = avatarType(row, prefs);
         const target = navigationTarget(row);
         const stateText = [t(`status.${row.status}`), row.migrationRequired && t('migration'), row.external && t('external'), row.unknownMode && t('unknownMode'), row.ambiguous && t('ambiguous'), row.depthLimit && t('depthLimit'), row.model, `L${row.level - 1}`].filter(Boolean).join(' · ');
-        const error = failures[row.id] ?? row.error ?? (row.catalogState === 'error' ? t('catalogReadError') : undefined);
+        const error = ownValue(failures, row.id) ?? row.error ?? (row.catalogState === 'error' ? t('catalogReadError') : undefined);
         const label = row.title;
         const indicator = row.expanded && (error ? h('div', { className: 'branch-note error', role: 'alert', style: { marginLeft: `${row.level * 20}px` } }, t('catalogError', { error }), h('button', { type: 'button', onClick: () => retry(row.id) }, t('retry')))
           : row.catalogState === 'unavailable' ? h('div', { className: 'branch-note', style: { marginLeft: `${row.level * 20}px` } }, t('catalogUnavailable'))
@@ -337,7 +338,7 @@ window.__ModuleLoader__.load({
         h('img', { className: 'image', src: images[type] ?? DEFAULT_IMAGES[type], alt: '' }),
         h('button', { type: 'button', className: 'body', tabIndex: -1, disabled: target === null, onClick: () => navigate(row) },
           h('span', { className: `dot ${row.status}`, 'aria-hidden': true }), h('span', { className: 'bodytext' }, h('span', { className: 'title' }, label), h('span', { className: 'meta' }, stateText))),
-        h('select', { className: 'avatar-select', disabled: row.ambiguous, 'aria-label': t('changeAvatar', { title: label }), value: prefs[row.id] ?? '', onChange: event => changeAvatar(row.id, event.target.value) },
+        h('select', { className: 'avatar-select', disabled: row.ambiguous, 'aria-label': t('changeAvatar', { title: label }), value: ownValue(prefs, row.id) ?? '', onChange: event => changeAvatar(row.id, event.target.value) },
           h('option', { value: '' }, t('autoAvatar')), TYPES.map(value => h('option', { key: value, value }, t(`type.${value}`))))
         ), indicator);
       }

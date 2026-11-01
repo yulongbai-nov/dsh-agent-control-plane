@@ -388,6 +388,114 @@ test('avatar policy is deterministic, explicit and browser-local with safe fallb
   assert.equal(core.saveCustomImages(undefined, {}), false);
 });
 
+test('prototype-named session IDs do not inherit avatar preferences or stored errors', () => {
+  for (const id of ['__proto__','constructor','toString']) {
+    assert.equal(core.avatarType({id,title:'普通会话'},{}),'lead',id);
+    const list={phase:'ready',ids:[id],byId:{[id]:summary(id)},projectionsBySession:{}};
+    const rows=core.buildRows(list,new Set(),new Set(),new Map());
+    assert.equal(rows.length,1);
+    assert.equal(rows[0].catalogState,'unloaded');
+  }
+  const loaded=core.readAvatarPrefs({getItem:()=>'{"__proto__":"code","constructor":"data","toString":"qa"}'});
+  assert.equal(core.avatarType({id:'__proto__'},loaded),'code');
+  assert.equal(core.avatarType({id:'constructor'},loaded),'data');
+  assert.equal(core.avatarType({id:'toString'},loaded),'qa');
+});
+
+test('inherited session-index entries do not create roots or cached descendants', () => {
+  const foreign='test-inherited-session-id';
+  const forged=summary(foreign);
+  const inheritedById=Object.create({[foreign]:forged});
+  assert.deepEqual(core.buildRows({ids:[foreign],byId:inheritedById,projectionsBySession:{}},new Set(),new Set(),new Map()),[]);
+  const inheritedCatalog=Object.create({root:ready([child(foreign)])});
+  const rows=core.buildRows({ids:['root'],byId:{root:summary('root')},projectionsBySession:inheritedCatalog},new Set(['root']),new Set(),new Map());
+  assert.deepEqual(rows.map(row=>row.id),['root']);
+  assert.equal(rows[0].catalogState,'unloaded');
+  const pollutedPrefs=Object.create({[foreign]:'code'});
+  assert.equal(core.avatarType({id:foreign,title:'normal'},pollutedPrefs),'lead');
+});
+
+test('session dictionary own getters remain readable for adapter compatibility', () => {
+  let calls=0;
+  const accessor=Object.defineProperty({},'root',{get(){calls++;return summary('root');},configurable:true});
+  const projections=Object.defineProperty({},'root',{get(){calls++;return ready([child('leaf')]);},configurable:true});
+  const rows=core.buildRows({ids:['root'],byId:accessor,projectionsBySession:projections},new Set(['root']),new Set(),new Map());
+  assert.deepEqual(rows.map(row=>row.id),['root','leaf']);
+  const prefs=Object.defineProperty({},'root',{get(){calls++;return 'code';},configurable:true});
+  assert.equal(core.avatarType({id:'root',title:'normal'},prefs),'code');
+  assert.ok(calls>0);
+});
+
+test('Object.prototype session-key pollution does not create rows or preference values', () => {
+  const id='__dsh_test_inherited_session_id__';
+  const injected={...summary(id),state:'ready',values:{subagentCatalog:[]}};
+  assert.equal(Object.hasOwn(Object.prototype,id),false);
+  Object.defineProperty(Object.prototype,id,{value:injected,writable:true,configurable:true});
+  try {
+    assert.deepEqual(core.buildRows({ids:[id],byId:{},projectionsBySession:{}},new Set(),new Set(),new Map()),[]);
+    const list={phase:'ready',ids:[id],byId:{[id]:summary(id)},projectionsBySession:{}};
+    const rows=core.buildRows(list,new Set(),new Set(),new Map());
+    assert.equal(rows.length,1); assert.equal(rows[0].catalogState,'unloaded');
+    assert.equal(core.avatarType({id,title:'normal'},{}),'lead');
+    states=[];stateIndex=0;let registration;
+    applyPlugin({slots:{inject(_name,callback){callback();},register(options,component){if(options.name==='main')registration={options,component};}},sessions:{refreshProjections(){},refresh(){}},uiWorkspace:{openSession(){}}});
+    const actions=registration.options.inject();actions.expansion.add(id);
+    const props={...actions,useSessions:selector=>selector(list),useSessionStatus:selector=>selector(new Map()),useWorkspaces:selector=>selector({archivedSessionIds:[]})};
+    const flatten=node=>node&&typeof node==='object'?[node,...(node.children??[]).flat(Infinity).flatMap(flatten)]:[];
+    assert.equal(flatten(registration.component(props)).some(node=>node.props?.role==='alert'),false);
+  } finally {Reflect.deleteProperty(Object.prototype,id);}
+});
+
+test('component persists and resets prototype-named avatar IDs without false errors', () => {
+  const beforeWindow=globalThis.window, values=new Map();
+  globalThis.window={localStorage:{getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)}};
+  try {
+    for(const id of ['__proto__','constructor','toString']) {
+      states=[];stateIndex=0;
+      let registration;
+      applyPlugin({slots:{inject(_name,callback){callback();},register(options,component){if(options.name==='main')registration={options,component};}},sessions:{refreshProjections(){},refresh(){}},uiWorkspace:{openSession(){}}});
+      const list={phase:'ready',ids:[id],byId:{[id]:summary(id)},projectionsBySession:{}};
+      const props={...registration.options.inject(),useSessions:selector=>selector(list),useSessionStatus:selector=>selector(new Map()),useWorkspaces:selector=>selector({archivedSessionIds:[]})};
+      const flatten=node=>node&&typeof node==='object'?[node,...(node.children??[]).flat(Infinity).flatMap(flatten)]:[];
+      const render=()=>{stateIndex=0;return flatten(registration.component(props));};
+      let nodes=render(), select=nodes.find(node=>node.props?.className==='avatar-select');
+      assert.equal(select.props.value,'',id);
+      assert.ok(nodes.find(node=>node.type==='img'&&node.props.className==='image').props.src,id);
+      select.props.onChange({target:{value:'code'}});nodes=render();
+      assert.equal(JSON.parse(values.get('dsh-session-tree.avatar-types.v1'))[id],'code',id);
+      assert.equal(nodes.find(node=>node.props?.className==='avatar-select').props.value,'code');
+      // Remount the component to exercise the JSON read path, not just its in-memory state.
+      states=[];nodes=render();
+      assert.equal(nodes.find(node=>node.props?.className==='avatar-select').props.value,'code',id);
+      nodes.find(node=>node.props?.className==='avatar-select').props.onChange({target:{value:''}});
+      assert.equal(Object.hasOwn(JSON.parse(values.get('dsh-session-tree.avatar-types.v1')),id),false,id);
+    }
+  } finally {globalThis.window=beforeWindow;}
+});
+
+test('prototype-named roots show only their own genuine refresh errors', async () => {
+  for (const id of ['__proto__','constructor','toString']) {
+    states=[];stateIndex=0;let registration, shouldFail=true;
+    applyPlugin({slots:{inject(_name,callback){callback();},register(options,component){if(options.name==='main')registration={options,component};}},sessions:{refreshProjections(){return shouldFail ? Promise.reject(Error(`real ${id} failure`)) : Promise.resolve();},refresh(){}},uiWorkspace:{openSession(){}}});
+    const list={phase:'ready',ids:[id],byId:{[id]:summary(id)},projectionsBySession:{[id]:{state:'loading',values:{subagentCatalog:[]}}}};
+    const actions=registration.options.inject();
+    const props={...actions,useSessions:selector=>selector(list),useSessionStatus:selector=>selector(new Map()),useWorkspaces:selector=>selector({archivedSessionIds:[]})};
+    const flatten=node=>node&&typeof node==='object'?[node,...(node.children??[]).flat(Infinity).flatMap(flatten)]:[];
+    const render=()=>{stateIndex=0;return flatten(registration.component(props));};
+    let nodes=render();
+    nodes.find(node=>node.props?.className==='caret').props.onClick({currentTarget:{closest(){}}});
+    await new Promise(resolve=>setImmediate(resolve));
+    nodes=render();
+    assert.ok(nodes.some(node=>node.props?.role==='alert'&&node.children.some(text=>typeof text==='string'&&text.includes(`real ${id} failure`))),id);
+    shouldFail=false;
+    nodes.find(node=>node.type==='button'&&node.children.includes('重试')).props.onClick();
+    await new Promise(resolve=>setImmediate(resolve));
+    nodes=render();
+    assert.equal(nodes.some(node=>node.props?.role==='alert'),false,id);
+    assert.equal(nodes.some(node=>node.props?.role==='status'&&node.children.includes('正在读取子代理目录…')),true,id);
+  }
+});
+
 test('loaded conflicts produce distinct, non-navigable, non-expandable occurrence rows', () => {
   const list = baseList();
   list.ids.push('other'); list.byId.other = summary('other');
