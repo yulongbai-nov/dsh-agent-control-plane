@@ -45,7 +45,7 @@ NODE
 
 另一个仅针对 `/Users/yulong` 的 `(deny file-read* file-write* (subpath ...))` 可令该路径下 stat 返回 EPERM，但 `/private/tmp`、`/private/var/folders` 与 `/Users/Shared` 仍可读；它不能防其他用户/临时文件或进程间 IPC。
 
-**Node/Electron 最小启动探针的进展，不是生产沙盒：**以前 `(deny default)` 会 signal 6；追加允许根目录本身的 `file-read-data (literal "/")` 后不再发生该启动错误。Node 还需只读其系统库、Homebrew 库和 OpenSSL 配置；已安装的 Electron Node 模式则以系统库和 app 包只读路径启动，并输出一次 `task_name_for_pid` code-sign 警告。前台探针对 `/Users/yulong`、`/Users/Shared`、`/private/tmp` 和 `/private/var/folders` 的**目录读取**均得到 EPERM；Node 对 `127.0.0.1:1` 连接得到 EPERM。探针没有读取目录内容、没有启动服务或浏览器。
+**Node/Electron 最小启动探针的进展，不是生产沙盒：**以前 `(deny default)` 会 signal 6；追加允许根目录本身的 `file-read-data (literal "/")` 后不再发生该启动错误。Node 还需只读其系统库、Homebrew 库和 OpenSSL 配置；已安装的 Electron Node 模式则以系统库和 app 包只读路径启动，并输出一次 `task_name_for_pid` code-sign 警告。前台探针对 `/Users/yulong`、`/Users/Shared`、`/private/tmp` 和 `/private/var/folders` 的**目录读取**均得到 EPERM；Node 对 `127.0.0.1:1`、Electron Node 模式对 `::1:1` 的连接均得到 EPERM。探针没有读取目录内容、没有启动 DSH 或浏览器。
 
 这些结果只说明极小空程序和几条负例。进一步的 Electron Node 模式探针将全局文件元数据收窄到 `/`、`/Applications`、`/dev`、`/usr`、`/System` 本身，并只允许读取系统库及签名 app 目录；禁止 `mach-lookup` 且只允许 `process-exec` 时空进程仍可启动，`stat('/Users/yulong')` 返回 EPERM。缺 `process-exec` 则启动器被拒绝。这不是完整应用、浏览器或 IPC canary；`process-exec` 也不是可直接移植的精确子进程白名单。
 
