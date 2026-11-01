@@ -25,6 +25,12 @@ test('unsupported control flow blocks outer entry/exit edges but not later uncon
   assert.deepEqual(labels(g), [['maybe', 'next']]);
 });
 
+test('dynamic effects in unsupported control flow invalidate the current phase', () => {
+  const g = extract(`const change=phase; phase('old'); if(true) change('new'); await agent('after');`);
+  assert.ok(uncertain(g));
+  assert.equal(g.nodes.find((node) => node.label === 'after').phase, null);
+});
+
 test('an unknown call barrier is preserved even after a later known node', () => {
   const g = extract(`await parallel([async () => {await mystery(); await agent('maybe')}]); await agent('after');`);
   assert.equal(labels(g).some(([from, to]) => from === 'maybe' && to === 'after'), false);

@@ -145,11 +145,20 @@ function extractTopology(script, meta = {}, options = {}) {
   let ast;
   try {
     const wrapped = parse(`${prefix}${script}\n})()`, { ecmaVersion: 'latest', sourceType: 'script' });
-    const body = wrapped?.body?.[0]?.expression?.callee?.body;
-    if (body?.type !== 'BlockStatement' || !Array.isArray(body.body)) throw new Error('parser did not return the workflow async body');
+    const end = prefix.length + script.length + '\n})()'.length;
+    const statement = wrapped?.body?.[0];
+    const call = statement?.expression;
+    const arrow = call?.callee;
+    const body = arrow?.body;
+    if (wrapped?.type !== 'Program' || wrapped.start !== 0 || wrapped.end !== end || wrapped.body.length !== 1 ||
+        statement?.type !== 'ExpressionStatement' || statement.start !== 0 || statement.end !== end ||
+        call?.type !== 'CallExpression' || call.start !== 0 || call.end !== end || call.optional || call.arguments?.length !== 0 ||
+        arrow?.type !== 'ArrowFunctionExpression' || !arrow.async || arrow.generator || arrow.params?.length !== 0 || arrow.start !== 1 || arrow.end !== end - 3 ||
+        body?.type !== 'BlockStatement' || !Array.isArray(body.body) || body.start !== prefix.length - 2 || body.end !== end - 3)
+      throw new Error('parser did not return the complete workflow async wrapper');
     ast = { body: body.body };
   } catch (error) {
-    const start = Number.isSafeInteger(error.pos) ? Math.max(0, Math.min(script.length, error.pos - prefix.length)) : 0;
+    const start = Number.isSafeInteger(error?.pos) ? Math.max(0, Math.min(script.length, error.pos - prefix.length)) : 0;
     warn('PARSE_ERROR', { start }, 'workflow script did not parse as an async body');
     return empty();
   }
@@ -420,7 +429,7 @@ function extractTopology(script, meta = {}, options = {}) {
         if (containsHook(statement, shadowed)) { warn('UNSUPPORTED_HOOK_CONTEXT', statement, 'hook in a declared function is not analyzed'); uncertain = opaque = true; }
       } else {
         warn('UNSUPPORTED_CONTROL_FLOW', statement, 'control flow or statement is not statically modeled');
-        if (containsPhase(statement, shadowed)) state.phaseKnown = false;
+        if (containsPhase(statement, shadowed) || hasDynamicEffect(statement)) state.phaseKnown = false;
         uncertain = opaque = true;
       }
       for (const part of fragments) {
