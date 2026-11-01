@@ -47,7 +47,9 @@ NODE
 
 **Node/Electron 最小启动探针的进展，不是生产沙盒：**以前 `(deny default)` 会 signal 6；追加允许根目录本身的 `file-read-data (literal "/")` 后不再发生该启动错误。Node 还需只读其系统库、Homebrew 库和 OpenSSL 配置；已安装的 Electron Node 模式则以系统库和 app 包只读路径启动，并输出一次 `task_name_for_pid` code-sign 警告。前台探针对 `/Users/yulong`、`/Users/Shared`、`/private/tmp` 和 `/private/var/folders` 的**目录读取**均得到 EPERM；Node 对 `127.0.0.1:1` 连接得到 EPERM。探针没有读取目录内容、没有启动服务或浏览器。
 
-这些结果只说明极小空程序和几条负例：当前研究策略仍允许**全局文件元数据**、广泛 `mach-lookup`/进程操作，Node 的路径也覆盖全部 Homebrew cellar，且未验证 symlink/hardlink、Keychain/IPC、全部文件访问、子进程、临时目录写入或精确回连。它既不证明隔离安全，也不能用于启动 DSH；必须先按下列门槛完成白名单、正反 canary 和完整进程树验证。
+这些结果只说明极小空程序和几条负例。进一步的 Electron Node 模式探针将全局文件元数据收窄到 `/`、`/Applications`、`/dev`、`/usr`、`/System` 本身，并只允许读取系统库及签名 app 目录；禁止 `mach-lookup` 且只允许 `process-exec` 时空进程仍可启动，`stat('/Users/yulong')` 返回 EPERM。缺 `process-exec` 则启动器被拒绝。这不是完整应用、浏览器或 IPC canary；`process-exec` 也不是可直接移植的精确子进程白名单。
+
+早期更宽的 Node 研究策略仍允许**全局文件元数据**、广泛 `mach-lookup`/进程操作，并覆盖全部 Homebrew cellar。两个探针都未验证 symlink/hardlink、Keychain/IPC、全部文件访问、子进程、临时目录写入或精确回连。它们既不证明隔离安全，也不能用于启动 DSH；必须先按下列门槛完成白名单、正反 canary 和完整进程树验证。
 
 **Keychain 负例：**在拒绝 `/Users/yulong` 文件访问且拒绝 `mach-lookup` 到 `com.apple.securityd` 后，运行 `/usr/bin/security list-keychains -d user` 仍以 0 退出。测试丢弃 stdout、只记录退出状态，未尝试读取、打印或发送任何凭据。成功列举 API 本身不证明秘密可以读取，但也不能以该规则声称隔离成功。需在专用临时账号/虚拟机创建**合成凭据 canary**，对完整进程树证明不可读取、且正向对照有效；不能对用户实际 Keychain 做试探。
 
