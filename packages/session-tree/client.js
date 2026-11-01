@@ -11,7 +11,7 @@ window.__ModuleLoader__.load({
         panel: '会话树', intro: '独立会话树面板；原生侧栏列表与页头目录不变。展开时读取该层目录。', lineage: '会话谱系',
         'type.lead': '组长 / 默认', 'type.research': '调研', 'type.code': '开发', 'type.write': '写作', 'type.data': '数据', 'type.qa': '校验',
         'status.archived': '已归档', 'status.waiting': '等待交互', 'status.running': '运行中', 'status.completed': '最近一次已完成', 'status.inactive': '未运行', 'status.unknown': '状态未知',
-        migration: '需要迁移', external: '外部任务', unknownMode: '模式未知', rowLabel: '{title}，{state}', collapse: '折叠 {title}', expand: '展开 {title}', changeAvatar: '更改 {title} 的头像', autoAvatar: '自动头像',
+        migration: '需要迁移', external: '外部任务', unknownMode: '模式未知', ambiguous: '身份存在歧义', depthLimit: '达到显示深度上限', rowLabel: '{title}，{state}', collapse: '折叠 {title}', expand: '展开 {title}', changeAvatar: '更改 {title} 的头像', autoAvatar: '自动头像',
         catalogError: '目录读取失败：{error}', catalogReadError: '读取目录失败', catalogUnavailable: '宿主未提供子代理目录投影。', catalogLoading: '正在读取子代理目录…', retry: '重试',
         openError: '打开失败：{error}', refreshError: '刷新失败：{error}', preferencesError: '头像偏好无法保存：浏览器存储不可用或空间不足。', preferencesSaved: '头像选择已保存在此浏览器。',
         imageInvalidSize: '请选择不超过 180 KB 的 PNG 图片。', imageReadError: '无法读取头像图片。', imageInvalid: '头像文件不是有效的 PNG 数据。', imageSaveError: '头像无法保存：浏览器存储不可用或空间不足。',
@@ -22,7 +22,7 @@ window.__ModuleLoader__.load({
         panel: 'Session tree', intro: 'Independent session tree; the native sidebar and header directory are unchanged. Expanding loads that level.', lineage: 'Session lineage',
         'type.lead': 'Lead / default', 'type.research': 'Research', 'type.code': 'Development', 'type.write': 'Writing', 'type.data': 'Data', 'type.qa': 'Verification',
         'status.archived': 'Archived', 'status.waiting': 'Waiting for interaction', 'status.running': 'Running', 'status.completed': 'Last turn completed', 'status.inactive': 'Inactive', 'status.unknown': 'Status unknown',
-        migration: 'Migration required', external: 'External task', unknownMode: 'Unknown mode', rowLabel: '{title}, {state}', collapse: 'Collapse {title}', expand: 'Expand {title}', changeAvatar: 'Change avatar for {title}', autoAvatar: 'Automatic avatar',
+        migration: 'Migration required', external: 'External task', unknownMode: 'Unknown mode', ambiguous: 'Ambiguous identity', depthLimit: 'Display depth limit reached', rowLabel: '{title}, {state}', collapse: 'Collapse {title}', expand: 'Expand {title}', changeAvatar: 'Change avatar for {title}', autoAvatar: 'Automatic avatar',
         catalogError: 'Failed to load catalog: {error}', catalogReadError: 'Failed to read catalog', catalogUnavailable: 'The host did not provide a subagent catalog projection.', catalogLoading: 'Loading subagent catalog…', retry: 'Retry',
         openError: 'Failed to open: {error}', refreshError: 'Failed to refresh: {error}', preferencesError: 'Could not save avatar preferences: browser storage is unavailable or full.', preferencesSaved: 'Avatar selection saved in this browser.',
         imageInvalidSize: 'Choose a PNG image no larger than 180 KB.', imageReadError: 'Could not read the avatar image.', imageInvalid: 'The avatar file is not valid PNG data.', imageSaveError: 'Could not save the avatar: browser storage is unavailable or full.',
@@ -93,17 +93,37 @@ window.__ModuleLoader__.load({
       if (summary?.projectionValues?.subagentTiming?.lastTurnCompleted === true) return 'completed';
       return 'inactive';
     }
-    // Catalog membership comes solely from each direct parent's projection. The
-    // recursion is guarded against malformed cycles, not capped by depth.
+    // Inspect only already-cached catalogs reachable from visible roots; do not fetch.
     function buildRows(list, expanded, archived, statuses) {
       const rows = [], byId = list.byId ?? {}, projections = list.projectionsBySession ?? {};
       const listed = new Set(list.ids ?? []);
-      function visit(id, parentId, entry, level, ancestors) {
-        if (!validId(id) || ancestors.has(id)) return;
+      const roots = (list.ids ?? []).filter(id => {
+        const row = byId[id];
+        return validId(id) && row && row.origin !== 'subagent' && !(row.blank && !(row.retainedBy?.mainView > 0));
+      });
+      const incoming = new Map(), pending = [...new Set(roots)], scanned = new Set();
+      for (let i = 0; i < pending.length; i++) {
+        const id = pending[i];
+        if (scanned.has(id)) continue;
+        scanned.add(id);
+        const catalog = catalogOf(projections[id]);
+        if (catalog.state === 'migration-required' || byId[id]?.formatStatus === 'migration-required') continue;
+        for (const entry of catalog.entries) {
+          if (!validId(entry?.id)) continue;
+          incoming.set(entry.id, (incoming.get(entry.id) ?? 0) + 1);
+          if (entry.mode === 'one-shot' || entry.mode === 'continuable') pending.push(entry.id);
+        }
+      }
+      const rootCounts = new Map();
+      for (const id of roots) rootCounts.set(id, (rootCounts.get(id) ?? 0) + 1);
+      function visit(id, parentId, entry, level, ancestors, rowKey, parentKey) {
+        if (!validId(id)) return;
         const summary = byId[id];
         const catalog = catalogOf(projections[id]);
         const mode = entry?.mode;
         const external = mode === 'external';
+        const unknownMode = parentId !== null && !external && mode !== 'one-shot' && mode !== 'continuable';
+        const ambiguous = ancestors.has(id) || (parentId === null ? rootCounts.get(id) > 1 || (incoming.get(id) ?? 0) > 0 : (incoming.get(id) ?? 0) > 1 || rootCounts.has(id));
         const migrationRequired = summary?.formatStatus === 'migration-required' || catalog.state === 'migration-required';
         const knownLeaf = catalog.state === 'ready' && catalog.entries.length === 0;
         const isArchived = archived.has(id);
@@ -111,50 +131,60 @@ window.__ModuleLoader__.load({
         const sessionState = statuses.get(id);
         // Catalog fallback rows use running=false without establishing live status.
         const knownSummary = listed.has(id) ? summary : { ...summary, running: undefined };
+        const canExpand = !ambiguous && !unknownMode && !external && !migrationRequired && !knownLeaf;
+        const depthLimit = canExpand && level >= 128;
+        const expandable = canExpand && !depthLimit;
         const row = {
-          id, parentId, mode, level, title, external, archived: isArchived, migrationRequired,
+          id, parentId, rowKey, parentKey, mode, level, title, external, unknownMode, ambiguous, archived: isArchived, migrationRequired,
           status: rowStatus(knownSummary, sessionState, isArchived),
           role: summary?.role, agentPreset: summary?.agentPreset ?? summary?.projectionValues?.agentPreset,
           model: summary?.agentModel,
           current: (summary?.retainedBy?.mainView ?? 0) > 0,
-          catalogState: catalog.state, error: catalog.error,
-          expandable: !external && !migrationRequired && !knownLeaf,
-          expanded: expanded.has(id) && !external && !migrationRequired && !knownLeaf
+          catalogState: catalog.state, error: catalog.error, depthLimit,
+          expandable, expanded: expanded.has(id) && expandable
         };
         rows.push(row);
         if (!row.expanded) return;
         const next = new Set(ancestors); next.add(id);
-        for (const nextEntry of catalog.entries) visit(nextEntry?.id, id, nextEntry, level + 1, next);
+        const occurrences = new Map();
+        for (const nextEntry of catalog.entries) {
+          if (!validId(nextEntry?.id)) continue;
+          const ordinal = occurrences.get(nextEntry.id) ?? 0;
+          occurrences.set(nextEntry.id, ordinal + 1);
+          const childKey = `${rowKey}/${nextEntry.id.length}:${nextEntry.id}:${ordinal}`;
+          visit(nextEntry.id, id, nextEntry, level + 1, next, childKey, rowKey);
+        }
       }
-      for (const id of list.ids ?? []) {
-        const row = byId[id];
-        if (!row || row.origin === 'subagent' || (row.blank && !(row.retainedBy?.mainView > 0))) continue;
-        visit(id, null, undefined, 1, new Set());
+      const rootOccurrences = new Map();
+      for (const id of roots) {
+        const ordinal = rootOccurrences.get(id) ?? 0;
+        rootOccurrences.set(id, ordinal + 1);
+        visit(id, null, undefined, 1, new Set(), `${id.length}:${id}:${ordinal}`, null);
       }
       const siblings = new Map();
       for (const row of rows) {
-        const group = siblings.get(row.parentId) ?? [];
+        const group = siblings.get(row.parentKey) ?? [];
         group.push(row);
-        siblings.set(row.parentId, group);
+        siblings.set(row.parentKey, group);
       }
       for (const group of siblings.values()) group.forEach((row, index) => { row.posInSet = index + 1; row.setSize = group.length; });
       return rows;
     }
     function navigationTarget(row) {
-      if (row.archived || row.external || !validId(row.id)) return null;
+      if (row.archived || row.external || row.ambiguous || row.unknownMode || !validId(row.id)) return null;
       if (row.parentId === null) return row.id;
-      if (!validId(row.parentId) || !['continuable', 'one-shot', 'unknown'].includes(row.mode)) return null;
+      if (!validId(row.parentId) || !['continuable', 'one-shot'].includes(row.mode)) return null;
       return { parentSessionId: row.parentId, childSessionId: row.id, mode: row.mode };
     }
     async function toggleBranch(id, expanded, refresh, projections) {
       if (expanded.has(id)) {
-        const closing = new Set();
-        function visit(current) {
-          if (closing.has(current)) return;
+        const closing = new Set(), pending = [id];
+        while (pending.length) {
+          const current = pending.pop();
+          if (closing.has(current)) continue;
           closing.add(current);
-          for (const child of catalogOf(projections[current]).entries) if (validId(child?.id)) visit(child.id);
+          for (const child of catalogOf(projections[current]).entries) if (validId(child?.id)) pending.push(child.id);
         }
-        visit(id);
         for (const current of closing) expanded.delete(current);
         return;
       }
@@ -182,7 +212,7 @@ window.__ModuleLoader__.load({
       const [images, setImages] = React.useState(() => readCustomImages(getStorage()));
       const [imageType, setImageType] = React.useState('lead');
       const [notice, setNotice] = React.useState(null);
-      const [focusId, setFocusId] = React.useState(null);
+      const [focusKey, setFocusKey] = React.useState(null);
       const treeRef = React.useRef(null);
       const rows = buildRows(list, expanded, new Set(archivedIds ?? []), statuses);
 
@@ -243,10 +273,10 @@ window.__ModuleLoader__.load({
         if (event.key === 'ArrowRight' && row.expandable && !row.expanded || event.key === 'ArrowLeft' && row.expanded) {
           event.preventDefault(); toggle(row); return;
         }
-        const index = rows.findIndex(item => item.id === row.id);
+        const index = rows.findIndex(item => item.rowKey === row.rowKey);
         let next;
-        if (event.key === 'ArrowRight' && row.expanded && rows[index + 1]?.parentId === row.id) next = index + 1;
-        if (event.key === 'ArrowLeft' && !row.expanded && row.parentId !== null) next = rows.findIndex(item => item.id === row.parentId);
+        if (event.key === 'ArrowRight' && row.expanded && rows[index + 1]?.parentKey === row.rowKey) next = index + 1;
+        if (event.key === 'ArrowLeft' && !row.expanded && row.parentKey !== null) next = rows.findIndex(item => item.rowKey === row.parentKey);
         if (event.key === 'ArrowDown') next = index + 1;
         if (event.key === 'ArrowUp') next = index - 1;
         if (event.key === 'Home') next = 0;
@@ -254,34 +284,34 @@ window.__ModuleLoader__.load({
         if (next !== undefined && next >= 0) {
           event.preventDefault();
           const target = rows[Math.min(rows.length - 1, next)];
-          setFocusId(target.id);
-          [...(treeRef.current?.querySelectorAll('[role="treeitem"]') ?? [])].find(element => element.dataset.sessionId === target.id)?.focus();
+          setFocusKey(target.rowKey);
+          [...(treeRef.current?.querySelectorAll('[role="treeitem"]') ?? [])].find(element => element.dataset.rowKey === target.rowKey)?.focus();
         }
       }
       function renderRow(row) {
         const type = avatarType(row, prefs);
         const target = navigationTarget(row);
-        const stateText = [t(`status.${row.status}`), row.migrationRequired && t('migration'), row.external && t('external'), row.mode === 'unknown' && t('unknownMode'), row.model, `L${row.level - 1}`].filter(Boolean).join(' · ');
+        const stateText = [t(`status.${row.status}`), row.migrationRequired && t('migration'), row.external && t('external'), row.unknownMode && t('unknownMode'), row.ambiguous && t('ambiguous'), row.depthLimit && t('depthLimit'), row.model, `L${row.level - 1}`].filter(Boolean).join(' · ');
         const error = failures[row.id] ?? row.error ?? (row.catalogState === 'error' ? t('catalogReadError') : undefined);
         const label = row.title;
         const indicator = row.expanded && (error ? h('div', { className: 'branch-note error', role: 'alert', style: { marginLeft: `${row.level * 20}px` } }, t('catalogError', { error }), h('button', { type: 'button', onClick: () => retry(row.id) }, t('retry')))
           : row.catalogState === 'unavailable' ? h('div', { className: 'branch-note', style: { marginLeft: `${row.level * 20}px` } }, t('catalogUnavailable'))
           : row.catalogState === 'loading' || row.catalogState === 'unloaded' ? h('div', { className: 'branch-note', role: 'status', style: { marginLeft: `${row.level * 20}px` } }, t('catalogLoading'), h('button', { type: 'button', onClick: () => retry(row.id) }, t('retry'))) : null);
-        return h(React.Fragment, { key: row.id }, h('div', {
+        return h(React.Fragment, { key: row.rowKey }, h('div', {
           className: `row ${row.level === 1 ? 'root-row' : ''}`,
           style: { marginLeft: `${(row.level - 1) * 20}px` }, role: 'treeitem',
-          tabIndex: (rows.some(item => item.id === focusId) ? focusId : rows[0]?.id) === row.id ? 0 : -1,
-          'data-session-id': row.id, 'aria-level': row.level, 'aria-posinset': row.posInSet, 'aria-setsize': row.setSize,
+          tabIndex: (rows.some(item => item.rowKey === focusKey) ? focusKey : rows[0]?.rowKey) === row.rowKey ? 0 : -1,
+          'data-session-id': row.id, 'data-row-key': row.rowKey, 'aria-level': row.level, 'aria-posinset': row.posInSet, 'aria-setsize': row.setSize,
           'aria-expanded': row.expandable ? row.expanded : undefined,
           'aria-disabled': target === null || undefined, 'aria-label': t('rowLabel', { title: label, state: stateText }),
-          onFocus: event => { if (event.target === event.currentTarget) setFocusId(row.id); },
+          onFocus: event => { if (event.target === event.currentTarget) setFocusKey(row.rowKey); },
           onKeyDown: event => treeKeys(event, row),
           onClick: event => { if (event.target === event.currentTarget) navigate(row); }
         }, h('button', { type: 'button', className: 'caret', tabIndex: -1, disabled: !row.expandable, 'aria-label': t(row.expanded ? 'collapse' : 'expand', { title: label }), onClick: event => { toggle(row); event.currentTarget.closest('[role="treeitem"]')?.focus(); } }, row.expandable ? (row.expanded ? '▾' : '▸') : '·'),
         h('img', { className: 'image', src: images[type] ?? DEFAULT_IMAGES[type], alt: '' }),
         h('button', { type: 'button', className: 'body', tabIndex: -1, disabled: target === null, onClick: () => navigate(row) },
           h('span', { className: `dot ${row.status}`, 'aria-hidden': true }), h('span', { className: 'bodytext' }, h('span', { className: 'title' }, label), h('span', { className: 'meta' }, stateText))),
-        h('select', { className: 'avatar-select', 'aria-label': t('changeAvatar', { title: label }), value: prefs[row.id] ?? '', onChange: event => changeAvatar(row.id, event.target.value) },
+        h('select', { className: 'avatar-select', disabled: row.ambiguous, 'aria-label': t('changeAvatar', { title: label }), value: prefs[row.id] ?? '', onChange: event => changeAvatar(row.id, event.target.value) },
           h('option', { value: '' }, t('autoAvatar')), TYPES.map(value => h('option', { key: value, value }, t(`type.${value}`))))
         ), indicator);
       }

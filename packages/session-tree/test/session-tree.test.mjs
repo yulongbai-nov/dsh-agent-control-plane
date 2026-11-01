@@ -198,7 +198,8 @@ test('lazy expansion fetches only the clicked layer and builds arbitrary depth w
   const rows = core.buildRows(list, expanded, new Set(), new Map());
   assert.deepEqual(rows.map(r => [r.id, r.parentId, r.level]), [['root', null, 1], ['a', 'root', 2], ['b', 'a', 3], ['c', 'b', 4]]);
   assert.deepEqual(calls, ['root', 'a', 'b']);
-  assert.deepEqual(core.navigationTarget(rows[3]), { parentSessionId: 'b', childSessionId: 'c', mode: 'unknown' });
+  assert.equal(core.navigationTarget(rows[3]), null);
+  assert.equal(rows[3].unknownMode, true);
   assert.deepEqual(core.navigationTarget(rows[2]), { parentSessionId: 'a', childSessionId: 'b', mode: 'one-shot' });
   assert.equal(core.navigationTarget(rows[0]), 'root');
   await toggle('a');
@@ -371,6 +372,144 @@ test('avatar policy is deterministic, explicit and browser-local with safe fallb
   assert.equal(core.saveCustomImages(undefined, {}), false);
 });
 
+test('loaded conflicts produce distinct, non-navigable, non-expandable occurrence rows', () => {
+  const list = baseList();
+  list.ids.push('other'); list.byId.other = summary('other');
+  list.projectionsBySession = {
+    root: ready([child('shared'), child('shared')]),
+    other: ready([child('shared')]),
+    shared: ready([child('descendant')])
+  };
+  const rows = core.buildRows(list, new Set(['root', 'shared']), new Set(), new Map());
+  const conflicts = rows.filter(row => row.ambiguous);
+  assert.equal(conflicts.filter(row => row.id === 'shared').length, 2);
+  assert.ok(conflicts.every(row => !row.expandable && !row.expanded && core.navigationTarget(row) === null));
+  assert.equal(rows.some(row => row.id === 'descendant'), false);
+  assert.equal(new Set(rows.map(row => row.rowKey)).size, rows.length);
+  assert.deepEqual(rows.map(row => row.rowKey), core.buildRows(list, new Set(['root', 'shared']), new Set(), new Map()).map(row => row.rowKey));
+});
+
+test('unknown or missing child mode never navigates or expands without confirmed identity', () => {
+  const list = baseList();
+  list.projectionsBySession = { root: ready([child('unknown','unknown'), {id:'missing',label:'missing'}, child('bad','bogus')]), unknown: ready([child('nested')]) };
+  const rows = core.buildRows(list, new Set(['root','unknown']), new Set(), new Map());
+  for (const row of rows.filter(row => row.parentId === 'root')) {
+    assert.equal(core.navigationTarget(row), null);
+    assert.equal(row.expandable, false);
+    assert.equal(row.unknownMode, true);
+  }
+  assert.equal(rows.some(row => row.id === 'nested'), false);
+});
+
+test('two closed-over parents share no guessed target even if only one is expanded', () => {
+  const list = baseList(); list.ids.push('other'); list.byId.other = summary('other');
+  list.projectionsBySession = { root: ready([child('shared')]), other: ready([child('shared')]) };
+  const rows = core.buildRows(list, new Set(['root']), new Set(), new Map());
+  const shared = rows.find(row => row.id === 'shared');
+  assert.equal(shared.ambiguous, true);
+  assert.equal(core.navigationTarget(shared), null);
+  assert.equal(shared.expandable, false);
+});
+
+test('new cached conflicts revoke navigation and clearing evidence restores it', () => {
+  const list = baseList(); list.ids.push('other'); list.byId.other = summary('other');
+  list.projectionsBySession = { root: ready([child('shared')]), other: ready([]) };
+  const rows = () => core.buildRows(list, new Set(['root']), new Set(), new Map());
+  assert.deepEqual(core.navigationTarget(rows().find(row => row.id === 'shared')), { parentSessionId:'root', childSessionId:'shared', mode:'continuable' });
+  list.projectionsBySession.other = {state:'error',values:{subagentCatalog:[child('shared')]}};
+  const conflict = rows().find(row => row.id === 'shared');
+  assert.equal(conflict.ambiguous,true); assert.equal(core.navigationTarget(conflict),null);
+  list.projectionsBySession.other = ready([]);
+  assert.equal(rows().find(row => row.id === 'shared').ambiguous,false);
+});
+
+test('deep visible chain is bounded, translated, and cannot request another level', () => {
+  states = []; stateIndex = 0;
+  const list = baseList(), calls = [], registrations = [];
+  for (let i = 0; i < 130; i++) list.projectionsBySession[i === 0 ? 'root' : `n${i}`] = ready([child(`n${i+1}`)]);
+  const expansion = new Set(['root', ...Array.from({length:129}, (_,i) => `n${i+1}`)]);
+  const rows = core.buildRows(list,expansion,new Set(),new Map());
+  assert.equal(rows.length,128);
+  assert.equal(rows[127].id,'n127');
+  assert.equal(rows[127].depthLimit,true);
+  assert.equal(rows[127].expandable,false);
+  assert.equal(rows[127].expanded,false);
+  assert.equal(rows.some(row => row.id === 'n128'),false);
+  const locale = mockLocale();
+  applyPlugin({ locale, slots:{inject(_name,callback) {callback();},register(options,component){registrations.push({options,component});}},
+    sessions:{refreshProjections(id) { calls.push(id); },refresh() {}},uiWorkspace:{openSession() {}} });
+  const main = registrations.find(item => item.options.name === 'main'), actions = main.options.inject();
+  for (const id of expansion) actions.expansion.add(id);
+  const props = {...actions,useSessions:selector => selector(list),useSessionStatus:selector => selector(new Map()),useWorkspaces:selector => selector({archivedSessionIds:[]})};
+  const flatten = node => node && typeof node === 'object' ? [node,...(node.children ?? []).flat(Infinity).flatMap(flatten)] : [];
+  for (const [language, warning] of [['zh','达到显示深度上限'],['en','Display depth limit reached']]) {
+    locale.setLanguage(language); stateIndex = 0;
+    const nodes = flatten(main.component(props));
+    const last = nodes.find(node => node.props?.['data-session-id'] === 'n127');
+    assert.ok(last.props['aria-label'].includes(warning));
+    const caret = flatten(last).find(node => node.props?.className === 'caret');
+    assert.equal(caret.props.disabled,true);
+    caret.props.onClick({currentTarget:{closest(){return null;}}});
+    assert.deepEqual(calls,[]);
+  }
+});
+
+test('closing a deeply cached branch is iterative and handles cycles', async () => {
+  const projections = {}, expanded = new Set();
+  for (let i = 0; i < 15000; i++) {
+    const id = `node${i}`; expanded.add(id);
+    projections[id] = ready([child(i === 14999 ? 'node0' : `node${i+1}`)]);
+  }
+  let calls = 0;
+  await core.toggleBranch('node0', expanded, async () => { calls++; }, projections);
+  assert.equal(expanded.size,0);
+  assert.equal(calls,0);
+});
+
+test('length-prefixed row identities distinguish adversarial ids and paths', () => {
+  const list = baseList(), tricky = ['a/1:b:0', 'a', '1:x:0', '💡', '\ud800', 'x:y/z', 'x:y/z'];
+  list.projectionsBySession.root = ready(tricky.map(id => child(id)));
+  list.projectionsBySession.a = ready([child('b'),child('💡')]);
+  const expanded = new Set(['root','a']);
+  const rows = core.buildRows(list,expanded,new Set(),new Map());
+  assert.equal(new Set(rows.map(row => row.rowKey)).size,rows.length);
+  assert.notEqual(rows.find(row => row.id === 'a/1:b:0').rowKey,rows.find(row => row.id === 'b').rowKey);
+  const uniqueKeys = Object.fromEntries(rows.filter(row => row.id !== 'x:y/z').map(row => [`${row.parentId}:${row.id}`,row.rowKey]));
+  list.projectionsBySession.root = ready([...tricky].reverse().map(id => child(id)));
+  const reordered = core.buildRows(list,expanded,new Set(),new Map());
+  assert.equal(new Set(reordered.map(row => row.rowKey)).size,reordered.length);
+  assert.deepEqual(Object.fromEntries(reordered.filter(row => row.id !== 'x:y/z').map(row => [`${row.parentId}:${row.id}`,row.rowKey])),uniqueKeys);
+});
+
+test('stable row identity does not change when unrelated siblings or roots reorder', () => {
+  const list = baseList(); list.ids.push('other'); list.byId.other = summary('other');
+  list.projectionsBySession = { root: ready([child('a'),child('b')]), other: ready([]) };
+  const keys = () => Object.fromEntries(core.buildRows(list,new Set(['root']),new Set(),new Map()).map(row => [`${row.parentId}:${row.id}`,row.rowKey]));
+  const before = keys();
+  list.ids.reverse(); list.projectionsBySession.root = ready([child('b'),child('a')]);
+  assert.deepEqual(keys(),before);
+});
+
+test('root-to-child cycle marks the root itself ambiguous without recursing', () => {
+  const list = baseList();
+  list.projectionsBySession = { root: ready([child('a')]), a: ready([child('root')]) };
+  const rows = core.buildRows(list, new Set(['root','a']), new Set(), new Map());
+  assert.deepEqual(rows.map(row => row.id), ['root']);
+  assert.equal(rows[0].ambiguous, true);
+  assert.equal(core.navigationTarget(rows[0]), null);
+  assert.equal(rows[0].expandable, false);
+});
+
+test('root targeted by a different root is ambiguous on both visible occurrences', () => {
+  const list = baseList(); list.ids.push('other'); list.byId.other = summary('other');
+  list.projectionsBySession = { root: ready([]), other: ready([child('root')]) };
+  const rows = core.buildRows(list, new Set(['other']), new Set(), new Map());
+  const occurrences = rows.filter(row => row.id === 'root');
+  assert.equal(occurrences.length,2);
+  assert.ok(occurrences.every(row => row.ambiguous && !row.expandable && core.navigationTarget(row) === null));
+  assert.notEqual(occurrences[0].rowKey,occurrences[1].rowKey);
+});
+
 test('component omits unavailable right-sidebar action on independent main panel', () => {
   states = []; stateIndex = 0;
   const list = baseList();
@@ -393,6 +532,47 @@ test('component omits unavailable right-sidebar action on independent main panel
   assert.equal(plugin.inject.includes('sidebarRight'), false);
 });
 
+test('ambiguous occurrences use unique keyboard focus and bilingual warning', () => {
+  states = []; stateIndex = 0;
+  const list = baseList(); list.ids.push('other'); list.byId.other = summary('other');
+  list.projectionsBySession = { root: ready([child('shared'),child('shared')]), other: ready([child('shared')]) };
+  const calls = [], registrations = [], locale = mockLocale();
+  applyPlugin({ locale, slots:{ inject(_name, callback) { callback(); }, register(options, component) { registrations.push({options,component}); } },
+    sessions:{ refreshProjections() {}, refresh() {} }, uiWorkspace:{openSession(target) { calls.push(['open',target]); }} });
+  const main = registrations.find(item => item.options.name === 'main'), actions = main.options.inject();
+  actions.expansion.add('root'); actions.expansion.add('other');
+  const props = {...actions,useSessions:selector => selector(list),useSessionStatus:selector => selector(new Map()),useWorkspaces:selector => selector({archivedSessionIds:[]})};
+  const flatten = node => node && typeof node === 'object' ? [node,...(node.children ?? []).flat(Infinity).flatMap(flatten)] : [];
+  const render = () => { stateIndex = 0; return flatten(main.component(props)); };
+  let rows = render().filter(node => node.props?.role === 'treeitem');
+  const shared = rows.filter(node => node.props['data-session-id'] === 'shared');
+  assert.equal(shared.length,3);
+  assert.ok(shared.every(node => node.props['aria-disabled'] === true && node.props['aria-label'].includes('身份存在歧义')));
+  assert.ok(shared.every(node => flatten(node).find(child => child.props?.className === 'avatar-select').props.disabled));
+  assert.deepEqual(shared.map(node => [node.props['aria-posinset'],node.props['aria-setsize']]),[[1,2],[2,2],[1,1]]);
+  assert.equal(new Set(rows.map(node => node.props['data-row-key'])).size,rows.length);
+  assert.equal(rows.filter(node => node.props.tabIndex === 0).length,1);
+  const elements = rows.map(row => ({dataset:{rowKey:row.props['data-row-key']},focus() { calls.push(['focus',this.dataset.rowKey]); }}));
+  states[7].current = { querySelectorAll: () => elements };
+  const key = (row, code) => row.props.onKeyDown({key:code,target:1,currentTarget:1,preventDefault(){}});
+  key(rows[0],'ArrowDown'); rows = render().filter(node => node.props?.role === 'treeitem');
+  assert.equal(calls.at(-1)[1],rows[1].props['data-row-key']);
+  assert.equal(rows[1].props.tabIndex,0);
+  key(rows[1],'ArrowDown'); rows = render().filter(node => node.props?.role === 'treeitem');
+  assert.equal(calls.at(-1)[1],rows[2].props['data-row-key']);
+  assert.equal(rows[2].props.tabIndex,0);
+  assert.equal(rows.filter(node => node.props.tabIndex === 0).length,1);
+  key(rows[2],'Enter'); assert.equal(calls.some(call => call[0] === 'open'),false);
+  key(rows[2],'ArrowLeft'); rows = render().filter(node => node.props?.role === 'treeitem');
+  assert.equal(calls.at(-1)[1],rows[0].props['data-row-key']);
+  assert.equal(rows[0].props.tabIndex,0);
+  key(rows[4],'ArrowLeft'); rows = render().filter(node => node.props?.role === 'treeitem');
+  assert.equal(calls.at(-1)[1],rows[3].props['data-row-key']);
+  assert.equal(rows[3].props.tabIndex,0);
+  locale.setLanguage('en'); rows = render().filter(node => node.props?.role === 'treeitem');
+  assert.ok(rows.filter(node => node.props['data-session-id'] === 'shared').every(node => node.props['aria-label'].includes('Ambiguous identity')));
+});
+
 test('component wires real DTO-shaped rows to keyboard and true navigation addresses', async () => {
   states = []; stateIndex = 0;
   const list = baseList(), expansion = new Set(['root', 'a']);
@@ -410,7 +590,8 @@ test('component wires real DTO-shaped rows to keyboard and true navigation addre
   const registration = registrations.find(item => item.options.name === 'main');
   const actions = registration.options.inject();
   for (const id of expansion) actions.expansion.add(id);
-  const elements = ['root', 'a', 'b'].map(id => ({ dataset: { sessionId: id }, focus() { calls.push(['focus', id]); } }));
+  const rootKey = '4:root:0', aKey = `${rootKey}/1:a:0`, bKey = `${aKey}/1:b:0`;
+  const elements = [['root',rootKey], ['a',aKey], ['b',bKey]].map(([id,rowKey]) => ({ dataset: { sessionId: id, rowKey }, focus() { calls.push(['focus', id]); } }));
   const props = { ...actions, useSessions: selector => selector(list), useSessionStatus: selector => selector(new Map()), useWorkspaces: selector => selector({ archivedSessionIds: [] }) };
   function render() { stateIndex = 0; return registration.component(props); }
   function flatten(node) { return node && typeof node === 'object' ? [node, ...(node.children ?? []).flat(Infinity).flatMap(flatten)] : []; }
@@ -439,8 +620,7 @@ test('flat tree gives correct sibling counts across multiple roots and grandchil
   const list = baseList();
   list.ids = ['root', 'root2'];
   list.byId.root2 = summary('root2');
-  // A malformed cycle must not count as an exposed sibling.
-  list.projectionsBySession = { root: ready([child('a'), child('b')]), a: ready([child('root'), child('c'), child('d')]) };
+  list.projectionsBySession = { root: ready([child('a'), child('b')]), a: ready([child('c'), child('d')]) };
   for (const id of ['a', 'b', 'c', 'd']) list.byId[id] = summary(id, { origin: 'subagent' });
   let registration;
   applyPlugin({ slots: { inject(_name, callback) { callback(); }, register(options, component) { if (options.name === 'main') registration = { options, component }; } }, sessions: {}, uiWorkspace: {} });
@@ -465,7 +645,8 @@ test('clicking disclosure restores row focus so keyboard navigation remains avai
     sessions: { refreshProjections(id) { calls.push(['refresh', id]); }, refresh() {} }, uiWorkspace: {} });
   const actions = registration.options.inject();
   const props = { ...actions, useSessions: selector => selector(list), useSessionStatus: selector => selector(new Map()), useWorkspaces: selector => selector({ archivedSessionIds: [] }) };
-  const elements = ['root', 'a'].map(id => ({ dataset: { sessionId: id }, focus() { calls.push(['focus', id]); } }));
+  const rootKey = '4:root:0', aKey = `${rootKey}/1:a:0`;
+  const elements = [['root',rootKey], ['a',aKey]].map(([id,rowKey]) => ({ dataset: { sessionId: id, rowKey }, focus() { calls.push(['focus', id]); } }));
   function render() { stateIndex = 0; return registration.component(props); }
   function flatten(node) { return node && typeof node === 'object' ? [node, ...(node.children ?? []).flat(Infinity).flatMap(flatten)] : []; }
   let rows = flatten(render()).filter(node => node.props?.role === 'treeitem');
