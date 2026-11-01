@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { inspectRuntime, readAsarEntry } from '../scripts/runtime-compat.mjs';
 
 function asar(entries) {
@@ -19,14 +21,14 @@ function asar(entries) {
     bodies.push(body);
   }
   const header = Buffer.from(JSON.stringify({ files }));
-  // Real Electron archives use a Pickle envelope: file contents begin at
-  // byte 8 + outer header size, and JSON begins at byte 16.
+  // Model Electron's nested Pickle envelopes, including 4-byte alignment.
+  const padding = (4 - (header.length % 4)) % 4;
   const prefix = Buffer.alloc(16);
   prefix.writeUInt32LE(4, 0);
-  prefix.writeUInt32LE(8 + header.length, 4);
-  prefix.writeUInt32LE(4 + header.length, 8);
+  prefix.writeUInt32LE(8 + header.length + padding, 4);
+  prefix.writeUInt32LE(4 + header.length + padding, 8);
   prefix.writeUInt32LE(header.length, 12);
-  return Buffer.concat([prefix, header, ...bodies]);
+  return Buffer.concat([prefix, header, Buffer.alloc(padding), ...bodies]);
 }
 
 const pkg = (name, version = '0.2.1-rc.5') => [
@@ -56,6 +58,61 @@ test('rejects malformed headers and out-of-range entries', () => {
   assert.throws(() => readAsarEntry(Buffer.alloc(4), 'x'), /archive|header/i);
   const buffer = asar({ x: 'hello' }).subarray(0, -3);
   assert.throws(() => readAsarEntry(buffer, 'x'), /bounds|range/i);
+});
+
+test('rejects malformed nested pickle envelopes and unaligned sizes', () => {
+  const original = asar({ x: 'hello' });
+  for (const [offset, value] of [[0, 0], [8, 0], [4, original.readUInt32LE(4) - 1]]) {
+    const buffer = Buffer.from(original);
+    buffer.writeUInt32LE(value, offset);
+    assert.throws(() => readAsarEntry(buffer, 'x'), /archive|header|pickle/i, `corrupt word at ${offset}`);
+  }
+});
+
+test('rejects contradictory link entries even with file metadata', () => {
+  const header = Buffer.from(JSON.stringify({ files: { x: { link: 'missing', size: 5, offset: '0' } } }));
+  const padding = (4 - (header.length % 4)) % 4;
+  const prefix = Buffer.alloc(16);
+  prefix.writeUInt32LE(4, 0);
+  prefix.writeUInt32LE(8 + header.length + padding, 4);
+  prefix.writeUInt32LE(4 + header.length + padding, 8);
+  prefix.writeUInt32LE(header.length, 12);
+  const buffer = Buffer.concat([prefix, header, Buffer.alloc(padding), Buffer.from('hello')]);
+  assert.throws(() => readAsarEntry(buffer, 'x'), /unsupported/i);
+});
+
+test('rejects invalid JSON and unsupported or unsafe offsets and sizes', () => {
+  const buffer = asar({ x: 'hello' });
+  const invalidJson = Buffer.from(buffer);
+  invalidJson[16] = 0x21;
+  assert.throws(() => readAsarEntry(invalidJson, 'x'), /JSON/i);
+
+  function withNode(node) {
+    const header = Buffer.from(JSON.stringify({ files: { x: node } }));
+    const padding = (4 - header.length % 4) % 4;
+    const prefix = Buffer.alloc(16);
+    prefix.writeUInt32LE(4, 0);
+    prefix.writeUInt32LE(8 + header.length + padding, 4);
+    prefix.writeUInt32LE(4 + header.length + padding, 8);
+    prefix.writeUInt32LE(header.length, 12);
+    return Buffer.concat([prefix, header, Buffer.alloc(padding), Buffer.from('hello')]);
+  }
+  for (const node of [
+    { offset: '-1', size: 5 }, { offset: 'nope', size: 5 },
+    { offset: '9999999999999999999', size: 5 }, { offset: '0', size: -1 },
+    { offset: '0', size: 9999 }, { offset: '0', size: 5, unpacked: true },
+    { files: {} },
+  ]) assert.throws(() => readAsarEntry(withNode(node), 'x'), /unsupported|range/i);
+});
+
+test('CLI reports usage and missing archive errors with explicit exit codes', () => {
+  const script = fileURLToPath(new URL('../scripts/runtime-compat.mjs', import.meta.url));
+  const usage = spawnSync(process.execPath, [script], { encoding: 'utf8' });
+  assert.equal(usage.status, 2);
+  assert.match(usage.stderr, /usage/i);
+  const missing = spawnSync(process.execPath, [script, '/this-file-does-not-exist.app.asar'], { encoding: 'utf8' });
+  assert.equal(missing.status, 1);
+  assert.match(missing.stderr, /compatibility check failed/i);
 });
 
 test('compatible installed versions and required seams pass', () => {

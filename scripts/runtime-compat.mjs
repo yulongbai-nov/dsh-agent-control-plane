@@ -22,11 +22,15 @@ export function readAsarEntry(buffer, path) {
   if (typeof path !== 'string' || !path || path.split('/').some(part => !part || part === '.' || part === '..')) {
     throw new Error('Invalid archive entry path');
   }
+  const outerPayloadSize = buffer.readUInt32LE(0);
   const outerSize = buffer.readUInt32LE(4);
+  const innerPayloadSize = buffer.readUInt32LE(8);
   const headerSize = buffer.readUInt32LE(12);
   const base = 8 + outerSize;
-  if (outerSize < 8 || headerSize > outerSize - 8 || base > buffer.length || 16 + headerSize > base) {
-    throw new Error('Invalid archive header bounds');
+  const alignedHeaderSize = Math.ceil(headerSize / 4) * 4;
+  if (outerPayloadSize !== 4 || outerSize !== innerPayloadSize + 4 ||
+      innerPayloadSize !== alignedHeaderSize + 4 || outerSize % 4 !== 0 || base > buffer.length) {
+    throw new Error('Invalid archive header bounds or Pickle envelope');
   }
   let header;
   try { header = JSON.parse(buffer.subarray(16, 16 + headerSize).toString('utf8')); }
@@ -36,7 +40,7 @@ export function readAsarEntry(buffer, path) {
     if (!node?.files || !Object.hasOwn(node.files, part)) throw new Error(`Missing archive entry: ${path}`);
     node = node.files[part];
   }
-  if (node?.files || node?.unpacked || !/^\d+$/.test(node?.offset ?? '') || !Number.isSafeInteger(node?.size) || node.size < 0) {
+  if (node?.files || node?.unpacked || Object.hasOwn(node, 'link') || !/^\d+$/.test(node?.offset ?? '') || !Number.isSafeInteger(node?.size) || node.size < 0) {
     throw new Error(`Unsupported archive entry: ${path}`);
   }
   const offset = Number(node.offset);
