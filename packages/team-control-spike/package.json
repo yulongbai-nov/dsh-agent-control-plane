@@ -2,5 +2,5 @@
   "name": "@dsh-agent-control-plane/team-control-spike",
   "version": "0.0.0",
   "private": true,
-  "scripts": { "test": "node --test test/gate.test.cjs" }
+  "scripts": { "test": "node --test test/gate.test.cjs test/baseline-safety.test.cjs" }
 }

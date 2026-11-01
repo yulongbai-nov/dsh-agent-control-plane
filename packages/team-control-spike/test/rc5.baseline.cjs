@@ -1,12 +1,12 @@
 'use strict';
-// Read-only installed rc.5 classes + synthetic in-memory fakes; never a host/plugin install.
+// Historical test body retained for review, but native execution is disabled:
+// no verified native baseline or installed-module loader is available here.
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {pathToFileURL}=require('node:url');
-const base='/Applications/DeepSeek Harness.app/Contents/Resources/app.asar/dsh/node_modules/@deepseek-ai/';
-const load=(path)=>import(pathToFileURL(base+path).href);
+const {loadFixtureClasses}=require('./fixture-baseline.cjs');
+const nativeBaselineSkip = {skip: 'NATIVE_BASELINE_UNVERIFIED: no independent pin or native loader'};
 async function fixture({fail=false,failCheckpoint=false}={}) {
- const [{Context},{TeamService}]=await Promise.all([load('cordis/lib/index.js'),load('dsh-experimental-agent-team/lib/index.js')]);
+ const [{Context},{TeamService}]=await loadFixtureClasses();
  const ctx=new Context();const events=[],calls=[],order=[];
  const state={members:[],tasks:[]};
  const root={id:'lead-session',options:{model:'inherited'},session:{header:{id:'lead-session'},inheritedEventCount:0,events:[],append(type,data){
@@ -28,7 +28,7 @@ async function fixture({fail=false,failCheckpoint=false}={}) {
 }
 const request=(name='alice')=>({name,description:'synthetic',prompt:[{type:'text',text:'synthetic'}],context:'fresh',provider:'spawn',signal:new AbortController().signal,agentOptions:{provider:'codex',model:'selected'},agentPreset:'preset'});
 
-test('native baseline reserves before activation and drops unrecognized request overrides',async()=>{
+test('native baseline reserves before activation and drops unrecognized request overrides',nativeBaselineSkip,async()=>{
  const f=await fixture();try{
   const result=await f.ctx.agentTeams.spawnTeammate(f.root,request());
   assert.equal(result.member.name,'alice');
@@ -41,7 +41,7 @@ test('native baseline reserves before activation and drops unrecognized request 
  } finally {await f.ctx.fiber.dispose();}
 });
 
-test('native provider failure records failed member and name is not recycled',async()=>{
+test('native provider failure records failed member and name is not recycled',nativeBaselineSkip,async()=>{
  const f=await fixture({fail:true});try{
   await assert.rejects(f.ctx.agentTeams.spawnTeammate(f.root,request()),/synthetic provider failure/);
   assert.deepEqual(f.order,['provisioning','flush','startActivation','failed','flush','drain']);
@@ -51,7 +51,7 @@ test('native provider failure records failed member and name is not recycled',as
  } finally {await f.ctx.fiber.dispose();}
 });
 
-test('native checkpoint failure marks failed, drains child, and never publishes active',async()=>{
+test('native checkpoint failure marks failed, drains child, and never publishes active',nativeBaselineSkip,async()=>{
  const f=await fixture({failCheckpoint:true});try{
   await assert.rejects(f.ctx.agentTeams.spawnTeammate(f.root,request()),/synthetic checkpoint failure/);
   assert.deepEqual(f.order,['provisioning','flush','startActivation','checkpoint','failed','flush','drain']);
@@ -59,7 +59,7 @@ test('native checkpoint failure marks failed, drains child, and never publishes 
  } finally {await f.ctx.fiber.dispose();}
 });
 
-test('native membership rejects stale caller and teammate cannot spawn',async()=>{
+test('native membership rejects stale caller and teammate cannot spawn',nativeBaselineSkip,async()=>{
  const f=await fixture();try{
   await assert.rejects(f.ctx.agentTeams.spawnTeammate({...f.root},request()),e=>e.code==='TEAM_NOT_MEMBER');
   assert.equal(f.events.length,0);assert.equal(f.calls.length,0);
@@ -70,3 +70,5 @@ test('native membership rejects stale caller and teammate cannot spawn',async()=
   assert.equal(f.events.length,0);assert.equal(f.calls.length,0);
  } finally {await f.ctx.fiber.dispose();}
 });
+
+module.exports={fixture};
