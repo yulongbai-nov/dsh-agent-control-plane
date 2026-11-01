@@ -17,7 +17,11 @@ const result = checkAgentSpec('spawn', {
 
 `status:'reject'` 时无 `approved`；已识别后端且仅通过静态字段/能力预检时 status **仍是 `unknown`**。`approved` 只是与 rc.5 `SubagentStartRequest` 字段同名的、经静态预检的分离副本（为空对象亦不表示运行获准），不构成路由、模型、effort、preset、权限、额度、可续聊或启动成功的保证。未知后端为 `unknown` 且**没有** `approved`，避免把不知能力的字段静默透传。`findings` 只给固定代码，不回显错误、输入或潜在秘密。
 
-当前只接受 spec 顶层 `preset`（非空字符串）与 `overrides`（普通对象，包含的键均须有值）；Proxy（含已撤销 Proxy）在检查原型或枚举属性前由 Node `util.types.isProxy` 拒绝，未知键、symbol、自定义原型、无效类型、getter 抛错一律拒绝。每层只枚举一次，以同一键集校验和复制，每个值只读取一次；getter 若事后添加属性，这些新属性不会进入静态副本。该快照不保证 getter 或输入无副作用，也不是运行时安全门禁。为了保守，`role`、`persistence`、`schema`、未知扩展、`reasoning_effort` 等目前直接拒绝，不表示这些功能或原生字段在其他上下文不存在；`outputSchema` 和后端可选性尚未纳入此原型。
+当前只接受 spec 顶层 `preset`（非空字符串）与 `overrides`（普通对象，包含的键均须有值）。每层先拒绝 Proxy（包括 revoked），再拒绝 Node `util.types` 暴露的常见 exotic brands（即便人为将其原型改为 null），只接受本 realm `Object.prototype` 或 null 原型；跨 realm 普通对象、数组、已识别的 exotic 对象和其他原型均拒绝。JavaScript 没有保证识别所有经原型篡改的 exotic/宿主对象的通用 plain-object 判断，此处不能声称穷尽所有 exotic。每层只枚举一次 own keys，拒绝未知键、symbol、非 enumerable 或 accessor 属性；按 own data descriptor 的值快照、校验并复制，**不会执行输入 getter/setter 或读取继承字段**。getter 返回 Promise 的旧路径已移除；但不会对外部创建或在别处触发的 rejected Promise 兜底。
+
+为保留已有 API，输出 `approved` / `agentOptions` 仍是普通 `{}`，写入采用 null-prototype descriptor 的 `Object.defineProperty`，不触发已存在的同名 `Object.prototype` setter。**但如果共享 `Object.prototype` 已有 `subagentDepth` 等 getter 或数据属性，调用方直接做 `approved.agentOptions.subagentDepth` / `in` 仍会看到或触发继承属性；这不是副本中的 own 数据。** 调用方只应按已知白名单检查 own data descriptors（而非直接读取任意继承属性），且不得直接将此预检输出用于真实启动。若后续需要隔离所有继承属性，须另设计并评估 null-prototype API 兼容性。
+
+这里仅排除上述有限的输入对象 accessor/Proxy 与输出继承 setter 副作用；假定同 realm 内建和原型等其他基础设施可信，不能保护调用方主动执行的代码、预污染/被替换的任意内建或恶意运行环境。`Reflect.ownKeys` 要在检查键数之前先枚举并分配，巨大对象可能导致资源耗尽，不是安全沙箱或 OOM 保护。为了保守，`role`、`persistence`、`schema`、未知扩展、`reasoning_effort` 等目前直接拒绝，不表示这些功能或原生字段在其他上下文不存在；`outputSchema` 和后端可选性尚未纳入此原型。
 
 | Synthetic backend | `preset` → `agentPreset` | `overrides` → `agentOptions` | 深度/权限结论 |
 |---|---|---|---|

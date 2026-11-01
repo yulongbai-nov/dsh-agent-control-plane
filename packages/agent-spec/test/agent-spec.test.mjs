@@ -136,22 +136,23 @@ test('rejects top-level and revoked proxies without invoking their traps', () =>
   assert.equal(check('spawn', { overrides: revoked.proxy }).status, 'reject');
 });
 
-test('a getter cannot add fields to the captured option keys', () => {
+test('accessor properties cannot mutate the input or execute while screening', () => {
+  let calls = 0;
   const options = {};
-  Object.defineProperty(options, 'model', { enumerable: true, get() { options.subagentDepth = 5; options.unsupported = 'injected'; return 'safe'; } });
+  Object.defineProperty(options, 'model', { enumerable: true, get() { calls++; options.subagentDepth = 5; options.unsupported = 'injected'; return 'safe'; } });
   const result = check('spawn', { overrides: options });
-  assert.equal(result.status, 'unknown');
-  assert.deepEqual(result.approved, { agentOptions: { model: 'safe' } });
+  assert.equal(result.status, 'reject');
+  assert.equal('approved' in result, false);
+  assert.equal(calls, 0);
+  assert.deepEqual(Reflect.ownKeys(options), ['model']);
 });
 
-test('candidate input values are detached and only read once', () => {
-  let count = 0;
-  const overrides = {};
-  Object.defineProperty(overrides, 'model', { enumerable: true, get() { return ++count === 1 ? 'first' : ''; } });
+test('candidate input data is detached from later mutations', () => {
+  const overrides = { model: 'first' };
   const spec = { overrides };
   const result = check('spawn', spec);
   assert.equal(result.status, 'unknown');
-  assert.equal(count, 1);
+  overrides.model = 'changed';
   overrides.newUnknown = 'value';
   assert.deepEqual(result.approved, { agentOptions: { model: 'first' } });
 });
