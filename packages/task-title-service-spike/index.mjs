@@ -71,32 +71,53 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
   if (state.owner !== undefined) throw new Error('synthetic title service already owned');
   const owner = Symbol('synthetic owner'); state.owner = owner;
   const work = new Map(), inFlight = new Set();
-  let active = true, closePromise;
+  let active = true, closePromise, mutating = false;
+  const reentrant = Object.freeze({ status: 'reentrant' });
+  function transact(operation) {
+    if (mutating) return reentrant;
+    mutating = true;
+    try { return operation(); } finally { mutating = false; }
+  }
+  const itemFor = (child) => {
+    let item = work.get(child);
+    if (!item) { item = { revision: 0 }; work.set(child, item); }
+    return item;
+  };
   const invalidateAttempt = (item) => {
     if (item.attempt?.status === 'pending') item.attempt.status = 'invalidated';
   };
   const supersede = (child, reason = 'task-change') => {
-    let item = work.get(child);
-    if (!item) { item = { revision: 0 }; work.set(child, item); }
+    const item = itemFor(child);
     item.revision += 1;
     invalidateAttempt(item);
     if (reason !== 'task-change' && item.attempt) item.attempt.blocked = true;
-    item.controller?.abort();
+    const controller = item.controller;
     item.controller = undefined;
+    controller?.abort();
     return item;
   };
   const alive = (lead, child) => {
     const parent = state.leadState.get(lead), data = state.childState.get(child);
     return active && parent && data && state.leads.get(parent.id) === lead && state.children.get(data.id) === child && data.lead === lead;
   };
+  const candidateCurrent = (parent, data, task, item, lead) => {
+    if (parent.tasks.get(task.id) !== task || task.ownerId !== data.id || task.status !== 'in_progress' ||
+        task.seq <= (item.messageCut ?? -1) || task.seq <= (item.invalidationCut ?? -1) || item.blockedLead === lead) return false;
+    let count = 0;
+    for (const value of parent.tasks.values()) if (value.ownerId === data.id && value.status === 'in_progress' && ++count > 1) return false;
+    return count === 1;
+  };
   function observe(lead, cursor) {
     const parent = state.leadState.get(lead);
     if (!parent || state.leads.get(parent.id) !== lead || !active) return;
     const cut = cursor === undefined ? parent.high : cursor;
-    const complete = state.authorized() && parent.valid && cut === parent.high;
-    for (const child of state.children.values()) {
+    const observationAuthorizationEpoch = state.authorizationEpoch();
+    // Observe only child identities live at invocation; callbacks cannot add replacements to this pass.
+    for (const child of [...state.children.values()]) {
       const data = state.childState.get(child);
       if (data.lead !== lead) continue;
+      // A prior child's abort callback may have changed the synthetic host.
+      const complete = alive(lead, child) && state.authorized() && state.authorizationEpoch() === observationAuthorizationEpoch && parent.valid && cut === parent.high;
       // An incomplete observation invalidates pending task work, but not message work.
       if (!complete) {
         if (work.get(child)?.kind === 'task') supersede(child);
@@ -133,12 +154,13 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
       const controller = new AbortController(); item.controller = controller;
       const promise = Promise.resolve().then(async () => {
         if (!active || controller.signal.aborted || item.revision !== revision || !alive(lead, child) ||
-            !state.authorized() || state.authorizationEpoch() !== authorizationEpoch || !parent.valid || cut !== parent.high || data.title?.kind === 'user') return;
+            !state.authorized() || state.authorizationEpoch() !== authorizationEpoch || !parent.valid || cut !== parent.high ||
+            data.title?.kind === 'user' || !candidateCurrent(parent, data, task, item, lead)) return;
         const title = await generate(Object.freeze({ subject: task.subject, taskId: task.id, revision: task.revision, signal: controller.signal }));
         // All checks and the synthetic state mutation below are synchronous; no callback or await may intervene.
         if (!active || controller.signal.aborted || item.revision !== revision || !alive(lead, child) || !state.authorized() ||
             state.authorizationEpoch() !== authorizationEpoch || !parent.valid || parent.high !== observedHigh || cut !== parent.high || data.title?.kind === 'user' ||
-            parent.tasks.get(task.id) !== task || task.ownerId !== data.id || task.status !== 'in_progress' || !nonempty(title)) return;
+            !candidateCurrent(parent, data, task, item, lead) || !nonempty(title)) return;
         data.title = { kind: 'task', title: title.trim(), taskId: task.id, revision: task.revision };
         attempt.status = 'committed';
       }).catch(() => {}).finally(() => {
@@ -152,12 +174,12 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
     }
   }
   return Object.freeze({
-    observe,
-    message(child, generateMessage) {
+    observe(lead, cursor) { return transact(() => observe(lead, cursor)); },
+    message(child, generateMessage) { return transact(() => {
       const data = state.childState.get(child);
       if (!active || !data || !alive(data.lead, child) || typeof generateMessage !== 'function') throw new Error('invalid synthetic message work');
+      itemFor(child).messageCut = state.leadState.get(data.lead).high;
       const item = supersede(child, 'message'), revision = item.revision;
-      item.messageCut = state.leadState.get(data.lead).high;
       item.kind = 'message';
       const controller = new AbortController(); item.controller = controller;
       const authorizationEpoch = state.authorizationEpoch();
@@ -173,13 +195,14 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
         inFlight.delete(promise);
         if (data.disposed && item.controller === undefined && work.get(child) === item) work.delete(child);
       });
-    },
-    rename(child, title) {
+    }); },
+    rename(child, title) { return transact(() => {
       const data = state.childState.get(child);
       if (!active || !data || state.children.get(data.id) !== child || !nonempty(title)) throw new Error('invalid synthetic rename');
-      supersede(child, 'rename'); data.title = { kind: 'user', title: title.trim() };
-    },
-    invalidate(child) {
+      data.title = { kind: 'user', title: title.trim() };
+      supersede(child, 'rename');
+    }); },
+    invalidate(child) { return transact(() => {
       const data = state.childState.get(child);
       if (!data) return;
       if (!active || state.children.get(data.id) !== child) {
@@ -187,13 +210,14 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
         if (data.disposed && work.has(child)) { supersede(child, 'invalidate'); work.delete(child); }
         return;
       }
-      const item = supersede(child, 'invalidate');
+      const item = itemFor(child);
       const parent = state.leadState.get(data.lead);
       if (parent && state.leads.get(parent.id) === data.lead) item.invalidationCut = parent.high;
       else item.blockedLead = data.lead; // No trustworthy cut: fail closed for this exact lead lifecycle.
-    },
-    async idle() { while (inFlight.size) await Promise.allSettled([...inFlight]); },
-    dispose() {
+      supersede(child, 'invalidate');
+    }); },
+    idle() { return transact(async () => { while (inFlight.size) await Promise.allSettled([...inFlight]); }); },
+    dispose() { return transact(() => {
       if (closePromise !== undefined) return closePromise;
       active = false;
       for (const child of work.keys()) supersede(child, 'dispose');
@@ -203,6 +227,6 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
         if (state.owner === owner) state.owner = undefined;
       })();
       return closePromise;
-    },
+    }); },
   });
 }
