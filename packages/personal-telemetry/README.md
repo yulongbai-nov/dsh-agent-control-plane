@@ -21,7 +21,7 @@ try {
 } finally { store.close() }
 ```
 
-字段只白名单读取 rc.5 `tokenUsage` wire view 的四个 provider token 桶及 `sessionStats` wire view 的八个数字；不会把 prompt、回复、工具参数、标题、路径、模型或额外字段保存到数据库。`tokenUsage` 内部折叠 state 虽有 `totals`，公开 `wire.view` 本身是这四个字段，不能把存储 cache 结构误作 wire 数据。本层不估 token、不假装已把指标精确关联到某个 workflow 或 agent。输入须为真实已验证的 `kind:'sequenced'` 投影及其 `asOfSeq`；`migration-required`、cache hint、缺 seq、负数/非数值/精度不安全均拒绝。单位缺失为 `null`，不是 0；单个 unit 不完整则拒绝整个输入。
+字段只白名单读取 rc.5 `tokenUsage` wire view 的四个 provider token 桶及 `sessionStats` wire view 的八个数字；不会把 prompt、回复、工具参数、标题、路径、模型或额外字段保存到数据库。`tokenUsage` 内部折叠 state 虽有 `totals`，公开 `wire.view` 本身是这四个字段，不能把存储 cache 结构误作 wire 数据。本层不估 token、不假装已把指标精确关联到某个 workflow 或 agent。`kind:'sequenced'` 是**本原型的输入约定**，不是 rc.5 原生 snapshot 的字段，也不是数据真实性证明：调用方必须自己认证准确的源观察后再包装；当前仅用合成输入。`migration-required`、cache hint、缺 seq、负数/非数值/精度不安全均拒绝。单位缺失为 `null`，不是 0；单个 unit 不完整则拒绝整个输入。
 
 `sessionKey`、`sourceIdentity` 接受 64 位小写 hex。**形状不等于隐私保证**：真实 adapter 要在用户同意后负责稳定的身份映射与适当的带秘密密钥 HMAC、密钥管理、源世代/日志生命周期校验；不建议把低熵身份直接 hash 后当作脱敏。source 身份变化时本层拒绝，不能跨重建世代误合并；安全重建/替换身份的授权流程尚未实现。
 
