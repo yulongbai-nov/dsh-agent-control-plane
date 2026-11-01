@@ -55,6 +55,8 @@ window.__ModuleLoader__.load({
       if (state === 'migration-required') return { state: 'migration-required', entries: entries ?? [] };
       if (state === 'error') return { state: 'error', entries: entries ?? [], error: snapshot.error?.message ?? '读取目录失败' };
       if (state === 'loading') return { state: 'loading', entries: entries ?? [] };
+      // An idle empty catalog may be a stale cache hint, not a known leaf.
+      if (state === 'idle' && entries?.length === 0) return { state: 'unloaded', entries };
       if (entries !== undefined) return { state: 'ready', entries };
       if (state === 'ready') return { state: 'unavailable', entries: [] };
       return { state: 'unloaded', entries: [] };

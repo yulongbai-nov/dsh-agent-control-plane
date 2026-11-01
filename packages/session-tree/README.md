@@ -6,7 +6,7 @@
 
 - 用根作用域 `useSessions` / `useSessionStatus` / `useWorkspaces` 展示根会话、当前目录投影和归档状态。每次展开调用 `ctx.sessions.refreshProjections(id)`；只请求被展开的层。子节点按各层 `values.subagentCatalog` 构建，打开时给 `ctx.uiWorkspace.openSession({parentSessionId, childSessionId, mode})` 传该层**直接**父 ID。收起父节点会收起它的后代；再次进入主面板保留当前展开状态。
 - 会话列表/投影由 rc.5 共享 store 实时更新；根列表删除后不再显示，目录成员由宿主目录为准，**不假定**可从摘要是否缺席推断子节点被删除。归档 ID 来自 Workspace 集合，显示为归档并禁止打开，与原生 Workspace 浏览器一致。缺少可靠运行基线的目录 fallback 行显示「状态未知」，不把未知当作完成或空闲；正常结束状态只在有可用运行基线和 `subagentTiming.lastTurnCompleted` 时显示。此处的归档是 Workspace Session 归档，不是尚未实现的 Team 成员归档。
-- migration-required 节点可打开但不可展开；external 条目只读且不可导航；目录读取失败提供重试，明确的空目录为叶子。`idle` 且无目录按未加载处理，已请求但宿主仍无响应时显示加载中并保留重试入口；`ready` 但无目录显示投影不可用，不伪装成空列表。`refreshProjections()` 在宿主内部会合并 in-flight 请求，重试不会强制中断卡住的请求。
+- migration-required 节点可打开但不可展开；external 条目只读且不可导航；目录读取失败提供重试。`idle` 的空目录只是可能过期的缓存提示，仍可展开以读取；只有状态为 `ready` 且目录明确为空时才视为叶子。`idle` 且无目录按未加载处理；缓存的非空目录仍可显示。已请求但宿主仍无响应时显示加载中并保留重试入口；`ready` 但无目录显示投影不可用，不伪装成空列表。`refreshProjections()` 在宿主内部会合并 in-flight 请求，重试不会强制中断卡住的请求。
 - 六张内置头像来自已提供的 mock。手动选择单会话类型优先，其次按可能可见的 role、agentPreset、标题关键词推断，未知回退组长图；不会声称 rc.5 目前对所有会话暴露 Agent Spec、工具集或模型。可在面板选择本地 PNG 替换某个类型（≤180 KB，建议 144×144），也可恢复默认；会话类型和自定义图片存在**当前浏览器 localStorage**，清除站点数据会丢失，不与其他设备同步。存储不可用/满时提示且不伪报保存成功。
 - 树提供方向键、Home/End、Enter/Space 和可 Tab 到的行内头像选择；扁平树为每行标注层级与同级位置，鼠标点击展开箭头后焦点返回树行。仍需真实 GUI 的键盘/屏幕阅读器验证。
 - **本面板不提供在右侧栏打开按钮。** rc.5 的右侧栏只绑定当前屏幕上的会话；独立主面板激活时没有可用的会话 surface，直接打开会抛错。主会话导航返回 `void`，不承诺等到右栏挂载或历史完成，不能安全地链式打开。可先打开会话，再使用原生页头的子代理目录及其右侧栏入口。

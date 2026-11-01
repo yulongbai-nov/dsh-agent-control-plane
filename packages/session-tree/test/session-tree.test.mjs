@@ -96,7 +96,7 @@ test('authoritative empty catalog is a leaf, failure is visible and retryable', 
   let [row] = core.buildRows(list, expanded, new Set(), new Map());
   assert.equal(row.catalogState, 'error'); assert.equal(row.error, 'offline'); assert.equal(row.expandable, true);
   assert.equal(core.catalogOf({ state: 'idle', values: {} }).state, 'unloaded');
-  assert.equal(core.catalogOf({ state: 'idle', values: { subagentCatalog: [] } }).state, 'ready');
+  assert.equal(core.catalogOf({ state: 'idle', values: { subagentCatalog: [] } }).state, 'unloaded');
   assert.equal(core.catalogOf({ state: 'loading', values: {} }).state, 'loading');
   assert.equal(core.catalogOf({ state: 'ready', values: {} }).state, 'unavailable');
   assert.equal(core.catalogOf({ state: 'migration-required', values: { subagentCatalog: [child('old')] } }).state, 'migration-required');
@@ -106,6 +106,91 @@ test('authoritative empty catalog is a leaf, failure is visible and retryable', 
   list.projectionsBySession.root = ready([]);
   [row] = core.buildRows(list, expanded, new Set(), new Map());
   assert.equal(row.expandable, false); assert.equal(row.catalogState, 'ready');
+});
+
+test('idle cached empty catalogs can expand, refresh and become authoritative', async () => {
+  const list = baseList(), expanded = new Set(), calls = [];
+  list.byId.a = summary('a', { origin: 'subagent', parentId: 'root' });
+  list.projectionsBySession.root = { state: 'idle', error: null, values: { subagentCatalog: [] } };
+  let [root] = core.buildRows(list, expanded, new Set(), new Map());
+  assert.equal(root.expandable, true);
+  await core.toggleBranch('root', expanded, async id => {
+    calls.push(id);
+    list.projectionsBySession[id] = ready([child('a')]);
+  }, list.projectionsBySession);
+  assert.deepEqual(calls, ['root']);
+  assert.deepEqual(core.buildRows(list, expanded, new Set(), new Map()).map(row => [row.id, row.parentId]), [['root', null], ['a', 'root']]);
+  list.projectionsBySession.a = { state: 'idle', error: null, values: { subagentCatalog: [] } };
+  let a = core.buildRows(list, expanded, new Set(), new Map())[1];
+  assert.equal(a.expandable, true);
+  await core.toggleBranch('a', expanded, async id => {
+    calls.push(id);
+    list.projectionsBySession[id] = ready([]);
+  }, list.projectionsBySession);
+  a = core.buildRows(list, expanded, new Set(), new Map())[1];
+  assert.equal(a.expandable, false);
+  assert.deepEqual(calls, ['root', 'a']);
+});
+
+test('disclosure UI refreshes an idle cached empty root without preloading', async () => {
+  states = []; stateIndex = 0;
+  const list = baseList(), calls = [];
+  list.projectionsBySession.root = { state: 'idle', error: null, values: { subagentCatalog: [] } };
+  let registration;
+  plugin.apply({
+    slots: { inject(_name, callback) { callback(); }, register(options, component) { if (options.name === 'main') registration = { options, component }; } },
+    sessions: { refreshProjections: async id => { calls.push(id); list.projectionsBySession[id] = ready([child('a')]); }, refresh() {} },
+    uiWorkspace: { openSession() {} }
+  });
+  const props = { ...registration.options.inject(), useSessions: selector => selector(list), useSessionStatus: selector => selector(new Map()), useWorkspaces: selector => selector({ archivedSessionIds: [] }) };
+  function render() { stateIndex = 0; return registration.component(props); }
+  function flatten(node) { return node && typeof node === 'object' ? [node, ...(node.children ?? []).flat(Infinity).flatMap(flatten)] : []; }
+  let elements = flatten(render());
+  const root = elements.find(node => node.props?.['data-session-id'] === 'root');
+  const disclosure = flatten(root).find(node => node.props?.className === 'caret');
+  assert.deepEqual(calls, []);
+  assert.equal(disclosure.props.disabled, false);
+  disclosure.props.onClick({ currentTarget: { closest: () => ({ focus() {} }) } });
+  await new Promise(resolve => setImmediate(resolve));
+  elements = flatten(render());
+  assert.deepEqual(calls, ['root']);
+  assert.ok(elements.some(node => node.props?.['data-session-id'] === 'a'));
+});
+
+test('nonempty cached catalog remains visible on expansion and migration remains closed', () => {
+  const list = baseList();
+  list.projectionsBySession.root = { state: 'idle', error: null, values: { subagentCatalog: [child('a')] } };
+  let rows = core.buildRows(list, new Set(['root']), new Set(), new Map());
+  assert.deepEqual(rows.map(row => row.id), ['root', 'a']);
+  assert.equal(rows[0].expandable, true);
+  list.projectionsBySession.root = { state: 'migration-required', error: null, values: { subagentCatalog: [child('a')] } };
+  rows = core.buildRows(list, new Set(['root']), new Set(), new Map());
+  assert.deepEqual(rows.map(row => row.id), ['root']);
+  assert.equal(rows[0].migrationRequired, true);
+  assert.equal(rows[0].expandable, false);
+});
+
+test('idle nonempty cache retains entries but reports refresh errors or absent projection', async () => {
+  const list = baseList(), expanded = new Set();
+  list.projectionsBySession.root = { state: 'idle', error: null, values: { subagentCatalog: [child('a')] } };
+  let [row] = core.buildRows(list, expanded, new Set(), new Map());
+  assert.equal(row.expandable, true);
+  await core.toggleBranch('root', expanded, async id => {
+    list.projectionsBySession[id] = { state: 'error', error: { message: 'offline' }, values: { subagentCatalog: [child('a')] } };
+  }, list.projectionsBySession);
+  let rows = core.buildRows(list, expanded, new Set(), new Map());
+  assert.equal(rows[0].catalogState, 'error');
+  assert.equal(rows[0].error, 'offline');
+  assert.deepEqual(rows.map(item => item.id), ['root', 'a']);
+  await core.retryBranch('root', async id => { list.projectionsBySession[id] = { state: 'ready', error: null, values: {} }; });
+  [row] = core.buildRows(list, expanded, new Set(), new Map());
+  assert.equal(row.catalogState, 'unavailable');
+  assert.equal(row.expandable, true);
+  list.projectionsBySession.root = { state: 'migration-required', error: null, values: { subagentCatalog: [] } };
+  [row] = core.buildRows(list, expanded, new Set(), new Map());
+  assert.equal(row.migrationRequired, true);
+  assert.equal(row.expandable, false);
+  assert.equal(row.expanded, false);
 });
 
 test('deleted roots disappear, archive and current status track provided snapshots', () => {
