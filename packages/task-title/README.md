@@ -47,7 +47,7 @@ ELECTRON_RUN_AS_NODE=1 \
 
 ## R9 合法接缝调查（rc.5）
 
-**没有找到能同时满足 R9 触发、有效来源、pin 与并发、冷恢复的公开标题服务接缝；不要安装或启用本原型。** `ctx.sessionTitle.get/rename/refresh/register` 之外未发现自动任务提交 API；不要凭 JavaScript 运行时可见的内部方法/字段调用私有 `supersede`、`runProvider` 等，也不要重命名用户标题、伪造消息或直接追加 `session/title`。已注册 provider 的对话摘要能力仍应保留；本次没有替换它。
+**CR-004 结论：没有找到在不修改或扩展标题服务时，能同时满足 R9 的触发时限、有效来源、pin、并发和冷恢复的公开接缝；不要安装或启用本原型。** `ctx.sessionTitle.get/rename/refresh/register` 之外未发现自动任务提交 API；不要凭 JavaScript 运行时可见的内部方法/字段调用私有 `supersede`、`runProvider` 等，也不要重命名用户标题、伪造消息或直接追加 `session/title`。已注册 provider 的对话摘要能力仍应保留；本次没有替换它。可选的任务备注/标签应使用与 `session/title` 分离的存储和授权（尚未实现）；它只能作为展示降级，**不满足 R9**。完整任务标题仍需下述受控服务扩展或上游能力。
 
 真实 rc.5 内存负例（`test/seams.rc5.integration.js`）：
 

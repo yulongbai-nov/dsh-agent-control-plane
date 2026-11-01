@@ -34,9 +34,9 @@ Host 侧已有只读冒烟：使用本机安装版 Electron 的 `ELECTRON_RUN_AS
 - CSS 仅引用安装版 rc.5 已存在的语义 alias（焦点使用 `brand-primary`、状态分别使用 `state-idle/business/success/warn-primary`），透明及继承不是固定色；没有颜色 fallback。组件内 `<style>` 随面板卸载，不修改全局样式。缺少官方主题或未来 token 改名会导致样式缺失，不能用单测证明两种主题的对比度或布局一致性。
 - 测试使用与 rc.5 协议对应的 locale/slot 替身，覆盖中英渲染、重新注册及卸载，不等同于真实 GUI 的实时语言切换验证。受本任务“不安装、不改 profile”的限制，现有 GUI 无法加载此改动；浅/深色与 Plugin Manager 并排、Tab/方向键/屏幕阅读器、切语言和控制台 slot crash 检查均待用户批准安装后在现有 GUI 完成。
 
-## 真侧栏树：后续选项与差距
+## 真侧栏树：CR-003 决策与差距
 
-rc.5 的 `sidebar.panellist` 是导航图标列表，其同 ID 的 `main` 是独占主面板，不是能嵌入持续可见树的侧栏内容。要在聊天期间持续显示真侧栏树，可以：
+**独立主面板不是 R7 的最终交付。** rc.5 的 `sidebar.panellist` 是导航图标列表，其同 ID 的 `main` 是独占主面板，不是能嵌入持续可见树的侧栏内容。当前尚无已验证的 single-slot 无损组合方式；选择以版本锁定的小范围 Workspace UI fork 作为候选，若上游提供可组合 slot 则优先复用。该 fork 尚未实现或验证，不得静默替换现有组件。要在聊天期间持续显示真侧栏树，可以：
 
 1. **维护兼容版本的 Workspace UI fork/替换**：在现有 `sidebar.workspaces` 单席内保留原生排序、分组、归档、权限与水位线，再把 subagent 目录渲染到根行下。体验最接近 mock，但涉及较大的 rc 更新及回归维护。
 2. **增加上游正式的侧栏 list/嵌套 slot**，让独立插件填充原生 Workspace 下方或每个会话行下；这需要 upstream 提供能力，外部插件不能单方面新增已被宿主渲染的 slot。直接抢占 `sidebar.workspaces` 会遮蔽原面板，不是无损组合，不建议静默采用。
