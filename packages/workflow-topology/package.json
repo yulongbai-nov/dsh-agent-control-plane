@@ -1,0 +1,10 @@
+{
+  "name": "@dsh-agent-control-plane/workflow-topology",
+  "version": "0.1.0",
+  "private": true,
+  "main": "index.cjs",
+  "engines": { "node": ">=24" },
+  "scripts": { "test": "node --test test/*.test.cjs test/*.test.mjs" },
+  "peerDependencies": { "acorn": "^8.0.0" },
+  "peerDependenciesMeta": { "acorn": { "optional": true } }
+}
