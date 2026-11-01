@@ -15,8 +15,8 @@ const item = (result, parentId, childId) => result.edges.find(edge => edge.paren
 test('only caller-reviewed direct edges become candidates; external stays non-navigable', () => {
   const result = inspectCandidates(base());
   assert.equal(result.status, 'incomplete'); // B has no projection
-  assert.equal(item(result, 'A', 'C').status, 'candidate');
-  assert.equal(item(result, 'C', 'D').status, 'candidate');
+  assert.equal(item(result, 'A', 'C').status, 'pending');
+  assert.equal(item(result, 'C', 'D').status, 'pending');
   assert.equal(item(result, 'A', 'E').status, 'external');
   assert.ok(result.issues.some(issue => issue.code === 'MISSING_CATALOG' && issue.parentId === 'B'));
   assert.equal('authorized' in item(result, 'A', 'C'), false);
@@ -26,7 +26,7 @@ test('only caller-reviewed direct edges become candidates; external stays non-na
 test('missing, unreviewed and forged source are separately withheld, never candidates', () => {
   for (const [record, code] of [
     [undefined, 'MISSING_CATALOG'],
-    [{ state: 'ready', entries: [{ id: 'C', mode: 'continuable' }] }, 'UNREVIEWED_CATALOG'],
+    [{ provenance: 'unreviewed', state: 'ready', entries: [{ id: 'C', mode: 'continuable' }] }, 'UNREVIEWED_CATALOG'],
     [{ provenance: 'verified', state: 'ready', entries: [{ id: 'C', mode: 'continuable' }] }, 'UNREVIEWED_CATALOG'],
     [{ provenance: true, state: 'ready', entries: [{ id: 'C', mode: 'continuable' }] }, 'UNREVIEWED_CATALOG'],
     [{ provenance: 'caller-reviewed', state: 'idle', entries: [] }, 'CATALOG_UNAVAILABLE'],
@@ -69,7 +69,7 @@ test('unreachable workspace data cannot inject edges or affect selected root can
   const input = base();
   input.catalogs.set('unrelated', { provenance: 'caller-reviewed', state: 'ready', entries: [{ id: 'C', mode: 'continuable' }] });
   const result = inspectCandidates(input);
-  assert.equal(item(result, 'A', 'C').status, 'candidate');
+  assert.equal(item(result, 'A', 'C').status, 'pending');
   assert.equal(item(result, 'unrelated', 'C'), undefined);
 });
 
@@ -101,12 +101,12 @@ test('malformed inputs, hostile proxies, throwing getters and limits fail closed
   assert.equal(JSON.stringify(result).includes('private'), false);
   const stable = base(); let reads = 0;
   Object.defineProperty(stable.catalogs.get('A'), 'entries', { get() { reads++; return [{ id: 'C', mode: 'continuable' }]; } });
-  assert.equal(item(inspectCandidates(stable), 'A', 'C').status, 'candidate');
-  assert.equal(reads, 1);
+  assert.equal(inspectCandidates(stable).status, 'invalid');
+  assert.equal(reads, 0);
   const changing = base(); let rootReads = 0;
   Object.defineProperty(changing.roots, 0, { get() { rootReads++; return rootReads === 1 ? 'A' : 'private'; } });
   const snap = inspectCandidates(changing);
-  assert.equal(rootReads, 1); assert.equal(JSON.stringify(snap).includes('private'), false);
+  assert.equal(rootReads, 0); assert.equal(snap.status, 'invalid'); assert.equal(JSON.stringify(snap).includes('private'), false);
   let traps = 0; const proxy = new Proxy({}, { get() { traps++; throw Error('private'); } });
   assert.equal(inspectCandidates(proxy).status, 'invalid'); assert.equal(traps, 0);
 });
