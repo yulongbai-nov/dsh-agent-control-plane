@@ -12,7 +12,7 @@ window.__ModuleLoader__.load({
         'type.lead': '组长 / 默认', 'type.research': '调研', 'type.code': '开发', 'type.write': '写作', 'type.data': '数据', 'type.qa': '校验',
         'status.archived': '已归档', 'status.waiting': '等待交互', 'status.running': '运行中', 'status.completed': '最近一次已完成', 'status.inactive': '未运行', 'status.unknown': '状态未知',
         migration: '需要迁移', external: '外部任务', unknownMode: '模式未知', ambiguous: '身份存在歧义', depthLimit: '达到显示深度上限', rowLabel: '{title}，{state}', collapse: '折叠 {title}', expand: '展开 {title}', changeAvatar: '更改 {title} 的头像', autoAvatar: '自动头像',
-        catalogError: '目录读取失败：{error}', catalogReadError: '读取目录失败', catalogUnavailable: '宿主未提供子代理目录投影。', catalogLoading: '正在读取子代理目录…', retry: '重试',
+        catalogError: '目录读取失败：{error}', catalogReadError: '读取目录失败', catalogUnavailable: '宿主未提供子代理目录投影。', catalogLoading: '正在读取子代理目录…', catalogUnknown: '目录状态未知，缓存暂不显示。', retry: '重试',
         openError: '打开失败：{error}', refreshError: '刷新失败：{error}', preferencesError: '头像偏好无法保存：浏览器存储不可用或空间不足。', preferencesSaved: '头像选择已保存在此浏览器。',
         imageInvalidSize: '请选择不超过 180 KB 的 PNG 图片。', imageReadError: '无法读取头像图片。', imageInvalid: '头像文件不是有效的 PNG 数据。', imageSaveError: '头像无法保存：浏览器存储不可用或空间不足。',
         imageSaved: '{type}头像已保存在此浏览器。', imageReset: '{type}头像已恢复内置图。', customAvatars: '自定义头像（仅此浏览器）', avatarType: '头像类型 ', replacePng: '替换为 PNG ', resetImage: '恢复内置图',
@@ -23,7 +23,7 @@ window.__ModuleLoader__.load({
         'type.lead': 'Lead / default', 'type.research': 'Research', 'type.code': 'Development', 'type.write': 'Writing', 'type.data': 'Data', 'type.qa': 'Verification',
         'status.archived': 'Archived', 'status.waiting': 'Waiting for interaction', 'status.running': 'Running', 'status.completed': 'Last turn completed', 'status.inactive': 'Inactive', 'status.unknown': 'Status unknown',
         migration: 'Migration required', external: 'External task', unknownMode: 'Unknown mode', ambiguous: 'Ambiguous identity', depthLimit: 'Display depth limit reached', rowLabel: '{title}, {state}', collapse: 'Collapse {title}', expand: 'Expand {title}', changeAvatar: 'Change avatar for {title}', autoAvatar: 'Automatic avatar',
-        catalogError: 'Failed to load catalog: {error}', catalogReadError: 'Failed to read catalog', catalogUnavailable: 'The host did not provide a subagent catalog projection.', catalogLoading: 'Loading subagent catalog…', retry: 'Retry',
+        catalogError: 'Failed to load catalog: {error}', catalogReadError: 'Failed to read catalog', catalogUnavailable: 'The host did not provide a subagent catalog projection.', catalogLoading: 'Loading subagent catalog…', catalogUnknown: 'Catalog status unknown; cached entries are hidden.', retry: 'Retry',
         openError: 'Failed to open: {error}', refreshError: 'Failed to refresh: {error}', preferencesError: 'Could not save avatar preferences: browser storage is unavailable or full.', preferencesSaved: 'Avatar selection saved in this browser.',
         imageInvalidSize: 'Choose a PNG image no larger than 180 KB.', imageReadError: 'Could not read the avatar image.', imageInvalid: 'The avatar file is not valid PNG data.', imageSaveError: 'Could not save the avatar: browser storage is unavailable or full.',
         imageSaved: '{type} avatar saved in this browser.', imageReset: '{type} avatar restored to the built-in image.', customAvatars: 'Custom avatars (this browser only)', avatarType: 'Avatar type ', replacePng: 'Replace with PNG ', resetImage: 'Restore built-in image',
@@ -79,11 +79,13 @@ window.__ModuleLoader__.load({
       if (state === 'migration-required') return { state: 'migration-required', entries: entries ?? [] };
       if (state === 'error') return { state: 'error', entries: entries ?? [], error: snapshot.error?.message };
       if (state === 'loading') return { state: 'loading', entries: entries ?? [] };
-      // An idle empty catalog may be a stale cache hint, not a known leaf.
-      if (state === 'idle' && entries?.length === 0) return { state: 'unloaded', entries };
-      if (entries !== undefined) return { state: 'ready', entries };
-      if (state === 'ready') return { state: 'unavailable', entries: [] };
-      return { state: 'unloaded', entries: [] };
+      if (state === 'idle') {
+        // An idle empty catalog may be a stale cache hint, not a known leaf.
+        return entries?.length ? { state: 'ready', entries } : { state: 'unloaded', entries: entries ?? [] };
+      }
+      if (state === 'ready') return entries !== undefined ? { state: 'ready', entries } : { state: 'unavailable', entries: [] };
+      // Keep cached entries as conservative conflict evidence, not navigable rows.
+      return { state: 'unknown', entries: entries ?? [] };
     }
     function rowStatus(summary, uiStatus, archived) {
       if (archived) return 'archived';
@@ -128,7 +130,7 @@ window.__ModuleLoader__.load({
         const migrationRequired = summary?.formatStatus === 'migration-required' || catalog.state === 'migration-required';
         const knownLeaf = catalog.state === 'ready' && catalog.entries.length === 0;
         const isArchived = archived.has(id);
-        const title = summary?.title?.trim() || entry?.label?.trim() || summary?.displayTitle || id;
+        const title = (typeof summary?.title === 'string' && summary.title.trim()) || (typeof entry?.label === 'string' && entry.label.trim()) || (typeof summary?.displayTitle === 'string' && summary.displayTitle) || id;
         const sessionState = statuses.get(id);
         // Catalog fallback rows use running=false without establishing live status.
         const knownSummary = listed.has(id) ? summary : { ...summary, running: undefined };
@@ -145,7 +147,7 @@ window.__ModuleLoader__.load({
           expandable, expanded: expanded.has(id) && expandable
         };
         rows.push(row);
-        if (!row.expanded) return;
+        if (!row.expanded || catalog.state === 'unknown') return;
         const next = new Set(ancestors); next.add(id);
         const occurrences = new Map();
         for (const nextEntry of catalog.entries) {
@@ -323,7 +325,7 @@ window.__ModuleLoader__.load({
         const label = row.title;
         const indicator = row.expanded && (error ? h('div', { className: 'branch-note error', role: 'alert', style: { marginLeft: `${row.level * 20}px` } }, t('catalogError', { error }), h('button', { type: 'button', onClick: () => retry(row.id) }, t('retry')))
           : row.catalogState === 'unavailable' ? h('div', { className: 'branch-note', style: { marginLeft: `${row.level * 20}px` } }, t('catalogUnavailable'))
-          : row.catalogState === 'loading' || row.catalogState === 'unloaded' ? h('div', { className: 'branch-note', role: 'status', style: { marginLeft: `${row.level * 20}px` } }, t('catalogLoading'), h('button', { type: 'button', onClick: () => retry(row.id) }, t('retry'))) : null);
+          : row.catalogState === 'loading' || row.catalogState === 'unloaded' || row.catalogState === 'unknown' ? h('div', { className: 'branch-note', role: 'status', style: { marginLeft: `${row.level * 20}px` } }, t(row.catalogState === 'unknown' ? 'catalogUnknown' : 'catalogLoading'), h('button', { type: 'button', onClick: () => retry(row.id) }, t('retry'))) : null);
         return h(React.Fragment, { key: row.rowKey }, h('div', {
           className: `row ${row.level === 1 ? 'root-row' : ''}`,
           style: { marginLeft: `${(row.level - 1) * 20}px` }, role: 'treeitem',

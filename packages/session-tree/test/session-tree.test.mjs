@@ -341,6 +341,89 @@ test('idle nonempty cache retains entries but reports refresh errors or absent p
   assert.equal(row.expanded, false);
 });
 
+test('unknown catalog states keep conservative conflict evidence but do not show untrusted children', () => {
+  for (const state of [undefined,null,'pending',42,{}]) {
+    for (const entries of [[],[child('cached')],undefined]) {
+      const list=baseList();list.projectionsBySession.root={state,values:entries===undefined?{}:{subagentCatalog:entries}};
+      const rows=core.buildRows(list,new Set(['root']),new Set(),new Map());
+      assert.equal(rows[0].catalogState,'unknown',String(state));
+      assert.equal(rows[0].expandable,true,String(state));
+      assert.deepEqual(rows.map(row=>row.id),['root']);
+    }
+  }
+  const list=baseList();list.projectionsBySession.root={state:'idle',values:{subagentCatalog:[child('cached')]}};
+  assert.deepEqual(core.buildRows(list,new Set(['root']),new Set(),new Map()).map(row=>row.id),['root','cached']);
+});
+
+test('unknown catalog state warns in both languages, hides children and permits retry', async () => {
+  for (const language of ['zh','en']) {
+    states=[];stateIndex=0;const locale=mockLocale();locale.setLanguage(language);let registration,calls=0;
+    applyPlugin({locale,slots:{inject(_name,callback){callback();},register(options,component){if(options.name==='main')registration={options,component};}},sessions:{refreshProjections(){calls++;},refresh(){}},uiWorkspace:{openSession(){}}});
+    const list=baseList();list.projectionsBySession.root={state:'alien',values:{subagentCatalog:[child('cached')]}};
+    const actions=registration.options.inject();actions.expansion.add('root');
+    const props={...actions,useSessions:selector=>selector(list),useSessionStatus:selector=>selector(new Map()),useWorkspaces:selector=>selector({archivedSessionIds:[]})};
+    const flatten=node=>node&&typeof node==='object'?[node,...(node.children??[]).flat(Infinity).flatMap(flatten)]:[];
+    const render=()=>{stateIndex=0;return flatten(registration.component(props));};
+    let nodes=render();
+    assert.equal(nodes.some(node=>node.props?.['data-session-id']==='cached'),false);
+    const warning=nodes.find(node=>node.props?.role==='status'&&node.children.some(text=>typeof text==='string'&&text.includes(language==='zh'?'目录状态未知':'Catalog status unknown')));
+    assert.ok(warning,language);
+    flatten(warning).find(node=>node.type==='button').props.onClick();
+    await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(calls,1);
+    list.projectionsBySession.root=ready([child('cached')]);
+    nodes=render();
+    assert.ok(nodes.some(node=>node.props?.['data-session-id']==='cached'));
+    assert.equal(nodes.some(node=>node.props?.role==='status'&&node.children.some(text=>typeof text==='string'&&text.includes(language==='zh'?'目录状态未知':'Catalog status unknown'))),false);
+  }
+});
+
+test('unknown catalog cache participates in conflict detection without exposing its children', () => {
+  const list=baseList();list.ids.push('other');list.byId.other=summary('other');
+  list.projectionsBySession={root:{state:'future',values:{subagentCatalog:[child('shared')]}},other:ready([child('shared')])};
+  const rows=core.buildRows(list,new Set(['root','other']),new Set(),new Map());
+  assert.deepEqual(rows.map(row=>row.id),['root','other','shared']);
+  const shared=rows.find(row=>row.id==='shared');
+  assert.equal(shared.ambiguous,true);assert.equal(core.navigationTarget(shared),null);assert.equal(shared.expandable,false);
+  list.projectionsBySession.root=ready([]);
+  const refreshed=core.buildRows(list,new Set(['root','other']),new Set(),new Map());
+  const unique=refreshed.find(row=>row.id==='shared');
+  assert.equal(unique.ambiguous,false);assert.notEqual(core.navigationTarget(unique),null);
+});
+
+test('known loading and error catalog cache remains visible', () => {
+  for (const state of ['loading','error']) {
+    const list=baseList();list.projectionsBySession.root={state,error:{message:'offline'},values:{subagentCatalog:[child('cached')]}};
+    const rows=core.buildRows(list,new Set(['root']),new Set(),new Map());
+    assert.deepEqual(rows.map(row=>row.id),['root','cached']);
+    assert.equal(rows[0].catalogState,state);
+  }
+});
+
+test('malformed summary titles and entry labels fall back to safe strings', () => {
+  const malformed=[null,undefined,17,{value:'not text'},['x'],true];
+  for(const value of malformed) {
+    const list=baseList();list.byId.root.title=value;list.byId.root.displayTitle=value;
+    list.projectionsBySession.root=ready([child('sub','continuable',value)]);
+    const rows=core.buildRows(list,new Set(['root']),new Set(),new Map());
+    assert.deepEqual(rows.map(row=>row.title),['root','sub']);
+  }
+  const list=baseList();list.byId.root.title=123;list.byId.root.displayTitle='  display title  ';
+  list.projectionsBySession.root=ready([child('sub','continuable','  child label  ')]);
+  const rows=core.buildRows(list,new Set(['root']),new Set(),new Map());
+  assert.deepEqual(rows.map(row=>row.title),['  display title  ','child label']);
+  states=[];stateIndex=0;let registration;
+  applyPlugin({slots:{inject(_name,callback){callback();},register(options,component){if(options.name==='main')registration={options,component};}},sessions:{refreshProjections(){},refresh(){}},uiWorkspace:{openSession(){}}});
+  list.byId.root.title={unexpected:true};list.byId.root.displayTitle={unexpected:true};
+  list.projectionsBySession.root=ready([child('sub','continuable',{unexpected:true})]);
+  const actions=registration.options.inject();actions.expansion.add('root');
+  const props={...actions,useSessions:selector=>selector(list),useSessionStatus:selector=>selector(new Map()),useWorkspaces:selector=>selector({archivedSessionIds:[]})};
+  const flatten=node=>node&&typeof node==='object'?[node,...(node.children??[]).flat(Infinity).flatMap(flatten)]:[];
+  const rendered=flatten(registration.component(props)).filter(node=>node.props?.role==='treeitem');
+  assert.ok(rendered.find(row=>row.props['data-session-id']==='root').props['aria-label'].startsWith('root'));
+  assert.ok(rendered.find(row=>row.props['data-session-id']==='sub').props['aria-label'].startsWith('sub'));
+});
+
 test('deleted roots disappear, archive and current status track provided snapshots', () => {
   const list = baseList();
   list.byId.a = summary('a', { origin: 'subagent', projectionValues: { subagentTiming: { lastTurnCompleted: true } } });
