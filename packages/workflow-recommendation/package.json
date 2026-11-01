@@ -1,0 +1,9 @@
+{
+  "name": "@dsh-agent-control-plane/workflow-recommendation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./index.mjs",
+  "scripts": { "test": "node --test test/*.test.mjs" },
+  "engines": { "node": ">=24" }
+}
