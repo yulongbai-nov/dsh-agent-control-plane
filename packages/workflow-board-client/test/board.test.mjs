@@ -20,7 +20,7 @@ const makeBoard = () => ({ version: 1, runId: 'run-A', sourceStatus: 'verified',
 const sampleData = () => ({ byId: { child: { id: 'child', parentId: 'parent-real', running: true } },
   projectionsBySession: { child: { values: { subagent: { mode: 'one-shot' } } } } });
 
-function renderer() {
+function renderer({ strict = false } = {}) {
   let state = [], cursor = 0, dirty = false, mounted = true, updatesAfterUnmount = 0;
   let effects = [], pending = [];
   const React = {
@@ -58,8 +58,11 @@ function renderer() {
       dirty = false; cursor = 0; pending = [];
       result = Component(props);
       for (const effect of pending) {
+        const first = !effects[effect.index];
         effects[effect.index]?.cleanup?.();
-        effects[effect.index] = { deps: effect.deps, cleanup: effect.callback() };
+        let cleanup = effect.callback();
+        if (strict && first) { cleanup?.(); cleanup = effect.callback(); }
+        effects[effect.index] = { deps: effect.deps, cleanup };
       }
     } while (dirty);
     return result;
@@ -252,6 +255,50 @@ test('navigation errors are scoped to node, run, parent, latest attempt and moun
   open(tree).props.onClick();
   r.unmount(); calls[7].reject(new Error('after unmount')); await new Promise(resolve => setImmediate(resolve));
   assert.equal(r.updatesAfterUnmount(), 0);
+});
+
+test('displayed error is permanently cleared after run or parent switches away and back', async () => {
+  const board = makeBoard(), r = renderer();
+  board.statusByNode.a = { status: 'running', childId: 'child', seq: 1 };
+  let reject;
+  const props = { board, sessions: sampleData(), statuses: new Map([['child', { running: true }]]), openSession: () => new Promise((_resolve, fail) => { reject = fail; }) };
+  const alert = tree => flatten(tree).find(node => node.props?.role === 'alert');
+  const open = tree => flatten(tree).find(node => node.type === 'button' && text(node) === '打开子会话');
+  async function showError(message) {
+    let tree = r.render(props);
+    rowsOf(tree).find(row => row.props['data-roster-id'] === 'a').props.onClick();
+    tree = r.render(props);
+    open(tree).props.onClick(); reject(new Error(message));
+    await new Promise(resolve => setImmediate(resolve));
+    tree = r.render(props);
+    assert.ok(text(alert(tree)).includes(message));
+  }
+  await showError('first run error');
+  let tree = r.render({ ...props, board: { ...board, runId: 'other-run' } });
+  assert.equal(alert(tree), undefined);
+  tree = r.render(props);
+  assert.equal(alert(tree), undefined);
+  await showError('first parent error');
+  tree = r.render({ ...props, board: { ...board, parentSessionId: 'other-parent' } });
+  assert.equal(alert(tree), undefined);
+  tree = r.render(props);
+  assert.equal(alert(tree), undefined);
+});
+
+test('strict-mode effect replay keeps navigation functional and clears old error across scopes', async () => {
+  const board = makeBoard(), r = renderer({ strict: true });
+  board.statusByNode.a = { status: 'running', childId: 'child', seq: 1 };
+  const props = { board, sessions: sampleData(), statuses: new Map([['child', { running: true }]]), openSession: () => Promise.reject(new Error('strict failure')) };
+  let tree = r.render(props);
+  rowsOf(tree).find(row => row.props['data-roster-id'] === 'a').props.onClick();
+  tree = r.render(props);
+  flatten(tree).find(node => node.type === 'button' && text(node) === '打开子会话').props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  tree = r.render(props);
+  assert.ok(flatten(tree).some(node => node.props?.role === 'alert' && text(node).includes('strict failure')));
+  r.render({ ...props, board: { ...board, runId: 'second' } });
+  tree = r.render(props);
+  assert.equal(flatten(tree).some(node => node.props?.role === 'alert'), false);
 });
 
 test('navigation rejection after a newer scope commits cannot update obsolete state', async () => {

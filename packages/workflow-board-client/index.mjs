@@ -59,6 +59,7 @@ export function createWorkflowBoard(React) {
     React.useLayoutEffect(() => {
       request.current.active = true;
       request.current.generation++;
+      setOpenError(null);
       return () => { request.current.active = false; request.current.generation++; };
     }, [board?.runId, board?.parentSessionId, selection?.id]);
     React.useLayoutEffect(() => {
