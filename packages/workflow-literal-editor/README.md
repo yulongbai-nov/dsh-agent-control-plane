@@ -19,6 +19,8 @@ if (before.ok && before.targets.length) {
 
 当前布局只按空 meta 调用 `layoutTopology`，不涉及尚未传入的真实 `meta.phases`；要对完整 workflow 保证相同坐标必须由调用方使用真实 meta 再做对账，不能把本预览当成完整 host 集成。rc.5 使用 `opts.label ?? defaultLabel(prompt)`，显式空 label 不触发 fallback；该情况已有测试。脚本字符串本身有敏感信息风险，宿主不应默认日志或外发 diff。
 
+**CR-005：本包不执行重跑。** spec §6.4 的 A 档规划是用户确认后由普通消息交给 agent，由模型决定是否重新调用 workflow；不是图编辑器直接执行，也不是保证模型会原样运行候选脚本。消息、潜在外发、权限及实际运行均须另行获得所需授权并处理；这条模型中介路径目前同样未接入。
+
 完整测试（零安装使用本机已有 Acorn，产品代码无机器路径）：
 
 ```sh

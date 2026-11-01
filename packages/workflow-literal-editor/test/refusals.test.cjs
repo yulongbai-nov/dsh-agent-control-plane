@@ -35,6 +35,19 @@ test('rejects duplicate labels, shadowing, unsupported dynamic flow and nonliter
   ]) assert.equal(inspect(script).ok,false,script);
 });
 
+test('dynamic, template, control-flow and unsupported multi-statement cases return explicit codes',()=>{
+  for (const [script,code] of [
+    [`await agent(args.prompt,{label:'A'})`, 'UNSAFE_TOPOLOGY'],
+    ['await agent(`computed`,{label:"A"})', 'UNSUPPORTED_CALL'],
+    [`if (args.flag) await agent('x',{label:'A'})`, 'UNSAFE_TOPOLOGY'],
+    [`await agent('x',{label:'A'}); let x=2;`, 'UNSUPPORTED_STATEMENT'],
+  ]) assert.deepEqual(inspect(script), {ok:false,code});
+  // Multiple supported top-level statements are allowed, not blanket-rejected.
+  const supported=inspect(`await agent('x',{label:'A'}); await agent('y',{label:'B'});`);
+  assert.equal(supported.ok,true);
+  assert.equal(supported.targets.length,2);
+});
+
 test('unsupported outer meta and args inputs are rejected rather than silently ignored',()=>{
   const script=`await agent('x',{label:'A'});`;
   assert.equal(inspectScript(script,{parse,meta:{phases:[{title:'x'}]}}).ok,false);
