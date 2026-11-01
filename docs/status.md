@@ -6,13 +6,13 @@
 |---|---|---|---|
 | R1 递归团队 | 无团队实现包 | [原始深度调研](../../dsh-mocks/research/depth.md)是现状分析，不是本仓库实现或验收 | 未开始：团队 L0–L3、L4 类型化拒绝及恢复未实现 |
 | R2 团队级深度 | [Agent Spec 预检](../packages/agent-spec/README.md)只输出 unknown | `node --test packages/agent-spec/test/*.test.mjs` 合成字段能力测试；不得将 `subagentDepth` 当相对预算 | 原型：没有团队范围设置与覆盖多条路径的原子门禁 |
-| R3 手动建队 | 无团队实现包 | [会话树](../packages/session-tree/README.md) 是浏览原型，不创建团队 | 未开始：成员、模型、工具集选择及 roster 写入未实现 |
+| R3 手动建队 | [TeamService 接缝研究](../packages/team-control-spike/README.md) | `test/rc5.baseline.cjs` 用真实服务和内存替身验证字段未透传；不是完整 Host 或 UI | 原型：成员、模型、工具集选择及真实 roster 写入尚未扩展 |
 | R4 自动建队 | 无团队实现包 | 尚无自动角色建议或一键创建的实现测试 | 未开始：建议、确认、撤销和权限未实现 |
-| R5 归档与唤醒 | 无 Team 归档实现包 | [标题调查](../packages/task-title/README.md)的 team 合成事件不构成归档实现 | 未开始：显式消息拒绝、同 ID 唤醒、持久恢复未实现；隐藏不等于归档 |
+| R5 归档与唤醒 | [Team 门禁参考模型](../packages/team-control-spike/README.md) | `node --test packages/team-control-spike/test/gate.test.cjs` 验证单 owner 内存模型，不接原生服务 | 原型：显式消息拒绝、同 ID 唤醒及持久恢复没有接入；隐藏不等于归档 |
 | R6 Agent Spec | [Agent Spec 预检](../packages/agent-spec/README.md) | `node --test packages/agent-spec/test/*.test.mjs`；静态子集的结果仍是 unknown | 原型：未接 Team/workflow、工具集、授权或递归预算，未知后端不透传 |
-| R7 常驻侧栏树 | [会话树主面板](../packages/session-tree/README.md) | `node --test packages/session-tree/test/*.test.mjs`；slot 协议的内存替身测试，不是 GUI | 原型：主面板不是最终侧栏；Workspace UI fork/可组合 seam 与真实 GUI 未实现/验收 |
+| R7 常驻侧栏树 | [会话树主面板](../packages/session-tree/README.md)、[侧栏候选研究](../packages/workspace-sidebar-spike/README.md) | `node --test packages/session-tree/test/*.test.mjs packages/workspace-sidebar-spike/test/*.test.mjs` 是合成测试，不是 GUI | 原型：主面板不是最终侧栏；公开上游源码存在但 fork/构建/真实 GUI 未实现或验收 |
 | R8 六类任务头像及覆盖 | [会话树主面板](../packages/session-tree/README.md) | 原型内置头像和浏览器 localStorage 覆盖；`node --test packages/session-tree/test/*.test.mjs` | 原型：与侧栏、可靠任务类型、持久策略及真实 GUI 尚未整体验收 |
-| R9 随任务更新标题 | [标题原型和服务负例](../packages/task-title/README.md#r9-合法接缝调查rc5) | rc.5 合成会话测试 `packages/task-title/test/seams.rc5.integration.js`：任务自身不触发标题 provider | 原型：公开 seam 无法证明满足 pin、任务触发和冷恢复；备注/标签只是未实现的降级，不满足 R9 |
+| R9 随任务更新标题 | [标题服务负例](../packages/task-title/README.md#r9-合法接缝调查rc5)、[调度模型](../packages/task-title-service-spike/README.md) | rc.5 合成会话负例和 `node --test packages/task-title-service-spike/test/*.test.mjs` 合成状态机测试 | 原型：公开 seam 无法证明满足 pin、任务触发和冷恢复；备注/标签只是未实现的降级，不满足 R9 |
 | R10 工作流图与编辑 | [拓扑](../packages/workflow-topology/README.md)、[字面量预览](../packages/workflow-literal-editor/README.md) | `NODE_PATH="$HOME/.dsh/profiles/desktop/node_modules" npm run test:workflow`；合成静态解析、布局和受限 diff | 原型：真实来源未认证，args/meta 编辑、真实 meta/宿主对账和授权重跑未实现 |
 | R11 节点看板 | [投影](../packages/workflow-board-projection/README.md)、[客户端](../packages/workflow-board-client/README.md) | `node --test packages/workflow-board-projection/test/*.test.cjs packages/workflow-board-client/test/*.test.mjs`，合成事件与 React 替身 | 原型：未接实时宿主、完整用量及原生 GUI；歧义不猜映射 |
 | R12 缓存友好 | 无专门的缓存策略实现包 | spec 参考历史调研；本仓库无真实 session 的 cache hit 验收 | 未开始：复用策略、冻结身份和命中率面板未实现 |
