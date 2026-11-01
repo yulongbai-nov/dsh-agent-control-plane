@@ -190,7 +190,10 @@ test('lazy expansion fetches only the clicked layer and builds arbitrary depth w
   const calls = [], data = { root: [child('a')], a: [child('b', 'one-shot')], b: [child('c', 'unknown')], c: [] };
   const expanded = new Set();
   const refresh = async id => { calls.push(id); list.projectionsBySession[id] = ready(data[id]); };
-  const toggle = id => core.toggleBranch(id, expanded, refresh, list.projectionsBySession);
+  const toggle = id => {
+    const rows = core.buildRows(list,expanded,new Set(),new Map());
+    return core.toggleBranch(rows.find(row=>row.id===id),expanded,refresh,rows);
+  };
   assert.deepEqual(core.buildRows(list, expanded, new Set(), new Map()).map(r => r.id), ['root']);
   await toggle('root'); assert.deepEqual(calls, ['root']);
   assert.deepEqual(core.buildRows(list, expanded, new Set(), new Map()).map(r => [r.id, r.parentId, r.level]), [['root', null, 1], ['a', 'root', 2]]);
@@ -246,19 +249,19 @@ test('idle cached empty catalogs can expand, refresh and become authoritative', 
   list.projectionsBySession.root = { state: 'idle', error: null, values: { subagentCatalog: [] } };
   let [root] = core.buildRows(list, expanded, new Set(), new Map());
   assert.equal(root.expandable, true);
-  await core.toggleBranch('root', expanded, async id => {
+  await core.toggleBranch(root, expanded, async id => {
     calls.push(id);
     list.projectionsBySession[id] = ready([child('a')]);
-  }, list.projectionsBySession);
+  }, [root]);
   assert.deepEqual(calls, ['root']);
   assert.deepEqual(core.buildRows(list, expanded, new Set(), new Map()).map(row => [row.id, row.parentId]), [['root', null], ['a', 'root']]);
   list.projectionsBySession.a = { state: 'idle', error: null, values: { subagentCatalog: [] } };
   let a = core.buildRows(list, expanded, new Set(), new Map())[1];
   assert.equal(a.expandable, true);
-  await core.toggleBranch('a', expanded, async id => {
+  await core.toggleBranch(a, expanded, async id => {
     calls.push(id);
     list.projectionsBySession[id] = ready([]);
-  }, list.projectionsBySession);
+  }, core.buildRows(list,expanded,new Set(),new Map()));
   a = core.buildRows(list, expanded, new Set(), new Map())[1];
   assert.equal(a.expandable, false);
   assert.deepEqual(calls, ['root', 'a']);
@@ -307,9 +310,9 @@ test('idle nonempty cache retains entries but reports refresh errors or absent p
   list.projectionsBySession.root = { state: 'idle', error: null, values: { subagentCatalog: [child('a')] } };
   let [row] = core.buildRows(list, expanded, new Set(), new Map());
   assert.equal(row.expandable, true);
-  await core.toggleBranch('root', expanded, async id => {
+  await core.toggleBranch(row, expanded, async id => {
     list.projectionsBySession[id] = { state: 'error', error: { message: 'offline' }, values: { subagentCatalog: [child('a')] } };
-  }, list.projectionsBySession);
+  }, [row]);
   let rows = core.buildRows(list, expanded, new Set(), new Map());
   assert.equal(rows[0].catalogState, 'error');
   assert.equal(rows[0].error, 'offline');
@@ -454,15 +457,69 @@ test('deep visible chain is bounded, translated, and cannot request another leve
   }
 });
 
-test('closing a deeply cached branch is iterative and handles cycles', async () => {
-  const projections = {}, expanded = new Set();
-  for (let i = 0; i < 15000; i++) {
-    const id = `node${i}`; expanded.add(id);
-    projections[id] = ready([child(i === 14999 ? 'node0' : `node${i+1}`)]);
+test('closing a visible root never crosses blocked modes, stale expanded edges or independent roots', async () => {
+  for (const mode of ['unknown','external',undefined,'invalid']) {
+    const list = baseList(); list.ids.push('other'); list.byId.other = summary('other');
+    list.projectionsBySession = { root:ready([child('barrier',mode)]), barrier:ready([child('other')]), other:ready([child('leaf')]) };
+    if (mode === undefined) list.projectionsBySession.root.values.subagentCatalog[0].mode = undefined;
+    const expanded = new Set(['root','barrier','other']);
+    const rows = core.buildRows(list,expanded,new Set(),new Map());
+    assert.deepEqual(rows.map(row=>row.id),['root','barrier','other','leaf']);
+    const root = rows[0];
+    await core.toggleBranch(root,expanded,async()=>{throw Error('unexpected refresh');},rows);
+    assert.deepEqual([...expanded],['barrier','other'],String(mode));
   }
-  let calls = 0;
-  await core.toggleBranch('node0', expanded, async () => { calls++; }, projections);
-  assert.equal(expanded.size,0);
+});
+
+test('collapse respects ambiguous and migration boundaries and clears only visible expanded nodes', async () => {
+  for (const boundary of ['ambiguous','migration']) {
+    const list = baseList(); list.ids.push('other'); list.byId.other = summary('other');
+    list.projectionsBySession = {root:ready([child('a'),child('block')]), a:ready([child('inner')]), block:ready([child('other')]), other:ready([child('leaf')])};
+    if (boundary === 'ambiguous') list.projectionsBySession.root.values.subagentCatalog.push(child('block'));
+    else list.byId.block = summary('block',{origin:'subagent',formatStatus:'migration-required'});
+    const expanded = new Set(['root','a','block','other']);
+    const rows = core.buildRows(list,expanded,new Set(),new Map());
+    const block = rows.find(row=>row.id==='block');
+    assert.equal(block.expandable,false);
+    await core.toggleBranch(rows[0],expanded,async()=>{throw Error('unexpected refresh');},rows);
+    assert.deepEqual([...expanded],['block','other'],boundary);
+  }
+});
+
+test('closing one root preserves another while clearing its legitimate visible multilevel subtree', async () => {
+  const list = baseList(); list.ids.push('other'); list.byId.other = summary('other');
+  list.projectionsBySession = {root:ready([child('a')]),a:ready([child('deep')]),deep:ready([child('leaf')]),other:ready([child('b')]),b:ready([child('c')])};
+  const expanded = new Set(['root','a','deep','other','b']);
+  const rows = core.buildRows(list,expanded,new Set(),new Map());
+  await core.toggleBranch(rows.find(row=>row.id==='root'),expanded,async()=>{throw Error('unexpected');},rows);
+  assert.deepEqual([...expanded],['other','b']);
+});
+
+test('closing a stale collapsed node does not traverse its unseen descendants', async () => {
+  const list = baseList();
+  list.projectionsBySession = { root:ready([child('a')]), a:ready([child('hidden')]), hidden:ready([child('more')]) };
+  const expanded = new Set(['root','hidden']);
+  const rows = core.buildRows(list,expanded,new Set(),new Map());
+  await core.toggleBranch(rows[0],expanded,async()=>{throw Error('unexpected refresh');},rows);
+  assert.deepEqual([...expanded],['hidden']);
+});
+
+test('ambiguous and cyclic root rows cannot collapse or disturb another root', async () => {
+  const list = baseList(); list.ids.push('other'); list.byId.other = summary('other');
+  list.projectionsBySession = {root:ready([child('a')]),a:ready([child('root')]),other:ready([child('leaf')])};
+  const expanded = new Set(['root','a','other']);
+  const rows = core.buildRows(list,expanded,new Set(),new Map());
+  assert.equal(rows[0].ambiguous,true);
+  await core.toggleBranch(rows[0],expanded,async()=>{throw Error('unexpected');},rows);
+  assert.deepEqual([...expanded],['root','a','other']);
+});
+
+test('closing a large synthetic visible subtree is iterative and stops at the next root', async () => {
+  const rows = Array.from({length:15000}, (_,i) => ({id:`node${i}`,rowKey:`key${i}`,level:i+1,expandable:true,expanded:true,ambiguous:false}));
+  rows.push({id:'other',rowKey:'other-key',level:1,expandable:true,expanded:true,ambiguous:false});
+  const expanded = new Set(rows.map(row=>row.id)); let calls = 0;
+  await core.toggleBranch(rows[0], expanded, async () => { calls++; }, rows);
+  assert.deepEqual([...expanded],['other']);
   assert.equal(calls,0);
 });
 
@@ -508,6 +565,26 @@ test('root targeted by a different root is ambiguous on both visible occurrences
   assert.equal(occurrences.length,2);
   assert.ok(occurrences.every(row => row.ambiguous && !row.expandable && core.navigationTarget(row) === null));
   assert.notEqual(occurrences[0].rowKey,occurrences[1].rowKey);
+});
+
+test('component collapse preserves another root behind an unknown-mode cached edge', () => {
+  states = []; stateIndex = 0;
+  const list = baseList(); list.ids.push('other'); list.byId.other = summary('other');
+  list.projectionsBySession = {root:ready([child('barrier','unknown')]),barrier:ready([child('other')]),other:ready([child('leaf')])};
+  let registration;
+  applyPlugin({slots:{inject(_name,callback){callback();},register(options,component){if(options.name==='main')registration={options,component};}},
+    sessions:{refreshProjections(){throw Error('unexpected refresh');},refresh(){}},uiWorkspace:{openSession(){}}});
+  const actions = registration.options.inject(); for (const id of ['root','barrier','other']) actions.expansion.add(id);
+  const props = {...actions,useSessions:selector=>selector(list),useSessionStatus:selector=>selector(new Map()),useWorkspaces:selector=>selector({archivedSessionIds:[]})};
+  const flatten = node => node && typeof node === 'object' ? [node,...(node.children ?? []).flat(Infinity).flatMap(flatten)] : [];
+  function render(){stateIndex=0;return flatten(registration.component(props));}
+  let rows = render().filter(node=>node.props?.role==='treeitem');
+  const root = rows.find(row=>row.props['data-session-id']==='root');
+  root.props.onKeyDown({key:'ArrowLeft',target:1,currentTarget:1,preventDefault(){}});
+  rows = render().filter(node=>node.props?.role==='treeitem');
+  assert.deepEqual(rows.map(row=>row.props['data-session-id']),['root','other','leaf']);
+  assert.equal(rows.find(row=>row.props['data-session-id']==='other').props['aria-expanded'],true);
+  assert.deepEqual([...actions.expansion],['barrier','other']);
 });
 
 test('component omits unavailable right-sidebar action on independent main panel', () => {

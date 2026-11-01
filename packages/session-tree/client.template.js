@@ -176,20 +176,19 @@ window.__ModuleLoader__.load({
       if (!validId(row.parentId) || !['continuable', 'one-shot'].includes(row.mode)) return null;
       return { parentSessionId: row.parentId, childSessionId: row.id, mode: row.mode };
     }
-    async function toggleBranch(id, expanded, refresh, projections) {
-      if (expanded.has(id)) {
-        const closing = new Set(), pending = [id];
-        while (pending.length) {
-          const current = pending.pop();
-          if (closing.has(current)) continue;
-          closing.add(current);
-          for (const child of catalogOf(projections[current]).entries) if (validId(child?.id)) pending.push(child.id);
+    async function toggleBranch(row, expanded, refresh, rows) {
+      const index = rows.findIndex(candidate => candidate.rowKey === row.rowKey);
+      if (index < 0 || !row.expandable) return;
+      if (row.expanded) {
+        expanded.delete(row.id);
+        for (let i = index + 1; i < rows.length && rows[i].level > row.level; i++) {
+          const descendant = rows[i];
+          if (!descendant.ambiguous && descendant.expandable && descendant.expanded) expanded.delete(descendant.id);
         }
-        for (const current of closing) expanded.delete(current);
         return;
       }
-      expanded.add(id);
-      await refresh(id);
+      expanded.add(row.id);
+      await refresh(row.id);
     }
     async function retryBranch(id, refresh) { await refresh(id); }
 
@@ -222,7 +221,7 @@ window.__ModuleLoader__.load({
         if (!row.expandable) return;
         const next = new Set(expanded);
         clearFailure(row.id);
-        const operation = toggleBranch(row.id, next, refreshProjection, list.projectionsBySession ?? {});
+        const operation = toggleBranch(row, next, refreshProjection, rows);
         expansion.clear();
         for (const id of next) expansion.add(id);
         setExpanded(next);
