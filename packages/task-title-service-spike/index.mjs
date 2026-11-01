@@ -109,11 +109,12 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
       const task = candidates.length === 1 ? candidates[0] : undefined;
       const previousTask = existing?.selected;
       const changed = task !== previousTask;
-      // Local synthetic message ordering: old source tasks cannot revive on later observation.
+      // Synthetic watermarks fence exact task versions that existed at message/invalidation time.
       const olderThanMessage = task !== undefined && task.seq <= (existing?.messageCut ?? -1);
-      if (task === undefined || data.title?.kind === 'user' || olderThanMessage) {
+      const explicitlyInvalidated = task !== undefined && (existing?.blockedLead === lead || task.seq <= (existing?.invalidationCut ?? -1));
+      if (task === undefined || data.title?.kind === 'user' || olderThanMessage || explicitlyInvalidated) {
         if (existing) {
-          if (existing.kind === 'task' && (changed || data.title?.kind === 'user' || olderThanMessage)) supersede(child);
+          if (existing.kind === 'task' && (changed || data.title?.kind === 'user' || olderThanMessage || explicitlyInvalidated)) supersede(child);
           existing.selected = task;
           if (changed) existing.attempt = undefined;
         }
@@ -180,7 +181,16 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
     },
     invalidate(child) {
       const data = state.childState.get(child);
-      if (data) { supersede(child, 'invalidate'); if (data.disposed) work.delete(child); }
+      if (!data) return;
+      if (!active || state.children.get(data.id) !== child) {
+        // Disposed synthetic children still need cooperative in-flight cancellation.
+        if (data.disposed && work.has(child)) { supersede(child, 'invalidate'); work.delete(child); }
+        return;
+      }
+      const item = supersede(child, 'invalidate');
+      const parent = state.leadState.get(data.lead);
+      if (parent && state.leads.get(parent.id) === data.lead) item.invalidationCut = parent.high;
+      else item.blockedLead = data.lead; // No trustworthy cut: fail closed for this exact lead lifecycle.
     },
     async idle() { while (inFlight.size) await Promise.allSettled([...inFlight]); },
     dispose() {

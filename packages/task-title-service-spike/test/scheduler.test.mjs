@@ -202,6 +202,153 @@ test('a task first observed only after a newer message does not trump it', async
   assert.deepEqual(host.title(child), { kind: 'message', title: 'New message' });
 });
 
+test('explicit invalidation survives ambiguous tasks then preserves the same candidate fence', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); const calls = [];
+  const model = createModel(host, { generate: async (input) => { calls.push(input); if (calls.length === 1) await gate.promise; return input.subject; } });
+  model.observe(lead); await settle(); model.invalidate(child);
+  assert.equal(calls[0].signal.aborted, true);
+  gate.resolve(); await model.idle();
+  host.task(lead, { id: 'other', revision: 1, status: 'pending', subject: 'B' });
+  host.task(lead, { id: 'other', revision: 2, ownerId: 'child', status: 'in_progress', subject: 'B' });
+  model.observe(lead); await model.idle();
+  host.task(lead, { id: 'other', revision: 3, ownerId: 'child', status: 'completed', subject: 'B' });
+  model.observe(lead); await model.idle();
+  assert.equal(calls.length, 1);
+  assert.equal(host.title(child), undefined);
+});
+
+test('explicit invalidation blocks a previously committed candidate across ambiguity', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; return subject; } });
+  model.observe(lead); await model.idle(); model.invalidate(child);
+  host.task(lead, { id: 'other', revision: 1, status: 'pending', subject: 'B' });
+  host.task(lead, { id: 'other', revision: 2, ownerId: 'child', status: 'in_progress', subject: 'B' });
+  model.observe(lead); await model.idle();
+  host.task(lead, { id: 'other', revision: 3, ownerId: 'child', status: 'completed', subject: 'B' });
+  model.observe(lead); await model.idle();
+  assert.equal(calls, 1);
+  assert.deepEqual(host.title(child), { kind: 'task', title: 'Task A', taskId: 'task', revision: 2 });
+});
+
+test('invalidation before selection blocks the currently unique synthetic candidate', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; return subject; } });
+  model.invalidate(child); model.observe(lead); await model.idle();
+  assert.equal(calls, 0); assert.equal(host.title(child), undefined);
+});
+
+test('invalidation while ambiguous fences both known candidates', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host); const calls = [];
+  host.task(lead, { id: 'other', revision: 1, status: 'pending', subject: 'B' });
+  host.task(lead, { id: 'other', revision: 2, ownerId: 'child', status: 'in_progress', subject: 'B' });
+  const model = createModel(host, { generate: async (input) => { calls.push(input); return input.subject; } });
+  model.observe(lead); model.invalidate(child);
+  host.task(lead, { id: 'other', revision: 3, ownerId: 'child', status: 'completed', subject: 'B' });
+  model.observe(lead); await model.idle();
+  assert.equal(calls.length, 0); assert.equal(host.title(child), undefined);
+});
+
+test('child disposal and recreation do not inherit an old cancellation watermark', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; return subject; } });
+  model.invalidate(child); host.disposeChild(child); model.invalidate(child);
+  const replacement = host.createChild('child', lead);
+  model.observe(lead); await model.idle();
+  assert.equal(calls, 1);
+  assert.deepEqual(host.title(replacement), { kind: 'task', title: 'Task A', taskId: 'task', revision: 2 });
+});
+
+test('invalidate without its original live lead cannot fence or update a rebuilt lead', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; return subject; } });
+  host.disposeLead(lead);
+  const replacementLead = host.createLead('lead');
+  model.invalidate(child);
+  host.task(replacementLead, { id: 'task', revision: 1, status: 'pending', subject: 'New lead task' });
+  host.task(replacementLead, { id: 'task', revision: 2, ownerId: 'child', status: 'in_progress', subject: 'New lead task' });
+  model.observe(replacementLead); await model.idle();
+  assert.equal(calls, 0); assert.equal(host.title(child), undefined);
+  host.disposeChild(child); model.invalidate(child);
+  const replacementChild = host.createChild('child', replacementLead);
+  model.observe(replacementLead); await model.idle();
+  assert.equal(calls, 1);
+  assert.equal(host.title(replacementChild)?.title, 'New lead task');
+});
+
+test('message watermark remains effective after separate explicit invalidation', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; return subject; } });
+  model.message(child, async () => 'Message wins'); await model.idle();
+  model.invalidate(child); model.observe(lead); await model.idle();
+  assert.equal(calls, 0);
+  assert.deepEqual(host.title(child), { kind: 'message', title: 'Message wins' });
+});
+
+test('an old disposed child invalidation cannot cancel replacement child work', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let signal;
+  const model = createModel(host, { generate: async (input) => { signal = input.signal; await gate.promise; return input.subject; } });
+  host.disposeChild(child); const replacement = host.createChild('child', lead);
+  model.observe(lead); await settle(); model.invalidate(child);
+  assert.equal(signal.aborted, false);
+  gate.resolve(); await model.idle();
+  assert.equal(host.title(replacement)?.title, 'Task A');
+});
+
+test('message fence remains monotonic across repeated user messages', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; return subject; } });
+  model.message(child, async () => 'First'); await model.idle();
+  host.task(lead, { id: 'task', revision: 3, ownerId: 'child', status: 'in_progress', subject: 'B' });
+  model.message(child, async () => 'Second'); await model.idle();
+  model.observe(lead); await model.idle();
+  assert.equal(calls, 0); assert.deepEqual(host.title(child), { kind: 'message', title: 'Second' });
+  host.task(lead, { id: 'task', revision: 4, ownerId: 'child', status: 'in_progress', subject: 'C' });
+  model.observe(lead); await model.idle(); assert.equal(calls, 1); assert.equal(host.title(child)?.title, 'C');
+});
+
+test('child dispose without explicit invalidation still rejects a cooperative late result', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(), model = createModel(host, { generate: async ({ subject }) => { await gate.promise; return subject; } });
+  model.observe(lead); await settle(); host.disposeChild(child);
+  const replacement = host.createChild('child', lead);
+  gate.resolve(); await model.idle();
+  assert.equal(host.title(child), undefined); assert.equal(host.title(replacement), undefined);
+});
+
+test('repeated invalidations use the latest synthetic cut', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; return subject; } });
+  model.invalidate(child);
+  host.task(lead, { id: 'task', revision: 3, ownerId: 'child', status: 'in_progress', subject: 'B' });
+  model.invalidate(child); model.observe(lead); await model.idle(); assert.equal(calls, 0);
+  host.task(lead, { id: 'task', revision: 4, ownerId: 'child', status: 'in_progress', subject: 'C' });
+  model.observe(lead); await model.idle(); assert.equal(calls, 1); assert.equal(host.title(child)?.title, 'C');
+});
+
+test('a new revision of an invalidated candidate can be generated', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; return subject; } });
+  model.observe(lead); await model.idle(); model.invalidate(child);
+  host.task(lead, { id: 'task', revision: 3, ownerId: 'child', status: 'in_progress', subject: 'Task A updated' });
+  model.observe(lead); await model.idle();
+  assert.equal(calls, 2);
+  assert.deepEqual(host.title(child), { kind: 'task', title: 'Task A updated', taskId: 'task', revision: 3 });
+});
+
+test('a truly different candidate after invalidation may be generated', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; return subject; } });
+  model.observe(lead); await model.idle(); model.invalidate(child);
+  host.task(lead, { id: 'task', revision: 3, status: 'completed', ownerId: 'child', subject: 'Task A' });
+  host.task(lead, { id: 'other', revision: 1, status: 'pending', subject: 'B' });
+  host.task(lead, { id: 'other', revision: 2, status: 'in_progress', ownerId: 'child', subject: 'B' });
+  model.observe(lead); await model.idle();
+  assert.equal(calls, 2);
+  assert.deepEqual(host.title(child), { kind: 'task', title: 'B', taskId: 'other', revision: 2 });
+});
+
 test('same-task retry cannot cross an owner away-and-back transition', async () => {
   const host = createSyntheticHost(); const { lead, child } = ready(host);
   const gate = deferred(); let calls = 0;
@@ -339,8 +486,8 @@ test('cooperative child cancellation allows pending service disposal to drain', 
   }) });
   model.observe(lead); await settle();
   host.disposeChild(child); model.invalidate(child);
+  assert.equal(observedAbort, true); // child invalidation itself must abort; not just service disposal
   await model.dispose();
-  assert.equal(observedAbort, true);
   assert.equal(host.title(child), undefined);
   assert.doesNotThrow(() => createModel(host));
 });
