@@ -320,6 +320,26 @@ test('v1 marker without the expected actual table is rejected without mutation',
   }
 });
 
+test('v1 rejects extra triggers, views, tables, indexes, and rolls back intact', () => {
+  const extras = [
+    'CREATE TRIGGER malicious AFTER INSERT ON session_snapshots BEGIN DELETE FROM session_snapshots; END',
+    'CREATE VIEW extra_view AS SELECT session_key FROM session_snapshots',
+    'CREATE TABLE extra_table (id TEXT PRIMARY KEY)',
+    'CREATE INDEX extra_index ON session_snapshots(source_identity)'
+  ];
+  for (const sql of extras) {
+    const db = new DatabaseSync(':memory:');
+    try {
+      migrate(db); db.exec(sql);
+      const before = db.prepare('SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY name').all();
+      assert.throws(() => migrate(db), { code: 'UNSUPPORTED_SCHEMA' }, sql);
+      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 1);
+      assert.deepEqual(db.prepare('SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY name').all(), before);
+      db.exec('CREATE TABLE rollback_probe (n INTEGER)');
+    } finally { db.close(); }
+  }
+});
+
 test('only safe in-memory database may be used and no destructive or export API exists', () => {
   assert.throws(() => createMemoryStore({ filename: '/Users/yulong/.dsh/analytics/personal-telemetry.db' }), { code: 'UNSUPPORTED_STORAGE' });
   const store = setup();

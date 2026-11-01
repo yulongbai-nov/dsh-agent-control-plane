@@ -21,12 +21,17 @@ export function migrate(database) {
     const version = database.prepare('PRAGMA user_version').get().user_version;
     if (version !== 0 && version !== 1) fail('UNSUPPORTED_SCHEMA', `Unsupported schema version: ${version}`);
     if (version === 0) {
-      if (database.prepare("SELECT 1 FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' LIMIT 1").get()) fail('UNSUPPORTED_SCHEMA', 'Unversioned database is not empty');
+      if (database.prepare('SELECT 1 FROM sqlite_master LIMIT 1').get()) fail('UNSUPPORTED_SCHEMA', 'Unversioned database is not empty');
       database.exec(SCHEMA);
       database.exec('PRAGMA user_version = 1');
     }
-    const schema = database.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'session_snapshots'").get();
-    if (schema?.sql !== SCHEMA) fail('UNSUPPORTED_SCHEMA', 'Version 1 table does not match the expected schema');
+    const objects = database.prepare('SELECT type, name, tbl_name, sql FROM sqlite_master').all();
+    const table = objects.find(row => row.type === 'table' && row.name === 'session_snapshots');
+    const index = objects.find(row => row.type === 'index' && row.name === 'sqlite_autoindex_session_snapshots_1');
+    if (objects.length !== 2 || table?.tbl_name !== 'session_snapshots' || table.sql !== SCHEMA ||
+        index?.tbl_name !== 'session_snapshots' || index.sql !== null) {
+      fail('UNSUPPORTED_SCHEMA', 'Version 1 objects do not match the expected schema');
+    }
     database.exec('COMMIT');
   } catch (error) { database.exec('ROLLBACK'); throw error; }
 }
