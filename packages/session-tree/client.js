@@ -221,6 +221,7 @@ window.__ModuleLoader__.load({
         return () => { current.active = false; current.versions.clear(); current.notice++; };
       }, []);
       const rows = buildRows(list, expanded, new Set(archivedIds ?? []), statuses);
+      const tabStop = rows.some(item => item.rowKey === focusKey) ? focusKey : rows[0]?.rowKey;
 
       function fail(id, error) { setFailures(current => ({ ...current, [id]: error?.message ?? String(error) })); }
       function clearFailure(id) { setFailures(current => { const next = { ...current }; delete next[id]; return next; }); }
@@ -325,7 +326,7 @@ window.__ModuleLoader__.load({
         return h(React.Fragment, { key: row.rowKey }, h('div', {
           className: `row ${row.level === 1 ? 'root-row' : ''}`,
           style: { marginLeft: `${(row.level - 1) * 20}px` }, role: 'treeitem',
-          tabIndex: (rows.some(item => item.rowKey === focusKey) ? focusKey : rows[0]?.rowKey) === row.rowKey ? 0 : -1,
+          tabIndex: tabStop === row.rowKey ? 0 : -1,
           'data-session-id': row.id, 'data-row-key': row.rowKey, 'aria-level': row.level, 'aria-posinset': row.posInSet, 'aria-setsize': row.setSize,
           'aria-expanded': row.expandable ? row.expanded : undefined,
           'aria-disabled': target === null || undefined, 'aria-label': t('rowLabel', { title: label, state: stateText }),

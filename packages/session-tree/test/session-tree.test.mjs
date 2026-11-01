@@ -25,6 +25,10 @@ const React = {
   useEffect(callback, deps) {
     const index = stateIndex++, previous = effects[index];
     if (!previous || !deps || deps.some((dep,i) => !Object.is(dep,previous.deps?.[i]))) pendingEffects.push({index,callback,deps});
+  },
+  useLayoutEffect(callback, deps) {
+    const index = stateIndex++, previous = effects[index];
+    if (!previous || !deps || deps.some((dep,i) => !Object.is(dep,previous.deps?.[i]))) pendingEffects.push({index,callback,deps,layout:true});
   }
 };
 const previousWindow = globalThis.window;
@@ -763,6 +767,119 @@ test('unmounted or effect-replayed avatar readers cannot write afterward', () =>
       assert.equal(app.updatesAfterUnmount(),0);
     } finally {app.dispose();}
   }
+});
+
+function focusHarness() {
+  states=[]; effects=[]; pendingEffects=[]; stateIndex=0;
+  const previousDocument=globalThis.document;
+  const body={isConnected:true}, outside={isConnected:true}, doc={body,activeElement:body};
+  globalThis.document=doc;
+  let registration;
+  applyPlugin({slots:{inject(_name,callback){callback();},register(options,component){if(options.name==='main')registration={options,component};}},
+    sessions:{refreshProjections(){},refresh(){}},uiWorkspace:{openSession(){}}});
+  const actions=registration.options.inject(), list=baseList();
+  list.ids.push('other');list.byId.other=summary('other');
+  list.projectionsBySession={root:ready([child('a')]),a:ready([child('deep')]),deep:ready([]),other:ready([])};
+  for(const id of ['root','a'])actions.expansion.add(id);
+  const props={...actions,useSessions:selector=>selector(list),useSessionStatus:selector=>selector(new Map()),useWorkspaces:selector=>selector({archivedSessionIds:[]})};
+  const flatten=node=>node&&typeof node==='object'?[node,...(node.children??[]).flat(Infinity).flatMap(flatten)]:[];
+  const nodes=new Map(), tree={querySelectorAll:()=>[...nodes.values()],contains(element){return [...nodes.values()].some(node=>node===element||node.controls.includes(element));}};
+  function render({commit=true}={}){
+    stateIndex=0;pendingEffects=[];
+    const elements=flatten(registration.component(props)), virtual=elements.filter(node=>node.props?.role==='treeitem');
+    const scheduled=[...pendingEffects];
+    if(commit){
+      for(const effect of scheduled.filter(effect=>effect.layout))effects[effect.index]?.cleanup?.();
+      const keys=new Set(virtual.map(row=>row.props['data-row-key']));
+      for(const [key,node] of nodes)if(!keys.has(key)){
+        node.isConnected=false;for(const control of node.controls)control.isConnected=false;
+        if(doc.activeElement===node||node.controls.includes(doc.activeElement))doc.activeElement=body;
+        nodes.delete(key);
+      }
+      for(const row of virtual){
+        const key=row.props['data-row-key'];let node=nodes.get(key);
+        if(!node){node={dataset:{rowKey:key},isConnected:true,controls:[],focus(){doc.activeElement=node;},contains(target){return target===node||node.controls.includes(target);}};nodes.set(key,node);}
+        node.virtual=row;
+        if(!node.controls.length)node.controls.push({isConnected:true,owner:node});
+      }
+      const treeRef=states.find(item=>item?.current===null);if(treeRef)treeRef.current=tree;
+      for(const effect of scheduled){if(!effect.layout)effects[effect.index]?.cleanup?.();effects[effect.index]={deps:effect.deps,cleanup:effect.callback(),setup:effect.callback};}
+    }
+    return {virtual,nodes};
+  }
+  function focus(id,control=false){
+    const node=[...nodes.values()].find(item=>item.virtual.props['data-session-id']===id);
+    assert.ok(node,`missing ${id}`);
+    doc.activeElement=control?node.controls[0]:node;
+    node.virtual.props.onFocus({target:doc.activeElement,currentTarget:node});
+    return node;
+  }
+  function dispose(){for(const effect of effects)effect?.cleanup?.();globalThis.document=previousDocument;}
+  return {list,render,focus,doc,body,outside,dispose,actions,nodes};
+}
+
+test.skip('TODO simulated fixture: dynamic duplicate removes focused descendant; real DOM ordering unverified', () => {
+  const app=focusHarness();
+  try {
+    app.render(); app.focus('deep'); app.render();
+    app.list.projectionsBySession.other=ready([child('a')]);
+    app.render();
+    assert.equal(app.doc.activeElement.virtual.props['data-session-id'],'root');
+    const rows=app.render().virtual;
+    assert.equal(rows.find(row=>row.props.tabIndex===0).props['data-session-id'],'root');
+  } finally {app.dispose();}
+});
+
+test.skip('TODO simulated fixture: moved focused subtree changes keys; real DOM ordering unverified', () => {
+  const app=focusHarness();
+  try {
+    app.render(); app.focus('deep'); app.render();
+    app.list.projectionsBySession.root=ready([]);
+    app.list.projectionsBySession.other=ready([child('a')]);
+    app.actions.expansion.add('other');
+    app.render();
+    assert.equal(app.doc.activeElement.virtual.props['data-session-id'],'deep');
+  } finally {app.dispose();}
+});
+
+test.skip('TODO simulated fixture: focus recovery must not steal outside or row-control focus', () => {
+  for(const where of ['outside','control']) {
+    const app=focusHarness();
+    try {
+      app.render(); app.focus('deep'); app.render();
+      const target=where==='outside'?app.outside:app.focus('deep',true).controls[0];
+      app.doc.activeElement=target;
+      app.list.projectionsBySession.other=ready([child('a')]);app.render();
+      assert.notEqual(app.doc.activeElement.virtual?.props['data-session-id'],'root');
+      if(where==='outside')assert.equal(app.doc.activeElement,target);
+    } finally {app.dispose();}
+  }
+});
+
+test.skip('TODO simulated fixture: removing every root must not focus stale detached rows', () => {
+  const app=focusHarness();
+  try {app.render();app.focus('deep');app.render();app.list.ids=[];app.render();assert.equal(app.doc.activeElement,app.body);}
+  finally {app.dispose();}
+});
+
+test('tab stop calculation scans visible rows at most once per render', () => {
+  states = []; stateIndex = 0;
+  const list = baseList();
+  for (let i=0;i<300;i++){const id=`extra-${i}`;list.ids.push(id);list.byId[id]=summary(id);}
+  let registration;
+  applyPlugin({slots:{inject(_name,callback){callback();},register(options,component){if(options.name==='main')registration={options,component};}},
+    sessions:{refreshProjections(){},refresh(){}},uiWorkspace:{openSession(){}}});
+  const props={...registration.options.inject(),useSessions:selector=>selector(list),useSessionStatus:selector=>selector(new Map()),useWorkspaces:selector=>selector({archivedSessionIds:[]})};
+  const previousSome=Array.prototype.some;let rowChecks=0;
+  Array.prototype.some=function(predicate,...rest){return previousSome.call(this,(value,index,array)=>{if(value?.rowKey!==undefined)rowChecks++;return predicate(value,index,array);},...rest);};
+  let tree;
+  try {stateIndex=0;tree=registration.component(props);} finally {Array.prototype.some=previousSome;}
+  const flatten=node=>node&&typeof node==='object'?[node,...(node.children??[]).flat(Infinity).flatMap(flatten)]:[];
+  const rows=flatten(tree).filter(node=>node.props?.role==='treeitem');
+  assert.equal(rows.length,301);
+  assert.ok(rowChecks<=rows.length,`row-key comparisons: ${rowChecks}`);
+  assert.equal(rows.filter(row=>row.props.tabIndex===0).length,1);
+  assert.equal(rows[0].props.tabIndex,0);
 });
 
 test('component omits unavailable right-sidebar action on independent main panel', () => {
