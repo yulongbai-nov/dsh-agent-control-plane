@@ -6,7 +6,7 @@ const topology = (nodes, complete = true) => ({version:1, nodes, edges:[], group
 const node = (id, label, phase = null, occurrence = 'single') => ({id, kind:'agent', label, phase, occurrence});
 const layout = {version:1,nodes:[{id:'a',x:10,y:20}],groups:[]};
 const event = (type, data, seq, time) => ({type:`tool-workflow/${type}`, data:{runId:'run-1', ...data}, seq, time});
-const run = (nodes, events, options = {}) => projectWorkflow({runId:'run-1',topology:topology(nodes),layout,events,sourceBinding:{status:'verified',runId:'run-1',toolCallId:'call-1'},...options});
+const run = (nodes, events, options = {}) => projectWorkflow({runId:'run-1',topology:topology(nodes),layout,events:events.map((event, seq) => event.seq === undefined ? {...event,seq,time:100+seq} : event),sourceBinding:{status:'verified',runId:'run-1',toolCallId:'call-1'},...options});
 const start = (seq, label, phase, childId = `child-${seq}`) => event('agent-start',{seq,label,...(phase === undefined ? {} : {phase}),childId});
 const end = (seq,outcome='completed') => event('agent-end',{seq,outcome});
 
@@ -66,7 +66,7 @@ test('layout and topology do not depend on events or mutate caller inputs', () =
   const originalTopology = topology([node('a','A')]);
   const before = JSON.stringify({originalTopology,layout});
   const a = projectWorkflow({runId:'run-1',topology:originalTopology,layout,events:[]});
-  const b = projectWorkflow({runId:'run-1',topology:originalTopology,layout,events:[start(1,'A'),end(1)]});
+  const b = projectWorkflow({runId:'run-1',topology:originalTopology,layout,events:[{...start(1,'A'),seq:0,time:100},{...end(1),seq:1,time:101}]});
   assert.deepEqual(a.topology,b.topology);
   assert.deepEqual(a.layout,b.layout);
   assert.equal(JSON.stringify({originalTopology,layout}),before);

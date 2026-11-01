@@ -6,6 +6,7 @@ const OUTCOMES = new Set(['completed', 'failed', 'cancelled']);
 const REASONS = new Map([['completed', 'completed'], ['error', 'failed'], ['cancelled', 'cancelled']]);
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const validSeq = (value) => Number.isSafeInteger(value) && value >= 1;
+const validEventSeq = (value) => Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0);
 const text = (value) => typeof value === 'string';
 
 // The inputs are session-log data and a trusted static skeleton, not executable code.
@@ -35,13 +36,17 @@ function projectWorkflow({ runId, topology, layout, events, parentSessionId, sou
     }
     if (data.runId !== runId) continue;
     const kind = event.type.slice(PREFIX.length);
-    if (Number.isSafeInteger(event.seq) && event.seq >= 0) {
+    if (!validEventSeq(event.seq)) {
+      malformed = true;
+      runConflict = true;
+      diagnostics.push({code:'INVALID_EVENT_SEQ'});
+    } else {
       if (event.seq <= lastEventSeq) { malformed = true; runConflict = true; diagnostics.push({code:'INVALID_EVENT_ORDER'}); }
       lastEventSeq = event.seq;
     }
     if (runEnd) { malformed = true; runConflict = true; diagnostics.push({code:'INVALID_RUN_ORDER'}); }
     const summary = { type: event.type, runId };
-    if (Number.isSafeInteger(event.seq) && event.seq >= 0) summary.eventSeq = event.seq;
+    if (validEventSeq(event.seq)) summary.eventSeq = event.seq;
     if (Number.isSafeInteger(event.time) && event.time >= 0) summary.time = event.time;
     if (own(data, 'seq') && validSeq(data.seq)) summary.seq = data.seq;
     if (text(data.label)) summary.label = data.label;
@@ -81,10 +86,10 @@ function projectWorkflow({ runId, topology, layout, events, parentSessionId, sou
       }
     }
   }
-  const run = { ...(runStart ? {name:runStart.name} : {}), status: !runConflict && runEnd ? runEnd.status : 'unknown' };
+  const run = { ...(runStart ? {name:runStart.name} : {}), status: !malformed && !runConflict && runEnd ? runEnd.status : 'unknown' };
   const invocations = [...entries.values()].sort((a,b) => a.seq-b.seq).map((entry) => {
     const first = entry.starts[0];
-    const status = entry.invalid || entry.starts.length !== 1 || entry.ends.length !== 1 ? 'unknown' : entry.ends[0];
+    const status = malformed || runConflict || entry.invalid || entry.starts.length !== 1 || entry.ends.length !== 1 ? 'unknown' : entry.ends[0];
     return {
       seq:entry.seq,
       ...(first ? first : {}),
@@ -117,7 +122,7 @@ function projectWorkflow({ runId, topology, layout, events, parentSessionId, sou
     let reason = member.reason;
     const options = optionsBySeq.get(member.seq) || [];
     if (!reason && !sourceVerified) reason = 'source-unverified';
-    if (!reason && (malformed || missingStart || conflictingSeq || duplicateChildren.has(member.childId))) reason = 'invalid-events';
+    if (!reason && (malformed || runConflict || missingStart || conflictingSeq || duplicateChildren.has(member.childId))) reason = 'invalid-events';
     if (!reason && topology.complete !== true) reason = 'incomplete-topology';
     if (!reason && options.length === 0) reason = 'no-candidate';
     if (!reason && options.length > 1) reason = 'ambiguous-static';

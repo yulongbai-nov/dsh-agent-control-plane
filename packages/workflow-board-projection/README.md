@@ -10,7 +10,7 @@ const board = projectWorkflow({ runId, topology, layout, events, parentSessionId
 参数：
 
 - `runId` 非空字符串；`topology` 和 `layout` 分别为 `workflow-topology` 的静态输出，调用前由宿主取得。输入绝不修改；投影直接返回这两个对象，运行状态不会重排坐标。外部不可就地改写输入；同一静态输入产生相同坐标。
-- `events` 是同一父会话**按日志顺序**给出的全量原始 session 事件（`{type,seq,time,data}`）；函数只处理属于 `runId` 的四种 `tool-workflow/*` 事件。过滤后的 eventSeq 若重复或递减，则告警并拒绝绑定；不会排序掩盖错误。后缀重复 / 历史截断 / 丢失数据不能视作完整证据。
+- `events` 是同一父会话**按日志顺序**给出的全量原始 session 事件（`{type,seq,time,data}`）；函数只处理属于 `runId` 的四种 `tool-workflow/*` 事件。每条相关事件的 session `seq` 必须是非负安全整数且不是负零；缺失或非法时给出 `INVALID_EVENT_SEQ`，拒绝绑定并将 run 和 invocation 状态设为 unknown。过滤后不同相关事件的 `seq` 必须严格递增，但可跳号（中间可能是其他 session 事件）；重复或递减同样告警并拒绝绑定，不会排序掩盖错误。运行生命周期矛盾或格式不合法时，run 和 invocation 状态设为 unknown，且不生成节点绑定。后缀重复 / 历史截断 / 丢失数据不能视作完整证据。
 - `parentSessionId` 可选，由宿主提供真实上下文、原样带回，**不验证**子会话亲属关系或打开权限。
 - 默认没有可靠的脚本↔run 关联，所以所有尚有 label 的 invocation 均为 `source-unverified`，不会映射静态节点。只有调用方从可信外部数据源**实际证明** `runId` 与该份 `topology`/源脚本属于同一工具调用时，才可传 `sourceBinding:{status:'verified',runId,toolCallId}`。这是调用方的事实断言，不是安全认证；仅提供字符串不能构成证明。**不能以 workflow 名称相同、最近的工具调用、日志顺序、人工猜测作为关联。**本包不会从原始事件推导此证据。rc.5 `tools/result` 在结果成功时可同时观察 `exec.callId` 与 typed `result.value.runId`，只是未来宿主可研究的**候选**关联 seam，不是认证凭据：scoped 工具可同名覆盖，插件可替换结果。仅在可信插件链前提下，并由宿主独立核验真实工具身份、父会话及同一 tool call 的 script/meta，才能建立关联；仅凭事件与工具名不得标 verified。外置插件不得调用非仓库插件禁止使用的 `appendPluginRecord`；若采用独立 storage domain 侧存，需处理与会话日志非事务及失败恢复。失败/取消、监听插件后加载、桥接或持久化失败时仍必须保留 unverified。
 

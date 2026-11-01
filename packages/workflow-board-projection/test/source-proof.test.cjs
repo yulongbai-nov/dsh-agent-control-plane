@@ -5,7 +5,7 @@ const { projectWorkflow } = require('../index.cjs');
 const args = () => ({
   runId:'r',topology:{version:1,complete:true,nodes:[{id:'a',kind:'agent',label:'A',phase:null,occurrence:'single'}]},
   layout:{version:1,nodes:[],groups:[]},
-  events:[{type:'tool-workflow/agent-start',data:{runId:'r',seq:1,label:'A',childId:'c'}}],
+  events:[{type:'tool-workflow/agent-start',seq:0,time:100,data:{runId:'r',seq:1,label:'A',childId:'c'}}],
 });
 
 test('no binding without an explicit externally validated source association', () => {

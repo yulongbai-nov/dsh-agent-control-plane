@@ -13,7 +13,7 @@ test('real topology output and projection retain byte-identical layout', {skip:!
   const layout = layoutTopology(skeleton);
   const make = (events) => projectWorkflow({runId:'r',topology:skeleton,layout,sourceBinding:{runId:'r',status:'verified',toolCallId:'call'},events});
   const before = make([]);
-  const after = make([{type:'tool-workflow/agent-start',data:{runId:'r',seq:1,label:'B',phase:'Build',childId:'b'}}]);
+  const after = make([{type:'tool-workflow/agent-start',seq:0,time:100,data:{runId:'r',seq:1,label:'B',phase:'Build',childId:'b'}}]);
   assert.equal(JSON.stringify(before.layout),JSON.stringify(after.layout));
   assert.equal(after.statusByNode[skeleton.nodes[1].id].childId,'b');
 });

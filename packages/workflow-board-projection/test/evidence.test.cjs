@@ -1,7 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {projectWorkflow}=require('../index.cjs');
+const {projectWorkflow:fold}=require('../index.cjs');
+const projectWorkflow = (input) => fold({...input,events:input.events.map((event, seq) => ({...event,seq,time:100+seq}))});
 const E = (type,data) => ({type:`tool-workflow/${type}`,data:{runId:'r',...data}});
 const build = (events) => projectWorkflow({runId:'r',topology:{version:1,complete:true,nodes:[{id:'a',kind:'agent',label:'A',phase:null,occurrence:'single'}]},layout:{version:1,nodes:[],groups:[]},sourceBinding:{status:'verified',runId:'r',toolCallId:'tool'},events});
 

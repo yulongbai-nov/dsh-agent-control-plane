@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {projectWorkflow}=require('../index.cjs');
 const E = (type,data) => ({type:`tool-workflow/${type}`,data:{runId:'r',...data}});
-const run = (events) => projectWorkflow({runId:'r',topology:{version:1,complete:true,nodes:[]},layout:{nodes:[],groups:[]},events});
+const run = (events) => projectWorkflow({runId:'r',topology:{version:1,complete:true,nodes:[]},layout:{nodes:[],groups:[]},events:events.map((event, seq) => ({...event,seq,time:100+seq}))});
 
 test('start recorded after end never produces a completed invocation in unmatched', () => {
   const graph=run([E('agent-end',{seq:1,outcome:'completed'}),E('agent-start',{seq:1,label:'A',childId:'c'})]);

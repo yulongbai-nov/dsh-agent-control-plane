@@ -5,7 +5,7 @@ const { projectWorkflow } = require('../index.cjs');
 const node = (id,label,phase=null) => ({id,label,phase,kind:'agent',occurrence:'single'});
 const evt = (type,data) => ({type:`tool-workflow/${type}`,data:{runId:'r',...data}});
 const start = (seq,label,phase) => evt('agent-start',{seq,label,childId:`c${seq}`,...(phase === undefined ? {} : {phase})});
-const project = (nodes,events) => projectWorkflow({runId:'r',topology:{version:1,nodes,complete:true},layout:{version:1,nodes:[],groups:[]},events,sourceBinding:{status:'verified',runId:'r',toolCallId:'call-1'}});
+const project = (nodes,events) => projectWorkflow({runId:'r',topology:{version:1,nodes,complete:true},layout:{version:1,nodes:[],groups:[]},events:events.map((event, seq) => ({...event,seq,time:100+seq})),sourceBinding:{status:'verified',runId:'r',toolCallId:'call-1'}});
 
 test('dynamic label is never itself used as a certain match', () => {
   const graph = project([node('a',null)],[start(1,'dynamic')]);
