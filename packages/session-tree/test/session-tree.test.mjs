@@ -154,6 +154,28 @@ test('avatar policy is deterministic, explicit and browser-local with safe fallb
   assert.equal(core.saveCustomImages(undefined, {}), false);
 });
 
+test('component omits unavailable right-sidebar action on independent main panel', () => {
+  states = []; stateIndex = 0;
+  const list = baseList();
+  list.projectionsBySession.root = ready([child('a')]);
+  list.byId.a = summary('a', { origin: 'subagent', parentId: 'root' });
+  let registration;
+  plugin.apply({
+    slots: { inject(_name, callback) { callback(); }, register(options, component) { if (options.name === 'main') registration = { options, component }; } },
+    sessions: { refreshProjections() {}, refresh() {} }, uiWorkspace: { openSession() {} },
+    sidebarRight: { openResource() { throw new Error('sidebarRight: no session surface is mounted'); } }
+  });
+  const actions = registration.options.inject();
+  actions.expansion.add('root');
+  const props = { ...actions, useSessions: selector => selector(list), useSessionStatus: selector => selector(new Map()), useWorkspaces: selector => selector({ archivedSessionIds: [] }) };
+  function flatten(node) { return node && typeof node === 'object' ? [node, ...(node.children ?? []).flat(Infinity).flatMap(flatten)] : []; }
+  const elements = flatten(registration.component(props));
+  assert.ok(elements.some(node => node.props?.['data-session-id'] === 'a'));
+  assert.equal(elements.some(node => /右侧栏打开/.test(node.props?.title ?? node.props?.['aria-label'] ?? '')), false);
+  assert.equal('openAside' in actions, false);
+  assert.equal(plugin.inject.includes('sidebarRight'), false);
+});
+
 test('component wires real DTO-shaped rows to keyboard and true navigation addresses', async () => {
   states = []; stateIndex = 0;
   const list = baseList(), expansion = new Set(['root', 'a']);
@@ -192,10 +214,51 @@ test('component wires real DTO-shaped rows to keyboard and true navigation addre
   assert.deepEqual(calls.find(call => call[0] === 'open'), ['open', { parentSessionId: 'a', childSessionId: 'b', mode: 'one-shot' }]);
   tree = flatten(render());
   assert.ok(tree.some(node => node.props?.role === 'status' && node.children.some(text => String(text).includes('open rejected'))));
-  const aside = flatten(b).find(node => node.props?.title === '在右侧栏打开');
-  aside.props.onClick();
-  assert.equal(calls.at(-1)[0], 'aside');
-  assert.equal(calls.at(-1)[1], 'dsh-resource://subagentchat/session/b?parent=a&mode=one-shot');
+  assert.equal(calls.some(call => call[0] === 'aside'), false);
+});
+
+test('flat tree gives correct sibling counts across multiple roots and grandchildren', () => {
+  states = []; stateIndex = 0;
+  const list = baseList();
+  list.ids = ['root', 'root2'];
+  list.byId.root2 = summary('root2');
+  // A malformed cycle must not count as an exposed sibling.
+  list.projectionsBySession = { root: ready([child('a'), child('b')]), a: ready([child('root'), child('c'), child('d')]) };
+  for (const id of ['a', 'b', 'c', 'd']) list.byId[id] = summary(id, { origin: 'subagent' });
+  let registration;
+  plugin.apply({ slots: { inject(_name, callback) { callback(); }, register(options, component) { if (options.name === 'main') registration = { options, component }; } }, sessions: {}, uiWorkspace: {} });
+  const actions = registration.options.inject();
+  actions.expansion.add('root'); actions.expansion.add('a');
+  const props = { ...actions, useSessions: selector => selector(list), useSessionStatus: selector => selector(new Map()), useWorkspaces: selector => selector({ archivedSessionIds: [] }) };
+  function flatten(node) { return node && typeof node === 'object' ? [node, ...(node.children ?? []).flat(Infinity).flatMap(flatten)] : []; }
+  const rows = flatten(registration.component(props)).filter(node => node.props?.role === 'treeitem');
+  assert.deepEqual(rows.map(row => [row.props['data-session-id'], row.props['aria-level'], row.props['aria-posinset'], row.props['aria-setsize']]), [
+    ['root', 1, 1, 2], ['a', 2, 1, 2], ['c', 3, 1, 2], ['d', 3, 2, 2], ['b', 2, 2, 2], ['root2', 1, 2, 2]
+  ]);
+});
+
+test('clicking disclosure restores row focus so keyboard navigation remains available', () => {
+  states = []; stateIndex = 0;
+  const list = baseList();
+  list.projectionsBySession.root = ready([child('a')]);
+  list.byId.a = summary('a', { origin: 'subagent', parentId: 'root' });
+  const calls = [];
+  let registration;
+  plugin.apply({ slots: { inject(_name, callback) { callback(); }, register(options, component) { if (options.name === 'main') registration = { options, component }; } },
+    sessions: { refreshProjections(id) { calls.push(['refresh', id]); }, refresh() {} }, uiWorkspace: {} });
+  const actions = registration.options.inject();
+  const props = { ...actions, useSessions: selector => selector(list), useSessionStatus: selector => selector(new Map()), useWorkspaces: selector => selector({ archivedSessionIds: [] }) };
+  const elements = ['root', 'a'].map(id => ({ dataset: { sessionId: id }, focus() { calls.push(['focus', id]); } }));
+  function render() { stateIndex = 0; return registration.component(props); }
+  function flatten(node) { return node && typeof node === 'object' ? [node, ...(node.children ?? []).flat(Infinity).flatMap(flatten)] : []; }
+  let rows = flatten(render()).filter(node => node.props?.role === 'treeitem');
+  states[7].current = { querySelectorAll: () => elements };
+  const disclosure = flatten(rows[0]).find(node => node.props?.className === 'caret');
+  disclosure.props.onClick({ currentTarget: { closest: () => elements[0] } });
+  assert.deepEqual(calls.at(-1), ['focus', 'root']);
+  rows = flatten(render()).filter(node => node.props?.role === 'treeitem');
+  rows[0].props.onKeyDown({ key: 'ArrowRight', target: elements[0], currentTarget: elements[0], preventDefault() {} });
+  assert.deepEqual(calls.at(-1), ['focus', 'a']);
 });
 
 test('generated browser entry matches its source and six PNG assets', () => {

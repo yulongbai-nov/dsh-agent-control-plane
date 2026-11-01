@@ -106,6 +106,13 @@ window.__ModuleLoader__.load({
         if (!row || row.origin === 'subagent' || (row.blank && !(row.retainedBy?.mainView > 0))) continue;
         visit(id, null, undefined, 1, new Set());
       }
+      const siblings = new Map();
+      for (const row of rows) {
+        const group = siblings.get(row.parentId) ?? [];
+        group.push(row);
+        siblings.set(row.parentId, group);
+      }
+      for (const group of siblings.values()) group.forEach((row, index) => { row.posInSet = index + 1; row.setSize = group.length; });
       return rows;
     }
     function navigationTarget(row) {
@@ -113,10 +120,6 @@ window.__ModuleLoader__.load({
       if (row.parentId === null) return row.id;
       if (!validId(row.parentId) || !['continuable', 'one-shot', 'unknown'].includes(row.mode)) return null;
       return { parentSessionId: row.parentId, childSessionId: row.id, mode: row.mode };
-    }
-    function asideAddress(address) {
-      const query = new URLSearchParams({ parent: address.parentSessionId, mode: address.mode });
-      return `dsh-resource://subagentchat/session/${encodeURIComponent(address.childSessionId)}?${query}`;
     }
     async function toggleBranch(id, expanded, refresh, projections) {
       if (expanded.has(id)) {
@@ -136,7 +139,7 @@ window.__ModuleLoader__.load({
     async function retryBranch(id, refresh) { await refresh(id); }
 
     const CSS = `
-.dsh-st{box-sizing:border-box;height:100%;overflow:auto;padding:calc(20px + var(--dsh-frame-top-clearance,0px)) 24px 28px max(24px,var(--dsh-frame-leading-clearance,0px));color:var(--dsw-alias-label-primary,#222);background:var(--dsw-alias-bg-layer-1,#fff);font:13px/1.45 system-ui,sans-serif}.dsh-st *{box-sizing:border-box}.dsh-st h1{font-size:19px;margin:0 0 4px}.dsh-st .note{color:var(--dsw-alias-label-tertiary,#777);font-size:12px;margin:0 0 14px}.dsh-st .tree{max-width:900px}.dsh-st button,.dsh-st select,.dsh-st input{font:inherit;color:inherit}.dsh-st button{cursor:pointer}.dsh-st button:focus-visible,.dsh-st select:focus-visible,.dsh-st input:focus-visible{outline:2px solid #3485ee;outline-offset:2px}.dsh-st button:disabled{cursor:not-allowed;opacity:.5}.dsh-st .row{display:flex;align-items:center;gap:7px;min-height:46px;padding:4px 6px;border-radius:8px}.dsh-st .row:hover,.dsh-st .row:focus-within{background:var(--dsw-alias-interactive-bg-hover,#f0f0f4)}.dsh-st .caret{flex:none;width:22px;border:0;background:transparent;padding:3px;color:var(--dsw-alias-label-tertiary,#888)}.dsh-st .image{width:32px;height:32px;flex:none;border-radius:9px;object-fit:cover}.dsh-st .body{display:flex;align-items:center;gap:7px;flex:1;min-width:80px;border:0;background:transparent;text-align:left;padding:2px}.dsh-st .bodytext{display:flex;flex-direction:column;min-width:0}.dsh-st .title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsh-st .meta{color:var(--dsw-alias-label-tertiary,#777);font-size:11px}.dsh-st .dot{width:8px;height:8px;border-radius:50%;flex:none;background:#b8b8bc}.dsh-st .dot.running{background:#428bfa}.dsh-st .dot.completed{background:#30a35d}.dsh-st .dot.waiting{background:#e9a12a}.dsh-st .dot.archived{background:#aaa}.dsh-st .aside{border:0;background:transparent;padding:4px;color:var(--dsw-alias-label-tertiary,#777)}.dsh-st .avatar-select{max-width:100px;font-size:11px;border:1px solid var(--dsw-alias-border-l3,#ddd);border-radius:5px;background:transparent}.dsh-st .branch-note{font-size:12px;color:var(--dsw-alias-label-tertiary,#777);padding:4px 8px 8px}.dsh-st .error{color:var(--dsw-alias-state-error-primary,#a33)}.dsh-st .notice button,.dsh-st .branch-note button{margin-left:8px}.dsh-st details{margin:16px 0;color:var(--dsw-alias-label-secondary,#666)}.dsh-st details div{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}.dsh-st .notice{margin:8px 0;font-size:12px}.dsh-st .root-row .title{font-weight:600}.dsh-st .row[aria-disabled=true]{opacity:.65}@media(max-width:540px){.dsh-st{padding-left:12px;padding-right:12px}.dsh-st .avatar-select{max-width:70px}}
+.dsh-st{box-sizing:border-box;height:100%;overflow:auto;padding:calc(20px + var(--dsh-frame-top-clearance,0px)) 24px 28px max(24px,var(--dsh-frame-leading-clearance,0px));color:var(--dsw-alias-label-primary,#222);background:var(--dsw-alias-bg-layer-1,#fff);font:13px/1.45 system-ui,sans-serif}.dsh-st *{box-sizing:border-box}.dsh-st h1{font-size:19px;margin:0 0 4px}.dsh-st .note{color:var(--dsw-alias-label-tertiary,#777);font-size:12px;margin:0 0 14px}.dsh-st .tree{max-width:900px}.dsh-st button,.dsh-st select,.dsh-st input{font:inherit;color:inherit}.dsh-st button{cursor:pointer}.dsh-st button:focus-visible,.dsh-st select:focus-visible,.dsh-st input:focus-visible{outline:2px solid #3485ee;outline-offset:2px}.dsh-st button:disabled{cursor:not-allowed;opacity:.5}.dsh-st .row{display:flex;align-items:center;gap:7px;min-height:46px;padding:4px 6px;border-radius:8px}.dsh-st .row:hover,.dsh-st .row:focus-within{background:var(--dsw-alias-interactive-bg-hover,#f0f0f4)}.dsh-st .caret{flex:none;width:22px;border:0;background:transparent;padding:3px;color:var(--dsw-alias-label-tertiary,#888)}.dsh-st .image{width:32px;height:32px;flex:none;border-radius:9px;object-fit:cover}.dsh-st .body{display:flex;align-items:center;gap:7px;flex:1;min-width:80px;border:0;background:transparent;text-align:left;padding:2px}.dsh-st .bodytext{display:flex;flex-direction:column;min-width:0}.dsh-st .title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dsh-st .meta{color:var(--dsw-alias-label-tertiary,#777);font-size:11px}.dsh-st .dot{width:8px;height:8px;border-radius:50%;flex:none;background:#b8b8bc}.dsh-st .dot.running{background:#428bfa}.dsh-st .dot.completed{background:#30a35d}.dsh-st .dot.waiting{background:#e9a12a}.dsh-st .dot.archived{background:#aaa}.dsh-st .avatar-select{max-width:100px;font-size:11px;border:1px solid var(--dsw-alias-border-l3,#ddd);border-radius:5px;background:transparent}.dsh-st .branch-note{font-size:12px;color:var(--dsw-alias-label-tertiary,#777);padding:4px 8px 8px}.dsh-st .error{color:var(--dsw-alias-state-error-primary,#a33)}.dsh-st .notice button,.dsh-st .branch-note button{margin-left:8px}.dsh-st details{margin:16px 0;color:var(--dsw-alias-label-secondary,#666)}.dsh-st details div{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}.dsh-st .notice{margin:8px 0;font-size:12px}.dsh-st .root-row .title{font-weight:600}.dsh-st .row[aria-disabled=true]{opacity:.65}@media(max-width:540px){.dsh-st{padding-left:12px;padding-right:12px}.dsh-st .avatar-select{max-width:70px}}
 `;
     const STATUS_LABELS = { archived: '已归档', waiting: '等待交互', running: '运行中', completed: '最近一次已完成', inactive: '未运行', unknown: '状态未知' };
     function getStorage() { try { return window.localStorage; } catch { return undefined; } }
@@ -145,7 +148,7 @@ window.__ModuleLoader__.load({
         h('rect', { x: 3, y: 2, width: 6, height: 6, rx: 1 }), h('rect', { x: 15, y: 10, width: 6, height: 6, rx: 1 }),
         h('rect', { x: 15, y: 18, width: 6, height: 4, rx: 1 }), h('path', { d: 'M6 8v5h9M6 13v7h9' }));
     }
-    function TreePanel({ useSessions, useSessionStatus, useWorkspaces, refreshProjection, refreshSessions, openSession, openAside, expansion }) {
+    function TreePanel({ useSessions, useSessionStatus, useWorkspaces, refreshProjection, refreshSessions, openSession, expansion }) {
       const list = useSessions(value => value);
       const statuses = useSessionStatus(value => value);
       const archivedIds = useWorkspaces(value => value.archivedSessionIds);
@@ -175,11 +178,11 @@ window.__ModuleLoader__.load({
         clearFailure(id);
         retryBranch(id, refreshProjection).catch(error => fail(id, error));
       }
-      function navigate(row, aside = false) {
+      function navigate(row) {
         const target = navigationTarget(row);
         if (target === null) return;
         try {
-          const result = aside && typeof target !== 'string' ? openAside(target) : openSession(target);
+          const result = openSession(target);
           Promise.resolve(result).catch(error => setNotice(`打开失败：${error?.message ?? String(error)}`));
         } catch (error) { setNotice(`打开失败：${error?.message ?? String(error)}`); }
       }
@@ -244,18 +247,18 @@ window.__ModuleLoader__.load({
           className: `row ${row.level === 1 ? 'root-row' : ''}`,
           style: { marginLeft: `${(row.level - 1) * 20}px` }, role: 'treeitem',
           tabIndex: (rows.some(item => item.id === focusId) ? focusId : rows[0]?.id) === row.id ? 0 : -1,
-          'data-session-id': row.id, 'aria-level': row.level, 'aria-expanded': row.expandable ? row.expanded : undefined,
+          'data-session-id': row.id, 'aria-level': row.level, 'aria-posinset': row.posInSet, 'aria-setsize': row.setSize,
+          'aria-expanded': row.expandable ? row.expanded : undefined,
           'aria-disabled': target === null || undefined, 'aria-label': `${label}，${stateText}`,
           onFocus: event => { if (event.target === event.currentTarget) setFocusId(row.id); },
           onKeyDown: event => treeKeys(event, row),
           onClick: event => { if (event.target === event.currentTarget) navigate(row); }
-        }, h('button', { type: 'button', className: 'caret', tabIndex: -1, disabled: !row.expandable, 'aria-label': `${row.expanded ? '折叠' : '展开'} ${label}`, onClick: () => toggle(row) }, row.expandable ? (row.expanded ? '▾' : '▸') : '·'),
+        }, h('button', { type: 'button', className: 'caret', tabIndex: -1, disabled: !row.expandable, 'aria-label': `${row.expanded ? '折叠' : '展开'} ${label}`, onClick: event => { toggle(row); event.currentTarget.closest('[role="treeitem"]')?.focus(); } }, row.expandable ? (row.expanded ? '▾' : '▸') : '·'),
         h('img', { className: 'image', src: images[type] ?? DEFAULT_IMAGES[type], alt: '' }),
         h('button', { type: 'button', className: 'body', tabIndex: -1, disabled: target === null, onClick: () => navigate(row) },
           h('span', { className: `dot ${row.status}`, 'aria-hidden': true }), h('span', { className: 'bodytext' }, h('span', { className: 'title' }, label), h('span', { className: 'meta' }, stateText))),
         h('select', { className: 'avatar-select', 'aria-label': `更改 ${label} 的头像`, value: prefs[row.id] ?? '', onChange: event => changeAvatar(row.id, event.target.value) },
-          h('option', { value: '' }, '自动头像'), TYPES.map(value => h('option', { key: value, value }, TYPE_LABELS[value]))),
-        typeof target === 'object' && target !== null ? h('button', { type: 'button', className: 'aside', title: '在右侧栏打开', 'aria-label': `在右侧栏打开 ${label}`, onClick: () => navigate(row, true) }, '⇥') : null
+          h('option', { value: '' }, '自动头像'), TYPES.map(value => h('option', { key: value, value }, TYPE_LABELS[value])))
         ), indicator);
       }
       return h('section', { className: 'dsh-st', 'aria-label': '会话树' }, h('style', null, CSS),
@@ -270,18 +273,17 @@ window.__ModuleLoader__.load({
         list.phase === 'ready' && rows.length === 0 && h('div', { className: 'notice' }, '暂无可显示的根会话。'),
         h('div', { className: 'tree', role: 'tree', ref: treeRef, 'aria-label': '会话谱系' }, rows.map(renderRow)));
     }
-    const inject = ['slots', 'sessions', 'uiWorkspace', 'sidebarRight'];
+    const inject = ['slots', 'sessions', 'uiWorkspace'];
     function apply(ctx) {
       const actions = {
         expansion: new Set(),
         refreshProjection: id => ctx.sessions.refreshProjections(id),
         refreshSessions: () => ctx.sessions.refresh(),
-        openSession: target => ctx.uiWorkspace.openSession(target),
-        openAside: address => ctx.sidebarRight.openResource(asideAddress(address), { kind: 'subagentchat', preferNewPane: true })
+        openSession: target => ctx.uiWorkspace.openSession(target)
       };
       ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: ID, inject: () => actions }, TreePanel));
       ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: ID, order: 55, label: '会话树' }, TreeIcon));
     }
-    return { apply, inject, __test: { avatarType, readAvatarPrefs, saveAvatarPrefs, readCustomImages, saveCustomImages, validImage, buildRows, catalogOf, navigationTarget, asideAddress, toggleBranch, retryBranch } };
+    return { apply, inject, __test: { avatarType, readAvatarPrefs, saveAvatarPrefs, readCustomImages, saveCustomImages, validImage, buildRows, catalogOf, navigationTarget, toggleBranch, retryBranch } };
   }
 });
