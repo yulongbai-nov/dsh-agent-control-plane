@@ -135,6 +135,23 @@ test('an owner change during an active task starts a new assignment', async () =
   assert.equal((await createProvider(sessions).generate(request)).title, '后分配');
 });
 
+test('release and reclaim, and reopen and recompletion update recency', async () => {
+  const events = [
+    event(1, 'task-1', 'first'), event(2, 'task-2', 'second'),
+    event(3, 'task-1', 'first', 'pending', null, 2),
+    event(4, 'task-1', 'first', 'in_progress', 'child', 3),
+  ];
+  const { sessions, request } = setup(events);
+  assert.equal((await createProvider(sessions).generate(request)).title, 'first');
+  events.push(event(5, 'task-1', 'first', 'completed', 'child', 4));
+  events.push(event(6, 'task-2', 'second', 'completed', 'child', 2));
+  assert.equal((await createProvider(sessions).generate(request)).title, 'second');
+  events.push(event(7, 'task-1', 'first', 'pending', null, 5));
+  events.push(event(8, 'task-1', 'first', 'in_progress', 'child', 6));
+  events.push(event(9, 'task-1', 'first', 'completed', 'child', 7));
+  assert.equal((await createProvider(sessions).generate(request)).title, 'first');
+});
+
 test('an unsupported or malformed event for this team fails closed', async () => {
   for (const invalid of [
     { seq: 2, type: 'team/task', data: { version: 99, teamId: 'lead' } },

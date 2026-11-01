@@ -84,6 +84,30 @@ test('rc.5 keeps the current fallback on an automatic provider failure', async (
   }
 });
 
+test('rc.5 keeps an accepted provider title when a later task is released', async () => {
+  const ctx = await environment();
+  try {
+    await ctx.plugin({ name, inject, apply });
+    const lead = ctx.sessions.create('lead');
+    const child = ctx.sessions.create('child', { meta: { parentSession: 'lead' } });
+    appendTask(lead, '原任务', 1, 'pending');
+    appendTask(lead, '原任务', 2, 'in_progress');
+    appendPrompt(child, '开始');
+    startRequest(child);
+    await settle();
+    assert.equal(ctx.sessionTitle.get(child).title, '原任务');
+    const eventCount = child.snapshotEvents().filter(event => event.type === 'session/title').length;
+    appendTask(lead, '原任务', 3, 'pending');
+    appendPrompt(child, '继续');
+    startRequest(child);
+    await settle();
+    assert.equal(ctx.sessionTitle.get(child).title, '原任务');
+    assert.equal(child.snapshotEvents().filter(event => event.type === 'session/title').length, eventCount);
+  } finally {
+    await ctx.fiber.dispose();
+  }
+});
+
 test('rc.5 refresh without a provider explicitly unpins a user title', async () => {
   const ctx = await environment();
   try {

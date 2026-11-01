@@ -20,4 +20,4 @@ rc.5 的 `dsh-session-title/README.zh.md`「提供方」及实现明确：已有
 
 ## 004 · 代码审查运行时限制
 
-当前公开的 `workflow` 的 `agent()` 支持按次指定 `provider` 与 `model`，但没有 reasoning-effort 参数；rc.5 `dsh-workflow-ptc/lib/index.js` 的 host `parseAgentRequest` 只透传 `prompt/provider/model/schema`。因此请求对象里伪造 `reasoning_effort: 'max'` 既不受支持，也不能证明生效。要如实进行 Sol/max 审查，需要运行时提供该控制，或用户明确允许变更会影响其他新会话的默认配置。本项目不暗改该配置。
+当前公开的 `workflow` 的 `agent()` 支持按次指定 `provider` 与 `model`，但没有 reasoning-effort 参数；rc.5 `dsh-workflow-ptc/lib/index.js` 的 host `childRequest` 只透传 `prompt/provider/model/schema`。因此请求对象里伪造 `reasoning_effort: 'max'` 既不受支持，也不能证明生效。要如实进行 Sol/max 审查，需要运行时提供该控制，或用户明确允许变更会影响其他新会话的默认配置。本项目不暗改该配置。
