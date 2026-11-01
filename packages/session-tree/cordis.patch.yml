@@ -1,0 +1,4 @@
+# Independent client-only bundle; does not replace the built-in workspace or subagent UI.
+- insert:
+    - id: session-tree
+      name: 'dsh-session-tree'
