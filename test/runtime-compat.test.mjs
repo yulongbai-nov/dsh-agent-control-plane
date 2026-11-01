@@ -81,6 +81,18 @@ test('rejects contradictory link entries even with file metadata', () => {
   assert.throws(() => readAsarEntry(buffer, 'x'), /unsupported/i);
 });
 
+test('rejects link-bearing intermediate directories', () => {
+  const header = Buffer.from(JSON.stringify({ files: { a: { link: 'missing', files: { x: { size: 5, offset: '0' } } } } }));
+  const padding = (4 - header.length % 4) % 4;
+  const prefix = Buffer.alloc(16);
+  prefix.writeUInt32LE(4, 0);
+  prefix.writeUInt32LE(8 + header.length + padding, 4);
+  prefix.writeUInt32LE(4 + header.length + padding, 8);
+  prefix.writeUInt32LE(header.length, 12);
+  const buffer = Buffer.concat([prefix, header, Buffer.alloc(padding), Buffer.from('hello')]);
+  assert.throws(() => readAsarEntry(buffer, 'a/x'), /unsupported/i);
+});
+
 test('rejects invalid JSON and unsupported or unsafe offsets and sizes', () => {
   const buffer = asar({ x: 'hello' });
   const invalidJson = Buffer.from(buffer);
@@ -98,10 +110,10 @@ test('rejects invalid JSON and unsupported or unsafe offsets and sizes', () => {
     return Buffer.concat([prefix, header, Buffer.alloc(padding), Buffer.from('hello')]);
   }
   for (const node of [
-    { offset: '-1', size: 5 }, { offset: 'nope', size: 5 },
+    { offset: '-1', size: 5 }, { offset: 'nope', size: 5 }, { offset: 0, size: 5 },
     { offset: '9999999999999999999', size: 5 }, { offset: '0', size: -1 },
     { offset: '0', size: 9999 }, { offset: '0', size: 5, unpacked: true },
-    { files: {} },
+    { files: {} }, null,
   ]) assert.throws(() => readAsarEntry(withNode(node), 'x'), /unsupported|range/i);
 });
 

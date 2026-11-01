@@ -37,10 +37,13 @@ export function readAsarEntry(buffer, path) {
   catch { throw new Error('Invalid archive header JSON'); }
   let node = header;
   for (const part of path.split('/')) {
-    if (!node?.files || !Object.hasOwn(node.files, part)) throw new Error(`Missing archive entry: ${path}`);
+    if (!node || typeof node !== 'object' || Object.hasOwn(node, 'link') || node.unpacked) {
+      throw new Error(`Unsupported archive entry: ${path}`);
+    }
+    if (!node.files || typeof node.files !== 'object' || !Object.hasOwn(node.files, part)) throw new Error(`Missing archive entry: ${path}`);
     node = node.files[part];
   }
-  if (node?.files || node?.unpacked || Object.hasOwn(node, 'link') || !/^\d+$/.test(node?.offset ?? '') || !Number.isSafeInteger(node?.size) || node.size < 0) {
+  if (!node || typeof node !== 'object' || node.files || node.unpacked || Object.hasOwn(node, 'link') || typeof node.offset !== 'string' || !/^\d+$/.test(node.offset) || !Number.isSafeInteger(node.size) || node.size < 0) {
     throw new Error(`Unsupported archive entry: ${path}`);
   }
   const offset = Number(node.offset);
