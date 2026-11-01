@@ -21,7 +21,8 @@ const sampleData = () => ({ byId: { child: { id: 'child', parentId: 'parent-real
   projectionsBySession: { child: { values: { subagent: { mode: 'one-shot' } } } } });
 
 function renderer() {
-  let state = [], cursor = 0;
+  let state = [], cursor = 0, dirty = false, mounted = true, updatesAfterUnmount = 0;
+  let effects = [], pending = [];
   const React = {
     Fragment: Symbol('Fragment'),
     createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
@@ -29,12 +30,42 @@ function renderer() {
     useState(initial) {
       const index = cursor++;
       if (!(index in state)) state[index] = typeof initial === 'function' ? initial() : initial;
-      return [state[index], next => { state[index] = typeof next === 'function' ? next(state[index]) : next; }];
+      return [state[index], next => {
+        if (!mounted) { updatesAfterUnmount++; return; }
+        const value = typeof next === 'function' ? next(state[index]) : next;
+        if (!Object.is(value, state[index])) { state[index] = value; dirty = true; }
+      }];
+    },
+    useRef(initial) {
+      const index = cursor++;
+      if (!(index in state)) state[index] = { current: initial };
+      return state[index];
+    },
+    useEffect(callback, deps) {
+      const index = cursor++, previous = effects[index];
+      if (!previous || !deps || deps.some((dep, i) => !Object.is(dep, previous.deps?.[i]))) pending.push({ index, callback, deps });
+    },
+    useLayoutEffect(callback, deps) {
+      const index = cursor++, previous = effects[index];
+      if (!previous || !deps || deps.some((dep, i) => !Object.is(dep, previous.deps?.[i]))) pending.push({ index, callback, deps });
     }
   };
   const Component = createWorkflowBoard(React);
-  const render = props => { cursor = 0; return Component(props); };
-  return { render };
+  const render = props => {
+    let result, passes = 0;
+    do {
+      if (++passes > 20) throw new Error('effect/render loop');
+      dirty = false; cursor = 0; pending = [];
+      result = Component(props);
+      for (const effect of pending) {
+        effects[effect.index]?.cleanup?.();
+        effects[effect.index] = { deps: effect.deps, cleanup: effect.callback() };
+      }
+    } while (dirty);
+    return result;
+  };
+  const unmount = () => { for (const effect of effects) effect?.cleanup?.(); mounted = false; };
+  return { render, unmount, updatesAfterUnmount: () => updatesAfterUnmount };
 }
 const flatten = node => node && typeof node === 'object' ? [node, ...(node.children ?? []).flat(Infinity).flatMap(flatten)] : [];
 const text = node => typeof node === 'string' || typeof node === 'number' ? String(node) : node && typeof node === 'object' ? (node.children ?? []).flat(Infinity).map(text).join('') : '';
@@ -129,6 +160,9 @@ test('removed phase and model options fall back without changing fixed status fi
   tree = r.render({ board: next });
   assert.deepEqual(['按状态筛选', '按阶段筛选', '按模型筛选'].map(name => filter(tree, name).props.value), ['failed', '', '']);
   assert.deepEqual(rowsOf(tree).map(node => node.props['data-roster-id']), ['c']);
+  tree = r.render({ board });
+  assert.deepEqual(['按状态筛选', '按阶段筛选', '按模型筛选'].map(name => filter(tree, name).props.value), ['failed', '', '']);
+  assert.deepEqual(rowsOf(tree).map(node => node.props['data-roster-id']), ['c']);
 });
 
 test('navigate only when rc.5 live member, identity and actual parent agree', () => {
@@ -176,6 +210,110 @@ test('a retained selection never opens a same-id node in another run', () => {
   assert.equal(rowsOf(tree).some(row => row.props['data-selected']), false);
   assert.equal(flatten(tree).some(node => node.type === 'button' && text(node) === '打开子会话'), false);
   assert.deepEqual(calls, []);
+});
+
+test('navigation errors are scoped to node, run, parent, latest attempt and mounted lifetime', async () => {
+  const board = makeBoard(), r = renderer(), calls = [];
+  board.statusByNode.a = { status: 'running', childId: 'child', seq: 1 };
+  board.statusByNode.b = { status: 'running', childId: 'child', seq: 2 };
+  const props = { board, sessions: sampleData(), statuses: new Map([['child', { running: true }]]), openSession: () => new Promise((resolve, reject) => calls.push({ resolve, reject })) };
+  const row = (tree, id) => rowsOf(tree).find(item => item.props['data-roster-id'] === id);
+  const open = tree => flatten(tree).find(node => node.type === 'button' && text(node) === '打开子会话');
+  const alert = tree => flatten(tree).find(node => node.props?.role === 'alert');
+  let tree = r.render(props);
+  row(tree, 'a').props.onClick(); tree = r.render(props);
+  open(tree).props.onClick();
+  row(tree, 'b').props.onClick(); tree = r.render(props);
+  calls[0].reject(new Error('late a')); await new Promise(resolve => setImmediate(resolve));
+  tree = r.render(props); assert.equal(alert(tree), undefined);
+  open(tree).props.onClick(); calls[1].reject(new Error('b failed')); await new Promise(resolve => setImmediate(resolve));
+  tree = r.render(props); assert.ok(text(alert(tree)).includes('b failed'));
+  open(tree).props.onClick(); tree = r.render(props); assert.equal(alert(tree), undefined);
+  calls[2].resolve(); await new Promise(resolve => setImmediate(resolve));
+  tree = r.render(props); assert.equal(alert(tree), undefined);
+  open(tree).props.onClick(); open(tree).props.onClick();
+  calls[3].reject(new Error('old attempt')); await new Promise(resolve => setImmediate(resolve));
+  tree = r.render(props); assert.equal(alert(tree), undefined);
+  calls[4].reject(new Error('latest attempt')); await new Promise(resolve => setImmediate(resolve));
+  tree = r.render(props); assert.ok(text(alert(tree)).includes('latest attempt'));
+  row(tree, 'a').props.onClick(); tree = r.render(props); assert.equal(alert(tree), undefined);
+  open(tree).props.onClick();
+  const otherRun = { ...board, runId: 'run-B' };
+  tree = r.render({ ...props, board: otherRun });
+  calls[5].reject(new Error('wrong run')); await new Promise(resolve => setImmediate(resolve));
+  tree = r.render({ ...props, board: otherRun }); assert.equal(alert(tree), undefined);
+  row(tree, 'a').props.onClick(); tree = r.render({ ...props, board: otherRun });
+  open(tree).props.onClick();
+  const otherParent = { ...otherRun, parentSessionId: 'parent-2' };
+  tree = r.render({ ...props, board: otherParent });
+  calls[6].reject(new Error('wrong parent')); await new Promise(resolve => setImmediate(resolve));
+  tree = r.render({ ...props, board: otherParent }); assert.equal(alert(tree), undefined);
+  tree = r.render({ ...props, board: otherRun }); row(tree, 'b').props.onClick(); tree = r.render({ ...props, board: otherRun });
+  open(tree).props.onClick();
+  r.unmount(); calls[7].reject(new Error('after unmount')); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(r.updatesAfterUnmount(), 0);
+});
+
+test('navigation rejection after a newer scope commits cannot update obsolete state', async () => {
+  const board = makeBoard();
+  board.statusByNode.a = { status: 'running', childId: 'child', seq: 1 };
+  let pending = [], states = [], cursor = 0, updates = 0, reject;
+  const React = {
+    Fragment: Symbol('fragment'), useId: () => ':gap:',
+    createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+    useState(initial) {
+      const index = cursor++;
+      if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial;
+      return [states[index], next => { updates++; states[index] = typeof next === 'function' ? next(states[index]) : next; }];
+    },
+    useRef(initial) { const index = cursor++; return states[index] ??= { current: initial }; },
+    useLayoutEffect(callback) { pending.push(callback); },
+    useEffect(callback) { pending.push(callback); }
+  };
+  const Component = createWorkflowBoard(React);
+  const props = { board, sessions: sampleData(), statuses: new Map([['child', { running: true }]]), openSession: () => new Promise((_resolve, fail) => { reject = fail; }) };
+  function render(value) { cursor = 0; pending = []; return Component(value); }
+  let tree = render(props); pending.forEach(effect => effect());
+  rowsOf(tree)[0].props.onClick(); tree = render(props); pending.forEach(effect => effect());
+  flatten(tree).find(node => node.type === 'button' && text(node) === '打开子会话').props.onClick();
+  render({ ...props, board: { ...board, runId: 'run-B' } });
+  pending.slice(0, 1).forEach(effect => effect()); // commit layout effect, before passive effects
+  const before = updates;
+  reject(new Error('obsolete')); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(updates, before);
+});
+
+test('keyboard selected node exposes direct predecessor and successor in both locales', () => {
+  const r = renderer(), board = makeBoard();
+  board.topology.nodes[1].label = null;
+  board.topology.edges = [{ from: 'a', to: 'b' }];
+  const props = { board, sessions: sampleData(), statuses: new Map() };
+  let tree = r.render(props);
+  const a = nodesOf(tree).find(node => node.props['data-node-id'] === 'a');
+  assert.ok(a.props['aria-label'].includes('后继'));
+  assert.ok(a.props['aria-label'].includes('未命名节点'));
+  assert.ok(nodesOf(tree).find(node => node.props['data-node-id'] === 'c').props['aria-label'].includes('无'));
+  let prevented = false;
+  a.props.onKeyDown({ key: ' ', preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  tree = r.render(props);
+  const detail = flatten(tree).find(node => node.props?.['aria-label'] === '所选节点');
+  assert.ok(text(detail).includes('后继'));
+  assert.ok(text(detail).includes('未命名节点'));
+  const b = nodesOf(tree).find(node => node.props['data-node-id'] === 'b');
+  assert.ok(b.props['aria-label'].includes('前驱'));
+  assert.ok(b.props['aria-label'].includes('first'));
+  const english = r.render({ ...props, locale: 'en' });
+  const englishA = nodesOf(english).find(node => node.props['data-node-id'] === 'a');
+  assert.ok(englishA.props['aria-label'].includes('Successors'));
+  assert.ok(englishA.props['aria-label'].includes('Unnamed node'));
+  const noEdge = { ...board, topology: { ...board.topology, edges: [] } };
+  const without = r.render({ ...props, board: noEdge, locale: 'en' });
+  assert.ok(nodesOf(without)[0].props['aria-label'].includes('Successors: None'));
+  assert.notEqual(nodesOf(without)[0].props['aria-label'], englishA.props['aria-label']);
+  const incomplete = { ...noEdge, topology: { ...noEdge.topology, complete: false } };
+  const uncertain = r.render({ ...props, board: incomplete, locale: 'en' });
+  assert.ok(nodesOf(uncertain)[0].props['aria-label'].includes('Successors: Not determined'));
 });
 
 test('events preserve input order and unknown/unmatched fields are never invented', () => {

@@ -11,7 +11,8 @@ const WORDS = {
     run: '运行', staticNodes: '静态节点', incomplete: '静态拓扑不完整；未显示的节点不代表不会执行。',
     missingLayout: '部分节点缺少有效静态坐标，无法显示在图中。', diagnostics: '投影诊断', diagnostic: '诊断',
     unmatched: '未匹配调用', reasonUnknown: '原因未知', events: '事件流', eventsLabel: '工作流事件流', noEvents: '暂无事件。',
-    event: '事件', time: '时间', invocation: '调用', boardLabel: '工作流拓扑与看板', openError: '打开失败'
+    event: '事件', time: '时间', invocation: '调用', boardLabel: '工作流拓扑与看板', openError: '打开失败',
+    predecessors: '直接前驱', successors: '直接后继', none: '无', uncertain: '未能确定', links: '静态边'
   },
   en: {
     running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled', unknown: 'Unknown',
@@ -24,7 +25,8 @@ const WORDS = {
     run: 'Run', staticNodes: 'Static nodes', incomplete: 'Static topology is incomplete; omitted nodes may still execute.',
     missingLayout: 'Some nodes lack valid static coordinates and cannot be displayed.', diagnostics: 'Projection diagnostics', diagnostic: 'Diagnostic',
     unmatched: 'Unmatched invocations', reasonUnknown: 'Unknown reason', events: 'Events', eventsLabel: 'Workflow event stream', noEvents: 'No events.',
-    event: 'Event', time: 'Time', invocation: 'Invocation', boardLabel: 'Workflow topology and roster', openError: 'Open failed'
+    event: 'Event', time: 'Time', invocation: 'Invocation', boardLabel: 'Workflow topology and roster', openError: 'Open failed',
+    predecessors: 'Predecessors', successors: 'Successors', none: 'None', uncertain: 'Not determined', links: 'Static edges'
   }
 };
 const stateOf = member => ['running', 'completed', 'failed', 'cancelled', 'unknown'].includes(member?.status) ? member.status : 'unknown';
@@ -51,14 +53,32 @@ export function createWorkflowBoard(React) {
     const words = typeof locale === 'string' && locale.toLowerCase().startsWith('en') ? WORDS.en : WORDS.zh;
     const [selection, setSelection] = React.useState(null);
     const [filters, setFilters] = React.useState(null);
-    const [openError, setOpenError] = React.useState('');
+    const [openError, setOpenError] = React.useState(null);
+    const request = React.useRef({ active: false, generation: 0 });
     const clipPrefix = React.useId();
+    React.useLayoutEffect(() => {
+      request.current.active = true;
+      request.current.generation++;
+      return () => { request.current.active = false; request.current.generation++; };
+    }, [board?.runId, board?.parentSessionId, selection?.id]);
+    React.useLayoutEffect(() => {
+      if (!filters || filters.runId !== board?.runId || filters.parentSessionId !== board?.parentSessionId || !Array.isArray(board?.topology?.nodes)) return;
+      const phases = board.topology.nodes.map(node => node?.phase);
+      const models = board.topology.nodes.map(node => node?.model);
+      const phase = filters.phase && !phases.includes(filters.phase) ? '' : filters.phase;
+      const model = filters.model && !models.includes(filters.model) ? '' : filters.model;
+      if (phase !== filters.phase || model !== filters.model) setFilters({ ...filters, phase, model });
+    }, [board?.runId, board?.parentSessionId, board?.topology?.nodes, filters]);
     if (!board || board.version !== 1 || !board.topology || !board.layout || !Array.isArray(board.topology.nodes) || !Array.isArray(board.layout.nodes) || board.topology.nodes.some(node => !node || !validId(node.id)) || board.layout.nodes.some(node => !node || !validId(node.id))) {
       return h('section', { className: 'wbc', role: 'status' }, h('style', null, CSS), words.invalid);
     }
     const topology = board.topology, layout = board.layout;
     const selected = selection?.runId === board.runId && selection?.parentSessionId === board.parentSessionId ? selection.id : null;
-    const setSelected = id => setSelection({ id, runId: board.runId, parentSessionId: board.parentSessionId });
+    const setSelected = id => {
+      request.current.generation++;
+      setOpenError(null);
+      setSelection({ id, runId: board.runId, parentSessionId: board.parentSessionId });
+    };
     const positions = new Map(layout.nodes.map(pos => [pos.id, pos]));
     const staticNodes = new Map(topology.nodes.map(node => [node.id, node]));
     const counts = new Map();
@@ -86,7 +106,20 @@ export function createWorkflowBoard(React) {
     const top = Math.min(0, ...coords.map(pos => pos.y), ...groups.map(group => group.bounds.y));
     const right = Math.max(400, ...coords.map(pos => pos.x + pos.width), ...groups.map(group => group.bounds.x + group.bounds.width));
     const bottom = Math.max(180, ...coords.map(pos => pos.y + pos.height), ...groups.map(group => group.bounds.y + group.bounds.height));
-    const edges = (Array.isArray(topology.edges) ? topology.edges : []).flatMap((edge, index) => {
+    const links = new Map(topology.nodes.map(node => [node.id, { before: [], after: [] }]));
+    const topologyEdges = Array.isArray(topology.edges) ? topology.edges : [];
+    for (const edge of topologyEdges) {
+      if (!edge || !links.has(edge.from) || !links.has(edge.to)) continue;
+      const after = links.get(edge.from).after, before = links.get(edge.to).before;
+      if (!after.includes(edge.to)) after.push(edge.to);
+      if (!before.includes(edge.from)) before.push(edge.from);
+    }
+    function linkText(id) {
+      const link = links.get(id) ?? { before: [], after: [] };
+      const names = ids => ids.length ? ids.map(target => staticNodes.get(target)?.label || words.unnamed).join(', ') : topology.complete === true ? words.none : words.uncertain;
+      return `${words.links} — ${words.predecessors}: ${names(link.before)}; ${words.successors}: ${names(link.after)}`;
+    }
+    const edges = topologyEdges.flatMap((edge, index) => {
       if (!edge || typeof edge !== 'object') return [];
       const a = displayedPositions.get(edge.from), b = displayedPositions.get(edge.to);
       if (!staticNodes.has(edge.from) || !staticNodes.has(edge.to) || !a || !b || ![a.x, a.y, a.width, a.height, b.x, b.y, b.width, b.height].every(Number.isFinite) || a.width <= 0 || a.height <= 0 || b.width <= 0 || b.height <= 0) return [];
@@ -107,10 +140,14 @@ export function createWorkflowBoard(React) {
     const target = selectedNode ? navigationTarget(board, member, sessions, statuses) : null;
     function openChild() {
       if (!target || typeof openSession !== 'function') return;
-      try {
-        const result = openSession(target);
-        Promise.resolve(result).catch(error => setOpenError(`${words.openError}: ${error?.message ?? String(error)}`));
-      } catch (error) { setOpenError(`${words.openError}: ${error?.message ?? String(error)}`); }
+      const generation = ++request.current.generation;
+      setOpenError(null);
+      const report = error => {
+        if (request.current.active && request.current.generation === generation) {
+          setOpenError({ runId: board.runId, parentSessionId: board.parentSessionId, nodeId: selected, message: `${words.openError}: ${error?.message ?? String(error)}` });
+        }
+      };
+      try { Promise.resolve(openSession(target)).catch(report); } catch (error) { report(error); }
     }
     const groupNames = new Map((Array.isArray(topology.groups) ? topology.groups : []).filter(group => group && validId(group.id)).map(group => [group.id, group.kind]));
     const graph = h('div', { className: 'graph' }, graphNodes.length ? h('svg', {
@@ -127,7 +164,7 @@ export function createWorkflowBoard(React) {
       const clipId = `${clipPrefix}-node-${index}`;
       const choose = () => setSelected(node.id);
       return h('g', { key: node.id, role: 'button', tabIndex: 0, 'data-node-id': node.id, transform: `translate(${pos.x} ${pos.y})`,
-        'aria-label': `${title}, ${words[status]}, ${words.phase} ${node.phase || words.unknown}, ${words.model} ${node.model || words.unknown}`,
+        'aria-label': `${title}, ${words[status]}, ${words.phase} ${node.phase || words.unknown}, ${words.model} ${node.model || words.unknown}. ${linkText(node.id)}`,
         'aria-pressed': selected === node.id, onClick: choose,
         onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(); } }
       }, h('rect', { className: 'node', width: pos.width, height: pos.height, rx: 9 }),
@@ -151,9 +188,10 @@ export function createWorkflowBoard(React) {
       !roster.length ? h('p', { className: 'empty' }, words.noRows) : null,
       selectedNode ? h('div', { className: 'detail', role: 'region', 'aria-label': words.selected }, h('strong', null, selectedNode.label || words.unnamed),
         h('div', { className: 'muted' }, `${words[stateOf(member)]} · ${selectedNode.phase || `${words.phase}: ${words.unknown}`} · ${selectedNode.model || `${words.model}: ${words.unknown}`}`),
+        h('p', null, linkText(selectedNode.id)),
         h('button', { type: 'button', disabled: !target || typeof openSession !== 'function', onClick: openChild }, words.open),
         !target ? h('p', { className: 'muted' }, words.gated) : null,
-        openError ? h('p', { role: 'alert' }, openError) : null) : h('p', { className: 'muted' }, words.choose));
+        openError && openError.runId === board.runId && openError.parentSessionId === board.parentSessionId && openError.nodeId === selected ? h('p', { role: 'alert' }, openError.message) : null) : h('p', { className: 'muted' }, words.choose));
     const events = Array.isArray(board.events) ? board.events : [];
     const unmatched = Array.isArray(board.unmatched) ? board.unmatched : [];
     const diagnostics = Array.isArray(board.diagnostics) ? board.diagnostics : [];
