@@ -1,6 +1,8 @@
 # rc.5 workflow 源候选观察器（实验性基础模块）
 
-只在内存里从公开的 `tools/result` **同步**抓取少量数据；所有候选均为 `unverified`，不是认证，不自动升级 `workflow-board-projection` 的 `sourceBinding.status`。这是零依赖 CommonJS 模块，不是可安装插件；不启动、包装或重跑工具，不执行脚本、不轮询、不订阅 `session/event` 或 `workflow/*`，不读写会话、文件、数据库或网络。它本身尚未接入 GUI。
+**CR-007 隔离：仅保留作合成研究，不安装、不加入任何 profile、不接真实宿主或用户会话。** 只在内存里从公开的 `tools/result` **同步**抓取少量数据；所有候选均为 `unverified`，不是认证，不自动升级 `workflow-board-projection` 的 `sourceBinding.status`。这是 private、零依赖 CommonJS 模块，不是可安装插件；不启动、包装或重跑工具，不执行脚本、不轮询、不订阅 `session/event` 或 `workflow/*`，不读写会话、文件、数据库或网络。它本身尚未接入 GUI。
+
+仅为已知 rc.5 伪造/冲突反例和回归测试保留；待可信 accepted-init 和原始调用身份 seam 建立、授权/资源边界经实测且反例迁移到回归测试后，再审议移除该研究包。当前无到期时间，删除仍须用户批准；保留不表示将部署。
 
 ## 最重要的限制：事件并不证明工具身份或 run 来源
 
