@@ -31,7 +31,7 @@ try {
 
 快照 cursor 只描述**该次读取时**的已知投影；源 session log 和 SQLite 不是跨库事务，本层无法证明快照是否追上源尾、缺页、取消或后续 append。输出 `freshness:'unknown'` 恒为未知，不把 source 未知/不完整标为完整，也不能根据 cursor 相等推导实时同步。后续 adapter 应负责安全、幂等的真实日志重建以及身份和 source 世代变化处理，且在无法证明完整时保持 unknown。
 
-内部测试模块的 `migrate(database)` 仅供合成内存迁移测试，不是包公开 API；它要求 `node:sqlite.DatabaseSync` 主库为 memory 且没有 attached 数据库；v0→v1 在事务中建表并写 `PRAGMA user_version`，未来未知版本拒绝，失败回滚。它不会接受磁盘文件。没有任意 SQL 接口的 `createMemoryStore()` 拒绝文件路径、外部句柄与额外配置。
+内部测试模块的 `migrate(database)` 仅供合成内存迁移测试，不是包公开 API；它要求 `node:sqlite.DatabaseSync` 主库为 memory 且没有 attached 数据库；v0→v1 仅对空库在事务中建表并写 `PRAGMA user_version`，只接受 0/1，其他版本（含负数）拒绝；v1 必须有该原型创建的精确 schema，否则拒绝，失败回滚。精确 SQL 比对刻意保守，可能拒绝结构等价但格式不同的表，不是磁盘迁移兼容方案。它不会接受磁盘文件。没有任意 SQL 接口的 `createMemoryStore()` 拒绝文件路径、外部句柄与额外配置。
 
 ## 验证与后续授权
 

@@ -284,6 +284,42 @@ test('version migrations are atomic, reentrant and reject unknown future schema'
   } finally { future.close(); }
 });
 
+test('negative schema versions fail without altering the transaction or version', () => {
+  const db = new DatabaseSync(':memory:');
+  try {
+    db.exec('PRAGMA user_version = -1');
+    assert.throws(() => migrate(db), { code: 'UNSUPPORTED_SCHEMA' });
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version, -1);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'table'").get().n, 0);
+    db.exec('CREATE TABLE rollback_probe (n INTEGER)');
+  } finally { db.close(); }
+});
+
+test('unversioned database with a view is rejected without mutation', () => {
+  const db = new DatabaseSync(':memory:');
+  try {
+    db.exec('CREATE VIEW unrelated AS SELECT 1 AS n');
+    assert.throws(() => migrate(db), { code: 'UNSUPPORTED_SCHEMA' });
+    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 0);
+    assert.equal(db.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type = 'view'").get().n, 1);
+  } finally { db.close(); }
+});
+
+test('v1 marker without the expected actual table is rejected without mutation', () => {
+  for (const create of ['', 'CREATE TABLE session_snapshots (session_key TEXT)', 'CREATE VIEW session_snapshots AS SELECT 1 AS session_key']) {
+    const db = new DatabaseSync(':memory:');
+    try {
+      if (create) db.exec(create);
+      db.exec('PRAGMA user_version = 1');
+      const before = db.prepare("SELECT type, name, sql FROM sqlite_master ORDER BY name").all();
+      assert.throws(() => migrate(db), { code: 'UNSUPPORTED_SCHEMA' });
+      assert.equal(db.prepare('PRAGMA user_version').get().user_version, 1);
+      assert.deepEqual(db.prepare("SELECT type, name, sql FROM sqlite_master ORDER BY name").all(), before);
+      db.exec('CREATE TABLE rollback_probe (n INTEGER)');
+    } finally { db.close(); }
+  }
+});
+
 test('only safe in-memory database may be used and no destructive or export API exists', () => {
   assert.throws(() => createMemoryStore({ filename: '/Users/yulong/.dsh/analytics/personal-telemetry.db' }), { code: 'UNSUPPORTED_STORAGE' });
   const store = setup();
