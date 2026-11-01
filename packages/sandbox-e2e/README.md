@@ -43,7 +43,11 @@ NODE
 
 本机结果依次为 `ECONNREFUSED`、`EPERM`、`EPERM`；第一个允许连接但本机无监听者，后两者被系统拒绝。`localhost:*` 会允许本机所有服务，不得用于待测客户端；按 port 单独放行仍需验证精确地址族、DNS/Unix socket、目标服务所有权、浏览器子进程继承和从端口公布到浏览器启动的竞态。此处没有在固定端口上启动服务；**不能把这一探测当作生产安全策略**。
 
-另一个仅针对 `/Users/yulong` 的 `(deny file-read* file-write* (subpath ...))` 可令该路径下 stat 返回 EPERM，但 `/private/tmp`、`/private/var/folders` 与 `/Users/Shared` 仍可读；它不能防其他用户/临时文件或进程间 IPC。`(deny default)` 的 Node 探测以 signal 6 终止；后续尝试允许系统库、Node/Homebrew 库、设备、`sysctl-read`、`mach-lookup` 和进程操作仍终止；对照中**允许所有文件读取**才成功。这只缩小了问题范围，不能作为安全沙盒：尚不知具体缺失访问，也不表明默认拒绝不可实现。上述探针只运行空 Node/Electron `console.log`，没有启动服务，宽松对照未用于运行 DSH。策略还必须涵盖软/硬链接和所有读取/写入/进程间访问路径；仅改环境变量不是权限隔离。
+另一个仅针对 `/Users/yulong` 的 `(deny file-read* file-write* (subpath ...))` 可令该路径下 stat 返回 EPERM，但 `/private/tmp`、`/private/var/folders` 与 `/Users/Shared` 仍可读；它不能防其他用户/临时文件或进程间 IPC。
+
+**Node/Electron 最小启动探针的进展，不是生产沙盒：**以前 `(deny default)` 会 signal 6；追加允许根目录本身的 `file-read-data (literal "/")` 后不再发生该启动错误。Node 还需只读其系统库、Homebrew 库和 OpenSSL 配置；已安装的 Electron Node 模式则以系统库和 app 包只读路径启动，并输出一次 `task_name_for_pid` code-sign 警告。前台探针对 `/Users/yulong`、`/Users/Shared`、`/private/tmp` 和 `/private/var/folders` 的**目录读取**均得到 EPERM；Node 对 `127.0.0.1:1` 连接得到 EPERM。探针没有读取目录内容、没有启动服务或浏览器。
+
+这些结果只说明极小空程序和几条负例：当前研究策略仍允许**全局文件元数据**、广泛 `mach-lookup`/进程操作，Node 的路径也覆盖全部 Homebrew cellar，且未验证 symlink/hardlink、Keychain/IPC、全部文件访问、子进程、临时目录写入或精确回连。它既不证明隔离安全，也不能用于启动 DSH；必须先按下列门槛完成白名单、正反 canary 和完整进程树验证。
 
 **Keychain 负例：**在拒绝 `/Users/yulong` 文件访问且拒绝 `mach-lookup` 到 `com.apple.securityd` 后，运行 `/usr/bin/security list-keychains -d user` 仍以 0 退出。测试丢弃 stdout、只记录退出状态，未尝试读取、打印或发送任何凭据。成功列举 API 本身不证明秘密可以读取，但也不能以该规则声称隔离成功。需在专用临时账号/虚拟机创建**合成凭据 canary**，对完整进程树证明不可读取、且正向对照有效；不能对用户实际 Keychain 做试探。
 
