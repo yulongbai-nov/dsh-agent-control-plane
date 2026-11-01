@@ -1,0 +1,6 @@
+{
+  "name": "@dsh-agent-control-plane/workflow-engine-spike",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": { "test": "node --test test/offline.test.cjs" }
+}
