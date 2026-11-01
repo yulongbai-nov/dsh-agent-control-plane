@@ -7,6 +7,7 @@ const artifacts = {
   'dsh-web-frontend/dist/assets/index-BXV-oxvX.js': '0f3fc6b857e4f8bd4d69619ce1010240cdaaa443abf0826532a24ef8f6e32ef0',
   'dsh-client-ui-renderer/lib/client.js': 'dbdb3f26bfbc1d143bc8a0eed5982a2507c4f0cf8027e7c170f3bed3604be356',
   'dsh-client-modules/lib/client.js': '426084f8672c26a469566a3f43c91a9b0d1dd73d0834028e553a6d0fa9cffa44',
+  'dsh-client-locale/lib/client.js': 'f432091187e11d464387a34e4d4e0b6c72afd02dc9ddecad62d1686475c151a1',
   'cordis/lib/index.js': '6a9394c0877ff45218818c6e815edd038f8057e1a1deb390a8d43ec81c57691e',
   'dsh-session/lib/index.js': '2f5dd07cb5c744a29abbb8003a8a4cefd9e582c6e2538074ca299a0ddd02a3bf',
   'dsh-session-projection/lib/index.js': '7dc2b212819baf4fc292751054d30b97afcbdee0a4733230abf92c6722e6550c',
@@ -33,14 +34,15 @@ export function slotCoreSource(shell) {
 
 export async function createHarness() {
   if (!process.versions.electron) throw new Error('run with the installed Electron binary in Node mode');
-  for (const [pkg, version] of [['dsh-web-frontend', '0.2.1-rc.5'], ['dsh-client-ui-renderer', '0.2.1-rc.5'], ['dsh-client-modules', '0.2.1-rc.5'], ['dsh-session', '0.2.1-rc.5'], ['dsh-session-projection', '0.2.1-rc.5'], ['dsh-subagent', '0.2.1-rc.5'], ['cordis', '4.0.5']]) {
+  for (const [pkg, version] of [['dsh-web-frontend', '0.2.1-rc.5'], ['dsh-client-ui-renderer', '0.2.1-rc.5'], ['dsh-client-modules', '0.2.1-rc.5'], ['dsh-client-locale', '0.2.1-rc.5'], ['dsh-session', '0.2.1-rc.5'], ['dsh-session-projection', '0.2.1-rc.5'], ['dsh-subagent', '0.2.1-rc.5'], ['cordis', '4.0.5']]) {
     const manifest = JSON.parse(await readFile(`${base}${pkg}/package.json`, 'utf8'));
     if (manifest.version !== version) throw new Error(`unsupported ${pkg} version ${manifest.version}`);
   }
-  const [shell, rendererSource, loaderSource] = await Promise.all([
+  const [shell, rendererSource, loaderSource, localeSource] = await Promise.all([
     installed('dsh-web-frontend/dist/assets/index-BXV-oxvX.js'),
     installed('dsh-client-ui-renderer/lib/client.js'),
     installed('dsh-client-modules/lib/client.js'),
+    installed('dsh-client-locale/lib/client.js'),
     installed('cordis/lib/index.js'),
     installed('dsh-session/lib/index.js'),
     installed('dsh-session-projection/lib/index.js'),
@@ -62,13 +64,15 @@ export async function createHarness() {
   const react = { createContext: () => ({}), Component: class {}, useSyncExternalStore() {} };
   const modules = loader.createClientModuleSystem(target, { id: bootstrap.id, exports: loader }, {
     boot: { rev: 'isolated-smoke', release: { version: '0.2.1-rc.5' }, entries: [], batches: [] },
-    staticModules: { react, 'react-dom': {}, 'react-dom/client': {}, 'react/jsx-runtime': {}, '@deepseek-ai/dsh-client-ui-slots': slotCore, '@deepseek-ai/cordis': cordis },
+    staticModules: { react, 'react-dom': {}, 'react-dom/client': {}, 'react/jsx-runtime': {}, '@deepseek-ai/dsh-client-ui-slots': slotCore, '@deepseek-ai/cordis': cordis, '@deepseek-ai/dsh-client-ui-primitives': {}, '@deepseek-ai/dsh-client-store': {} },
     loadBundle() { throw new Error('bundle transport disabled in isolated smoke'); },
   });
   vm.runInContext(rendererSource, sandbox, { filename: 'rc5-ui-renderer.js', timeout: 1000 });
+  vm.runInContext(localeSource, sandbox, { filename: 'rc5-client-locale.js', timeout: 1000 });
   const browserSource = await readFile(new URL('../session-tree/client.js', import.meta.url), 'utf8');
   vm.runInContext(browserSource, sandbox, { filename: 'session-tree-client.js', timeout: 1000 });
   const renderer = await modules.import('@deepseek-ai/dsh-client-ui-renderer');
+  const { LocaleRuntime } = await modules.import('@deepseek-ai/dsh-client-locale');
   const browser = await modules.import('dsh-session-tree');
   const host = await import('../session-tree/index.js');
   const ctx = new cordis.Context();
@@ -81,6 +85,11 @@ export async function createHarness() {
     await hostCtx.plugin(Subagents, {});
     const hostFiber = await hostCtx.plugin(host);
     await ctx.plugin({ name: 'smoke-slot-registry', apply(ctx) { new renderer.SlotRegistry(ctx); } });
+    await ctx.plugin({ name: 'smoke-locale', inject: ['slots'], apply(ctx) {
+      const locale = new LocaleRuntime(ctx, undefined, { languages: ['zh'], preference: null });
+      ctx.reflect.provide('locale', locale);
+      ctx.slots.installLocale(locale);
+    } });
     ctx.on('slots/changed', (name) => events.push(name));
     const declarationsPlugin = { name: 'smoke-slot-declarations', inject: ['slots'], apply(ctx) {
       ctx.slots.register({ name: 'root', children: { main: { kind: 'keyed', scope: 'root' }, sidebar: { kind: 'single', scope: 'root' } } }, () => null);

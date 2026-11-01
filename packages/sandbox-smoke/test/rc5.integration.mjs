@@ -21,8 +21,12 @@ test('real rc.5 host, browser module loader and slot registry activate and clean
     const sidebar = harness.ctx.slots.entries('sidebar.panellist')[0];
     assert.equal(typeof main.component, 'function');
     assert.equal(typeof sidebar.component, 'function');
-    assert.equal(sidebar.options.label, '会话树');
+    assert.equal(sidebar.options.label(), '会话树');
     assert.equal(sidebar.options.order, 55);
+    assert.equal(harness.ctx.locale.bind('dsh-session-tree')('panel'), '会话树');
+    harness.ctx.locale.setLocale('en');
+    assert.equal(sidebar.options.label(), 'Session tree');
+    harness.ctx.locale.setLocale('zh');
     const actions = main.inject();
     await actions.refreshProjection('root');
     await actions.refreshSessions();
@@ -32,13 +36,16 @@ test('real rc.5 host, browser module loader and slot registry activate and clean
       ['openSession', { parentSessionId: 'root', childSessionId: 'child', mode: 'continuable' }],
     ]);
     await harness.plugin.dispose();
+    assert.equal(harness.ctx.locale.bind('dsh-session-tree')('panel'), 'panel');
     assert.deepEqual(await entries(harness), { main: [], sidebar: [] });
     assert.equal(harness.ctx.slots.spec('main').kind, 'keyed');
     assert.equal(harness.ctx.slots.spec('sidebar.panellist').kind, 'list');
     const again = await harness.activate();
     assert.equal(again.state, 2);
     assert.deepEqual(await entries(harness), { main: ['dsh-session-tree'], sidebar: ['dsh-session-tree'] });
+    assert.equal(harness.ctx.locale.bind('dsh-session-tree')('panel'), '会话树');
     await again.dispose();
+    assert.equal(harness.ctx.locale.bind('dsh-session-tree')('panel'), 'panel');
   } finally {
     await harness.close();
   }
@@ -99,6 +106,7 @@ test('closing disposes both browser and host contexts, services and stored sessi
   assert.equal(harness.hostCtx.sessions, undefined);
   assert.equal(harness.hostCtx.sessionProjections, undefined);
   assert.equal(harness.hostCtx.subagents, undefined);
+  assert.equal(harness.ctx.locale, undefined);
   assert.equal(harness.ctx.slots, undefined);
 });
 
