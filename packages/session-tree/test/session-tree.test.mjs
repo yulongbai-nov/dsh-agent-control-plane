@@ -975,10 +975,10 @@ test('component collapse preserves another root behind an unknown-mode cached ed
   assert.deepEqual([...actions.expansion],['barrier','other']);
 });
 
-function avatarHarness({ strict = false } = {}) {
+function avatarHarness({ strict = false, storage } = {}) {
   states = []; effects = []; pendingEffects = []; stateIndex = 0; mountedForTest = true; postUnmountUpdates = 0;
   const previousWindow = globalThis.window, previousReader = globalThis.FileReader;
-  const values = new Map(), readers = [], writes = [];
+  const values = storage ?? new Map(), readers = [], writes = [];
   let failWrites = false, unmounted = false;
   globalThis.window = {localStorage:{getItem:key => values.get(key) ?? null,setItem(key,value){ if(failWrites) throw Error('blocked'); values.set(key,value); writes.push([key,value]); }}};
   globalThis.FileReader = class {
@@ -1007,9 +1007,12 @@ function avatarHarness({ strict = false } = {}) {
   function reset(){const nodes=render();nodes.find(node=>node.type==='button'&&node.children.includes('恢复内置图')).props.onClick();}
   function notice(){return render().filter(node=>node.props?.role==='status').flatMap(node=>node.children).filter(value=>typeof value==='string').join(' ');}
   function stored(){return JSON.parse(values.get('dsh-session-tree.avatar-images.v1') ?? '{}');}
-  function unmount(){if(unmounted)return;for(const effect of effects)effect?.cleanup?.();unmounted=true;mountedForTest=false;}
+  let layoutGone=false, passiveGone=false;
+  function layoutUnmount(){if(layoutGone)return;for(const effect of effects)if(effect?.layout)effect.cleanup?.();layoutGone=true;unmounted=true;mountedForTest=false;}
+  function passiveUnmount(){if(passiveGone)return;for(const effect of effects)if(effect && !effect.layout)effect.cleanup?.();passiveGone=true;}
+  function unmount(){layoutUnmount();passiveUnmount();}
   function dispose(){unmount();mountedForTest=true;globalThis.window=previousWindow;globalThis.FileReader=previousReader;}
-  return {render,select,upload,reset,notice,stored,readers,writes,unmount,dispose,updatesAfterUnmount:()=>postUnmountUpdates,setFail(value){failWrites=value;}};
+  return {render,select,upload,reset,notice,stored,readers,writes,layoutUnmount,passiveUnmount,unmount,dispose,updatesAfterUnmount:()=>postUnmountUpdates,setFail(value){failWrites=value;}};
 }
 const pngA = 'data:image/png;base64,iVBORw0KGgoAAAA=';
 const pngB = 'data:image/png;base64,iVBORw0KGgoAAAB=';
@@ -1124,13 +1127,62 @@ test('effect replay invalidates pending work while reactivated instance accepts 
   const app=avatarHarness();
   try {
     const old=app.upload();
-    const effect=effects.find(item=>!item?.layout && typeof item?.cleanup==='function');
+    const effect=effects.find(item=>item?.layout && typeof item?.cleanup==='function');
     effect.cleanup();
     // React StrictMode setup replay is represented by re-running the captured setup.
     effect.cleanup=effect.setup();
     old.finish(pngA); assert.deepEqual(app.stored(),{});
     app.upload().finish(pngB); assert.deepEqual(app.stored(),{lead:pngB});
   } finally {app.dispose();}
+});
+
+test('layout unmount fences image success and failure before passive cleanup', () => {
+  for(const strict of [false,true]) {
+    const app=avatarHarness({strict});
+    try {
+      const lead=app.upload();app.select('code');const code=app.upload();
+      const before=app.writes.length;
+      app.layoutUnmount();
+      lead.finish(pngA);code.fail();
+      assert.equal(app.writes.length,before);
+      assert.deepEqual(app.stored(),{});
+      assert.equal(app.updatesAfterUnmount(),0);
+      app.passiveUnmount();
+    } finally {app.dispose();}
+  }
+});
+
+test('old generation readers stay fenced after layout setup replay', () => {
+  const app=avatarHarness();
+  try {
+    const lead=app.upload();app.select('code');const code=app.upload();
+    const layout=effects.find(effect=>effect?.layout);assert.ok(layout);
+    layout.cleanup();layout.cleanup=layout.setup();
+    lead.finish(pngA);code.fail();
+    assert.deepEqual(app.stored(),{});
+    assert.doesNotMatch(app.notice(),/无法读取头像图片/);
+    app.upload().finish(pngB);
+    assert.deepEqual(app.stored(),{code:pngB});
+  } finally {app.dispose();}
+});
+
+test('old unmounted instance callbacks cannot overwrite a fresh instance', () => {
+  const previousWindow=globalThis.window,previousReader=globalThis.FileReader, shared=new Map();
+  const old=avatarHarness({storage:shared});
+  let fresh;
+  try {
+    const pending=old.upload();old.select('code');const oldError=old.upload();old.layoutUnmount();
+    fresh=avatarHarness({storage:shared});const freshPending=fresh.upload();
+    old.passiveUnmount();
+    freshPending.finish(pngB);
+    const before=fresh.writes.length;
+    pending.finish(pngA);oldError.fail();
+    assert.equal(fresh.writes.length,before);
+    assert.deepEqual(fresh.stored(),{lead:pngB});
+    assert.equal(fresh.updatesAfterUnmount(),0);
+  } finally {
+    fresh?.dispose();old.dispose();globalThis.window=previousWindow;globalThis.FileReader=previousReader;
+  }
 });
 
 test('unmounted or effect-replayed avatar readers cannot write afterward', () => {
@@ -1208,11 +1260,12 @@ test.skip('TODO simulated fixture: dynamic duplicate removes focused descendant;
 test.skip('TODO simulated fixture: moved focused subtree changes keys; real DOM ordering unverified', () => {
   const app=focusHarness();
   try {
+    app.actions.expansion.add('other'); // Seed before the component copies expansion into state.
     app.render(); app.focus('deep'); app.render();
     app.list.projectionsBySession.root=ready([]);
     app.list.projectionsBySession.other=ready([child('a')]);
-    app.actions.expansion.add('other');
-    app.render();
+    const rows=app.render().virtual;
+    assert.ok(rows.some(row=>row.props['data-session-id']==='deep'));
     assert.equal(app.doc.activeElement.virtual.props['data-session-id'],'deep');
   } finally {app.dispose();}
 });

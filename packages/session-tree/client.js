@@ -218,17 +218,15 @@ window.__ModuleLoader__.load({
       const treeRef = React.useRef(null);
       const lifecycle = React.useRef({ active: false, generation: 0 });
       const refreshIntents = React.useRef(new Map());
+      const imageOperations = React.useRef(null);
+      if (!imageOperations.current) imageOperations.current = { images, versions: new Map(), notice: 0 };
       React.useLayoutEffect(() => {
         const current = lifecycle.current;
         current.active = true;
-        return () => { current.active = false; current.generation++; refreshIntents.current.clear(); };
-      }, []);
-      const imageOperations = React.useRef(null);
-      if (!imageOperations.current) imageOperations.current = { images, versions: new Map(), notice: 0, active: false };
-      React.useEffect(() => {
-        const current = imageOperations.current;
-        current.active = true;
-        return () => { current.active = false; current.versions.clear(); current.notice++; };
+        return () => {
+          current.active = false; current.generation++; refreshIntents.current.clear();
+          imageOperations.current.versions.clear(); imageOperations.current.notice++;
+        };
       }, []);
       const rows = buildRows(list, expanded, new Set(archivedIds ?? []), statuses);
       const tabStop = rows.some(item => item.rowKey === focusKey) ? focusKey : rows[0]?.rowKey;
@@ -287,14 +285,11 @@ window.__ModuleLoader__.load({
         setPrefs(next); setNotice({ key: 'preferencesSaved' });
       }
       function beginImageOperation(type) {
-        const current = imageOperations.current, version = Symbol();
+        const current = imageOperations.current, life = lifecycle.current, generation = life.generation, version = Symbol();
         current.versions.set(type, version);
         const notice = ++current.notice;
-        return {
-          current,
-          valid: () => current.active && current.versions.get(type) === version,
-          tell: value => { if (current.active && current.versions.get(type) === version && current.notice === notice) setNotice(value); }
-        };
+        const valid = () => life.active && life.generation === generation && current.versions.get(type) === version;
+        return { current, valid, tell: value => { if (valid() && current.notice === notice) setNotice(value); } };
       }
       function changeImage(event) {
         const file = event.target.files?.[0];
