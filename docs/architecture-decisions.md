@@ -33,6 +33,8 @@ rc.5 的 `dsh-session-title/README.zh.md`「提供方」及实现明确：已有
 - **直接继承现有 engine 的最小 spike**：rc.5 导出的 `PtcWorkflowEngine` 可作为同 scope 单 provider 子类重用执行逻辑，在 `start(request)` 返回后观察入参引用与 runId。真实引擎的[合成反例](../packages/workflow-engine-spike/README.md)已证实，即便前后同一普通属性，依赖也可在中间更改 accepted script 并恢复；额外读取 getter 还可改变行为。观察到的入参不是引擎实际接受来源的证明，更不能推断工具调用、后台 job、拒绝或静态调用点。预先复制/冻结入参会改变原生语义，不能假装透明；需要受控的 accepted-init seam 或更强的明确可信边界。
 - **薄 fork workflow 工具**：若需要精确工具/后台 job 以及前台失败和取消链路，可研究在实际执行体记录即将传给引擎的参数和 runId；仍调用原引擎。此工具侧参数亦不自动证明引擎实际 accepted init，around 可改写 exec，关联原始 tool/call 必须额外核对身份和摘要。老记录来源不能猜。
 
+Sol/max 独立分析建议：可信来源至少覆盖三个**不同边界**，优先上游受控 seam，否则再评估版本锁定的小 fork，复用现有执行器而不新造 scheduler：（1）Host 认证原始 session 事件、已解析的实际工具定义及 wrapper dispatch lineage；（2）工具执行分支到 run/job 所有权的交接；（3）engine 真正接收并交给 guest 的不可变 accepted-init 与 run 对应关系。**这些尚未实现，任何一边缺失都不构成来源认证。** around 可以不调用或多次调用 `next`，一次原始调用可能产生 0..N 个 leaf attempt；应由受控 Host 为每个 attempt 分配独立身份，而非假设 call↔run 一一对应。原始参数、wrapper 变换后的有效参数、引擎实际 accepted script/meta 必须分别表示；若不同，只能展示有证据的变换，不能用原始脚本画实际运行拓扑。来源认证、开始受理、运行结局及 durable coverage 相互独立；证据冲突/缺失为 unknown，启用前的历史和在途运行不可仅靠旧 `tool/call` 升级。
+
 无论哪个方案，Host-owned companion store/read-model 必须使用独立版本化 snapshot/watch；原生 Session 投影同步折叠 session 事件，不可在 `wire.view` 偷读会变化的外部 store。同步内存关联不等于持久化：独立 storage 和 Session 日志不具事务，崩溃可能留下 orphan/incomplete；旧记录和缺失终态应保留 unknown。想恢复历史拓扑必须有合法授权的实际来源快照，或可验证的精确事件引用与摘要；保存功能脚本不同于数值遥测，须单独说明隐私边界。
 
 ## 006 · 个人遥测的事实与披露边界
