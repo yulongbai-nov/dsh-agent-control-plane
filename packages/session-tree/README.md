@@ -1,5 +1,7 @@
 # 独立会话树（rc.5 实验包）
 
+Community plugin, not affiliated with DeepSeek Harness.
+
 这是 **独立主面板增量**，不是常驻在侧栏里的树。侧栏「会话树」入口打开主面板；选择会话后切回会话，展开状态在页面运行期间保留。原生 Workspace 列表和页头 subagent 目录都不改。未安装、未在运行中的 GUI 实测，暂不能宣称完整通过 R7/R8 或可直接部署。
 
 ## 能做什么
@@ -25,6 +27,12 @@ node --test packages/session-tree/test/*.test.mjs
 Host 侧已有只读冒烟：使用本机安装版 Electron 的 `ELECTRON_RUN_AS_NODE=1` 和 app.asar 内 Cordis，`new Context().plugin(await import('./index.js'))` 成功。测试通过真实的 `client.js` ModuleLoader factory，但 React hooks 和宿主服务是测试替身，不等价于真实宿主端到端测试。rc.5 `uiWorkspace.openSession` 返回 `void`，内部负责导航和历史加载；插件可提示同步异常，测试中的 Promise 拒绝处理仅为防御其他实现，**不能保证捕获 rc.5 内部异步失败**。注册、会话导航、权限错误和 UI 样式仍须经用户批准后在真实 GUI 实测。
 
 `package.json` 遵循已安装 rc.5 插件的 `dsh.bundle.patch`、`dsh.client.inject`、`exports["./client"]` 和浏览器 `window.__ModuleLoader__.load` 约定。host `apply` 空实现；browser 唯一 `require` 是 host 注入的 `react`。版本门故意限定 rc.5，不使用兼容豁免。本任务没有安装包、改 profile/app.asar 或提交。以后若用户明确批准安装，才可按本机官方插件管理器的 `file:` 方案安装，并在已有 GUI 重启/刷新后手动验证，不承诺热更新。
+
+### 主题和语言的实际依赖
+
+- 运行时需要 rc.5 的官方 `locale` 服务和 `--dsw-alias-*` 主题变量；manifest 的 `dsh.client.inject` 用于激活排序，客户端 `inject` 要求对应服务可用。插件按官方协议在所属 `ctx.effect` 注册中英字典并在卸载时释放，主面板通过 slot 的 `locale` 注入翻译函数；侧栏标签用 `locale.bind` 动态读取。宿主会话标题、模型和宿主错误是外部数据，不由插件翻译。
+- CSS 仅引用安装版 rc.5 已存在的语义 alias（焦点使用 `brand-primary`、状态分别使用 `state-idle/business/success/warn-primary`），透明及继承不是固定色；没有颜色 fallback。组件内 `<style>` 随面板卸载，不修改全局样式。缺少官方主题或未来 token 改名会导致样式缺失，不能用单测证明两种主题的对比度或布局一致性。
+- 测试使用与 rc.5 协议对应的 locale/slot 替身，覆盖中英渲染、重新注册及卸载，不等同于真实 GUI 的实时语言切换验证。受本任务“不安装、不改 profile”的限制，现有 GUI 无法加载此改动；浅/深色与 Plugin Manager 并排、Tab/方向键/屏幕阅读器、切语言和控制台 slot crash 检查均待用户批准安装后在现有 GUI 完成。
 
 ## 真侧栏树：后续选项与差距
 

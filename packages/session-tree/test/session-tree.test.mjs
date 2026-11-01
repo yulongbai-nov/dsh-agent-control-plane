@@ -36,19 +36,150 @@ const ready = entries => ({ state: 'ready', error: null, values: { subagentCatal
 const child = (id, mode = 'continuable', label = id) => ({ id, mode, label });
 const baseList = () => ({ phase: 'ready', ids: ['root'], byId: { root: summary('root') }, projectionsBySession: {} });
 
+// Mirror rc.5's namespace registration, slot t injection and owning effects.
+function mockLocale() {
+  const namespaces = new Map();
+  let language = 'zh';
+  return {
+    namespaces,
+    setLanguage(value) { language = value; },
+    register(ns, dicts) {
+      assert.equal(namespaces.has(ns), false, 'a namespace must not be registered twice');
+      namespaces.set(ns, dicts);
+      return () => { if (namespaces.get(ns) === dicts) namespaces.delete(ns); };
+    },
+    bind(ns) {
+      return (key, params = {}) => {
+        const template = namespaces.get(ns)?.[language]?.[key] ?? key;
+        return template.replace(/\{(\w+)\}/g, (match, name) => name in params ? String(params[name]) : match);
+      };
+    }
+  };
+}
+function applyPlugin(ctx) {
+  const effects = [];
+  ctx.locale ??= mockLocale();
+  ctx.effect = callback => { const dispose = callback(); if (typeof dispose === 'function') effects.push(dispose); };
+  const register = ctx.slots.register;
+  ctx.slots.register = function(options, component) {
+    return register.call(this, options, props => component({ t: ctx.locale.bind(options.locale), ...props }));
+  };
+  plugin.apply(ctx);
+  return () => { for (const dispose of effects.reverse()) dispose(); };
+}
+
 test('registers the rc.5 independent main slot and matching sidebar entry', () => {
   const registrations = [];
   const ctx = { slots: {
     inject(name, callback) { callback(); },
     register(options, component) { registrations.push({ options, component }); }
   }, sessions: {}, uiWorkspace: {}, sidebarRight: {} };
-  plugin.apply(ctx);
+  applyPlugin(ctx);
   assert.deepEqual(registrations.map(({ options }) => [options.name, options.key ?? options.id]), [
     ['main', 'dsh-session-tree'], ['sidebar.panellist', 'dsh-session-tree']
   ]);
   assert.equal(typeof registrations[0].component, 'function');
   assert.equal(typeof registrations[1].component, 'function');
   assert.ok(plugin.inject.includes('sessions') && plugin.inject.includes('uiWorkspace'));
+});
+
+test('locale dictionary and slots are owned by the plugin lifecycle', () => {
+  const registrations = [], locale = mockLocale();
+  const ctx = { locale, slots: {
+    inject(_name, callback) { callback(); },
+    register(options, component) { registrations.push({ options, component }); }
+  }, sessions: {}, uiWorkspace: {} };
+  const dispose = applyPlugin(ctx);
+  assert.ok(plugin.inject.includes('locale'));
+  const main = registrations.find(item => item.options.name === 'main');
+  const panel = registrations.find(item => item.options.name === 'sidebar.panellist');
+  assert.ok(main.options.locale);
+  assert.equal(panel.options.locale, main.options.locale);
+  assert.deepEqual([...locale.namespaces.keys()], [main.options.locale]);
+  const dictionaries = locale.namespaces.get(main.options.locale);
+  assert.deepEqual(Object.keys(dictionaries).sort(), ['en', 'zh']);
+  assert.deepEqual(Object.keys(dictionaries.zh).sort(), Object.keys(dictionaries.en).sort());
+  for (const key of Object.keys(dictionaries.en)) {
+    const placeholders = value => [...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]).sort();
+    assert.deepEqual(placeholders(dictionaries.zh[key]), placeholders(dictionaries.en[key]), `placeholder mismatch: ${key}`);
+  }
+  locale.setLanguage('zh'); assert.equal(panel.options.label(), '会话树');
+  locale.setLanguage('en'); assert.equal(panel.options.label(), 'Session tree');
+  dispose();
+  assert.equal(locale.namespaces.size, 0);
+  const again = applyPlugin(ctx);
+  assert.equal(locale.namespaces.size, 1);
+  again();
+  assert.equal(locale.namespaces.size, 0);
+});
+
+test('panel renders translated text, accessible controls, and errors in zh and en', () => {
+  const registrations = [], locale = mockLocale();
+  const list = baseList();
+  list.projectionsBySession.root = { state: 'error', values: {} };
+  applyPlugin({ locale, slots: {
+    inject(_name, callback) { callback(); },
+    register(options, component) { registrations.push({ options, component }); }
+  }, sessions: { refreshProjections() {}, refresh() {} }, uiWorkspace: { openSession() {} } });
+  const main = registrations.find(item => item.options.name === 'main');
+  const actions = main.options.inject();
+  actions.expansion.add('root');
+  const props = { ...actions, useSessions: selector => selector(list), useSessionStatus: selector => selector(new Map()), useWorkspaces: selector => selector({ archivedSessionIds: [] }) };
+  const flatten = node => node && typeof node === 'object' ? [node, ...(node.children ?? []).flat(Infinity).flatMap(flatten)] : [];
+  function render(language) { locale.setLanguage(language); states = []; stateIndex = 0; return flatten(main.component(props)); }
+  for (const [language, expected] of Object.entries({
+    zh: { title: '会话树', label: '折叠 root', avatar: '更改 root 的头像', status: '未运行', error: '目录读取失败：读取目录失败', retry: '重试' },
+    en: { title: 'Session tree', label: 'Collapse root', avatar: 'Change avatar for root', status: 'Inactive', error: 'Failed to load catalog: Failed to read catalog', retry: 'Retry' }
+  })) {
+    const elements = render(language), row = elements.find(node => node.props?.role === 'treeitem');
+    assert.ok(elements.some(node => node.type === 'h1' && node.children.includes(expected.title)));
+    assert.ok(row.props['aria-label'].includes(expected.status));
+    assert.ok(elements.some(node => node.props?.['aria-label'] === expected.label));
+    assert.ok(elements.some(node => node.props?.['aria-label'] === expected.avatar));
+    assert.ok(elements.some(node => node.props?.role === 'alert' && node.children.includes(expected.error)));
+    assert.ok(elements.some(node => node.type === 'button' && node.children.includes(expected.retry)));
+    if (language === 'en') {
+      const textAndLabels = elements.flatMap(node => [...node.children.filter(value => typeof value === 'string'), node.props?.['aria-label'], node.props?.title].filter(value => typeof value === 'string')).join(' ');
+      assert.doesNotMatch(textAndLabels, /[\u3400-\u9fff]/);
+    }
+  }
+});
+
+test('changing locale retranslates an existing notice without resetting the tree', () => {
+  const registrations = [], locale = mockLocale(), list = baseList();
+  applyPlugin({ locale, slots: {
+    inject(_name, callback) { callback(); },
+    register(options, component) { registrations.push({ options, component }); }
+  }, sessions: { refreshProjections() {}, refresh() {} }, uiWorkspace: { openSession() {} } });
+  const main = registrations.find(item => item.options.name === 'main'), actions = main.options.inject();
+  actions.expansion.add('root');
+  const props = { ...actions, useSessions: selector => selector(list), useSessionStatus: selector => selector(new Map()), useWorkspaces: selector => selector({ archivedSessionIds: [] }) };
+  const flatten = node => node && typeof node === 'object' ? [node, ...(node.children ?? []).flat(Infinity).flatMap(flatten)] : [];
+  function render() { stateIndex = 0; return flatten(main.component(props)); }
+  states = []; locale.setLanguage('zh');
+  const input = render().find(node => node.type === 'input' && node.props.type === 'file');
+  input.props.onChange({ target: { files: [{ type: 'image/jpeg', size: 1 }], value: 'x' } });
+  let elements = render();
+  assert.ok(elements.some(node => node.props?.role === 'status' && node.children.includes('请选择不超过 180 KB 的 PNG 图片。')));
+  locale.setLanguage('en');
+  elements = render();
+  assert.ok(elements.some(node => node.props?.role === 'status' && node.children.includes('Choose a PNG image no larger than 180 KB.')));
+  assert.equal(elements.find(node => node.props?.['data-session-id'] === 'root').props['aria-expanded'], true);
+});
+
+test('CSS colors use only known rc.5 alias tokens without color fallbacks', async () => {
+  const template = await readFile(new URL('../client.template.js', import.meta.url), 'utf8');
+  const css = template.match(/const CSS = `([\s\S]*?)`;/)?.[1];
+  assert.ok(css);
+  const official = new Set(['bg-layer-1', 'label-primary', 'label-secondary', 'label-tertiary', 'border-l3', 'interactive-bg-hover', 'state-error-primary', 'state-business-primary', 'state-success-primary', 'state-warn-primary', 'state-idle-primary', 'brand-primary']);
+  assert.doesNotMatch(css, /#[\da-f]{3,8}\b|\b(?:rgb|rgba|hsl|hsla)\s*\(/i);
+  assert.doesNotMatch(css, /var\(--dsw-alias-[\w-]+\s*,/);
+  for (const match of css.matchAll(/var\(--dsw-alias-([\w-]+)/g)) assert.ok(official.has(match[1]), `unknown rc.5 alias: ${match[1]}`);
+  for (const match of css.matchAll(/(?:^|[;{])\s*(?:color|background(?:-color)?|outline|border(?:-color)?)\s*:\s*([^;}]+)/g)) {
+    const value = match[1];
+    if (/^(?:0|none|transparent|inherit)$/.test(value)) continue;
+    assert.match(value, /var\(--dsw-alias-[\w-]+\)/, `non-token color: ${value}`);
+  }
 });
 
 test('lazy expansion fetches only the clicked layer and builds arbitrary depth with real parents', async () => {
@@ -137,7 +268,7 @@ test('disclosure UI refreshes an idle cached empty root without preloading', asy
   const list = baseList(), calls = [];
   list.projectionsBySession.root = { state: 'idle', error: null, values: { subagentCatalog: [] } };
   let registration;
-  plugin.apply({
+  applyPlugin({
     slots: { inject(_name, callback) { callback(); }, register(options, component) { if (options.name === 'main') registration = { options, component }; } },
     sessions: { refreshProjections: async id => { calls.push(id); list.projectionsBySession[id] = ready([child('a')]); }, refresh() {} },
     uiWorkspace: { openSession() {} }
@@ -246,7 +377,7 @@ test('component omits unavailable right-sidebar action on independent main panel
   list.projectionsBySession.root = ready([child('a')]);
   list.byId.a = summary('a', { origin: 'subagent', parentId: 'root' });
   let registration;
-  plugin.apply({
+  applyPlugin({
     slots: { inject(_name, callback) { callback(); }, register(options, component) { if (options.name === 'main') registration = { options, component }; } },
     sessions: { refreshProjections() {}, refresh() {} }, uiWorkspace: { openSession() {} },
     sidebarRight: { openResource() { throw new Error('sidebarRight: no session surface is mounted'); } }
@@ -275,7 +406,7 @@ test('component wires real DTO-shaped rows to keyboard and true navigation addre
     uiWorkspace: { openSession: target => { calls.push(['open', target]); return Promise.reject(new Error('open rejected')); } },
     sidebarRight: { openResource: (target, options) => calls.push(['aside', target, options]) }
   };
-  plugin.apply(ctx);
+  applyPlugin(ctx);
   const registration = registrations.find(item => item.options.name === 'main');
   const actions = registration.options.inject();
   for (const id of expansion) actions.expansion.add(id);
@@ -312,7 +443,7 @@ test('flat tree gives correct sibling counts across multiple roots and grandchil
   list.projectionsBySession = { root: ready([child('a'), child('b')]), a: ready([child('root'), child('c'), child('d')]) };
   for (const id of ['a', 'b', 'c', 'd']) list.byId[id] = summary(id, { origin: 'subagent' });
   let registration;
-  plugin.apply({ slots: { inject(_name, callback) { callback(); }, register(options, component) { if (options.name === 'main') registration = { options, component }; } }, sessions: {}, uiWorkspace: {} });
+  applyPlugin({ slots: { inject(_name, callback) { callback(); }, register(options, component) { if (options.name === 'main') registration = { options, component }; } }, sessions: {}, uiWorkspace: {} });
   const actions = registration.options.inject();
   actions.expansion.add('root'); actions.expansion.add('a');
   const props = { ...actions, useSessions: selector => selector(list), useSessionStatus: selector => selector(new Map()), useWorkspaces: selector => selector({ archivedSessionIds: [] }) };
@@ -330,7 +461,7 @@ test('clicking disclosure restores row focus so keyboard navigation remains avai
   list.byId.a = summary('a', { origin: 'subagent', parentId: 'root' });
   const calls = [];
   let registration;
-  plugin.apply({ slots: { inject(_name, callback) { callback(); }, register(options, component) { if (options.name === 'main') registration = { options, component }; } },
+  applyPlugin({ slots: { inject(_name, callback) { callback(); }, register(options, component) { if (options.name === 'main') registration = { options, component }; } },
     sessions: { refreshProjections(id) { calls.push(['refresh', id]); }, refresh() {} }, uiWorkspace: {} });
   const actions = registration.options.inject();
   const props = { ...actions, useSessions: selector => selector(list), useSessionStatus: selector => selector(new Map()), useWorkspaces: selector => selector({ archivedSessionIds: [] }) };
@@ -358,6 +489,7 @@ test('browser entry only needs React and host bundle is self-contained', async (
   assert.equal(manifest.exports['./client'], './client.js');
   assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml');
   assert.equal(manifest.dsh.client.platform, 'web');
+  assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'));
   assert.ok(manifest.files.includes('build.mjs'));
   assert.ok(manifest.files.includes('client.template.js'));
   assert.ok(manifest.files.includes('test'));
