@@ -43,7 +43,7 @@ NODE
 
 本机结果依次为 `ECONNREFUSED`、`EPERM`、`EPERM`；第一个允许连接但本机无监听者，后两者被系统拒绝。`localhost:*` 会允许本机所有服务，不得用于待测客户端；按 port 单独放行仍需验证精确地址族、DNS/Unix socket、目标服务所有权、浏览器子进程继承和从端口公布到浏览器启动的竞态。此处没有在固定端口上启动服务；**不能把这一探测当作生产安全策略**。
 
-另一个仅针对 `/Users/yulong` 的 `(deny file-read* file-write* (subpath ...))` 可令该路径下 stat 返回 EPERM，但 `/private/tmp`、`/private/var/folders` 与 `/Users/Shared` 仍可读；它不能防其他用户/临时文件或进程间 IPC。`(deny default)` 的初次 Node 探测以 signal 6 终止，未诊断，不表明默认拒绝不可实现。策略还必须涵盖软/硬链接和所有读取/写入/进程间访问路径；仅改环境变量不是权限隔离。
+另一个仅针对 `/Users/yulong` 的 `(deny file-read* file-write* (subpath ...))` 可令该路径下 stat 返回 EPERM，但 `/private/tmp`、`/private/var/folders` 与 `/Users/Shared` 仍可读；它不能防其他用户/临时文件或进程间 IPC。`(deny default)` 的 Node 探测以 signal 6 终止；后续尝试允许系统库、Node/Homebrew 库、设备、`sysctl-read`、`mach-lookup` 和进程操作仍终止；对照中**允许所有文件读取**才成功。这只缩小了问题范围，不能作为安全沙盒：尚不知具体缺失访问，也不表明默认拒绝不可实现。上述探针只运行空 Node/Electron `console.log`，没有启动服务，宽松对照未用于运行 DSH。策略还必须涵盖软/硬链接和所有读取/写入/进程间访问路径；仅改环境变量不是权限隔离。
 
 **Keychain 负例：**在拒绝 `/Users/yulong` 文件访问且拒绝 `mach-lookup` 到 `com.apple.securityd` 后，运行 `/usr/bin/security list-keychains -d user` 仍以 0 退出。测试丢弃 stdout、只记录退出状态，未尝试读取、打印或发送任何凭据。成功列举 API 本身不证明秘密可以读取，但也不能以该规则声称隔离成功。需在专用临时账号/虚拟机创建**合成凭据 canary**，对完整进程树证明不可读取、且正向对照有效；不能对用户实际 Keychain 做试探。
 
