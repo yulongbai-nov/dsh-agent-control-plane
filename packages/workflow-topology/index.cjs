@@ -2,7 +2,7 @@
 
 // Static analysis only: neither this module nor its tests evaluate workflow source.
 const HOOKS = new Set(['agent', 'parallel', 'pipeline', 'phase', 'log']);
-const DEFAULT_LIMITS = Object.freeze({ maxScriptLength: 1_000_000, maxAstNodes: 100_000, maxNodes: 512, maxItems: 128, maxDepth: 80 });
+const DEFAULT_LIMITS = Object.freeze({ maxScriptLength: 1_000_000, maxAstNodes: 100_000, maxNodes: 512, maxItems: 128, maxDepth: 80, maxExpansion: 4096 });
 
 function children(node) {
   const out = [];
@@ -40,9 +40,14 @@ function hookCall(node, name, shadowed) {
     node.callee.name === name && !shadowed.has(name);
 }
 function containsHook(node, shadowed) {
-  let found = false;
-  visit(node, (n) => { if (n.type === 'Identifier' && HOOKS.has(n.name) && !shadowed.has(n.name)) found = true; });
-  return found;
+  const stack = node ? [node] : [];
+  while (stack.length) {
+    const current = stack.pop();
+    if (current.type === 'Identifier' && HOOKS.has(current.name) && !shadowed.has(current.name)) return true;
+    const list = current.type === 'Property' && !current.computed ? [current.value] : children(current);
+    for (const child of list) stack.push(child);
+  }
+  return false;
 }
 function containsPhase(node, shadowed) {
   let found = false;
@@ -53,6 +58,16 @@ function hasDynamicEffect(node) {
   let found = false;
   visit(node, (n) => { if (['CallExpression', 'NewExpression', 'ImportExpression', 'TaggedTemplateExpression', 'MemberExpression', 'SpreadElement', 'BinaryExpression', 'UpdateExpression', 'AssignmentExpression'].includes(n.type)) found = true; });
   return found;
+}
+function mayChangePhase(node, shadowed) {
+  let uncertain = false;
+  visit(node, (n) => {
+    if ((n.type === 'VariableDeclarator' && n.id.type !== 'Identifier') ||
+        ['NewExpression', 'ImportExpression', 'TaggedTemplateExpression', 'MemberExpression', 'SpreadElement', 'BinaryExpression', 'UpdateExpression', 'AssignmentExpression'].includes(n.type)) uncertain = true;
+    if (n.type === 'CallExpression' && (!['agent', 'parallel', 'pipeline', 'log'].some((name) => hookCall(n, name, shadowed)) ||
+        (hookCall(n, 'parallel', shadowed) && n.arguments.length > 1))) uncertain = true;
+  });
+  return uncertain;
 }
 function literal(node, depth = 0) {
   if (!node || depth > 40) return { known: false };
@@ -126,12 +141,16 @@ function extractTopology(script, meta = {}, options = {}) {
     catch { warn('PARSER_UNAVAILABLE', null, 'provide an Acorn-compatible parse function or install the acorn peer'); return empty(); }
   }
   if (typeof parse !== 'function') { warn('PARSER_UNAVAILABLE', null, 'parse must be a function'); return empty(); }
+  const prefix = '(async () => {\n';
   let ast;
   try {
-    ast = parse(script, { ecmaVersion: 'latest', sourceType: 'script', allowAwaitOutsideFunction: true, allowReturnOutsideFunction: true });
-    if (!ast || ast.type !== 'Program' || !Array.isArray(ast.body)) throw new Error('parser did not return a Program');
+    const wrapped = parse(`${prefix}${script}\n})()`, { ecmaVersion: 'latest', sourceType: 'script' });
+    const body = wrapped?.body?.[0]?.expression?.callee?.body;
+    if (body?.type !== 'BlockStatement' || !Array.isArray(body.body)) throw new Error('parser did not return the workflow async body');
+    ast = { body: body.body };
   } catch (error) {
-    warn('PARSE_ERROR', { start: Number.isSafeInteger(error.pos) ? error.pos : 0 }, 'workflow script did not parse');
+    const start = Number.isSafeInteger(error.pos) ? Math.max(0, Math.min(script.length, error.pos - prefix.length)) : 0;
+    warn('PARSE_ERROR', { start }, 'workflow script did not parse as an async body');
     return empty();
   }
   const shadowed = new Set();
@@ -145,7 +164,9 @@ function extractTopology(script, meta = {}, options = {}) {
     if (name && HOOKS.has(name)) checkBinding(name);
     else if (left.computed) for (const hook of HOOKS) shadowed.add(hook);
   };
-  const underLimit = visit(ast, (node) => {
+  const underLimit = visit({ type: 'WorkflowBody', body: ast.body }, (node) => {
+    if (typeof node.start === 'number') node.start -= prefix.length;
+    if (typeof node.end === 'number') node.end -= prefix.length;
     if (node.type === 'VariableDeclarator') namesInPattern(node.id, checkBinding);
     if (node.type === 'FunctionDeclaration' || node.type === 'FunctionExpression' || node.type === 'ArrowFunctionExpression') {
       if (node.id) namesInPattern(node.id, checkBinding);
@@ -170,7 +191,13 @@ function extractTopology(script, meta = {}, options = {}) {
       graph.phases.push(phase.title);
     }
   }
-  const state = { phase: null, phaseKnown: true, truncated: false };
+  const state = { phase: null, phaseKnown: true, truncated: false, expansion: 0 };
+  const spendExpansion = (node) => {
+    if (++state.expansion <= limits.maxExpansion) return true;
+    warn('EXPANSION_LIMIT', node, 'static expansion work limit reached; topology is incomplete');
+    state.truncated = true;
+    return false;
+  };
   const nodeById = new Map();
   const edgeSet = new Set();
   const connect = (from, to) => {
@@ -241,6 +268,7 @@ function extractTopology(script, meta = {}, options = {}) {
   const childContext = (ctx, path, extra = {}) => ({ ...ctx, ...extra, path: `${ctx.path}${path}`, depth: ctx.depth + 1 });
   let analyzeExpression, analyzeSequence;
   const analyzeCallback = (callback, ctx) => {
+    if (!spendExpansion(callback)) return blank(true);
     if (!callback || (callback.type !== 'ArrowFunctionExpression' && callback.type !== 'FunctionExpression') || callback.generator) {
       warn('DYNAMIC_CALLBACK', callback, 'callback is not an inline function');
       if (callback && containsHook(callback, shadowed)) warn('UNSUPPORTED_HOOK_CONTEXT', callback, 'hook inside dynamic callback is not analyzed');
@@ -257,6 +285,11 @@ function extractTopology(script, meta = {}, options = {}) {
   };
   const analyzeParallel = (call, ctx) => {
     const array = call.arguments[0];
+    const extraArgs = call.arguments.length > 1;
+    if (extraArgs) {
+      warn('UNSUPPORTED_EXTRA_ARGUMENTS', call, 'extra parallel arguments are evaluated but not modeled');
+      state.phaseKnown = false;
+    }
     const g = group('parallel', call, ctx, { expansion: 'expanded' });
     if (!array || array.type !== 'ArrayExpression' || array.elements.length > limits.maxItems || array.elements.some((n) => !n || n.type === 'SpreadElement')) {
       warn('DYNAMIC_PARALLEL', call, 'parallel branches are not a bounded literal array');
@@ -265,13 +298,14 @@ function extractTopology(script, meta = {}, options = {}) {
       if (array && containsHook(array, shadowed)) warn('UNSUPPORTED_HOOK_CONTEXT', array, 'hook inside unresolved parallel branches is not analyzed');
       return blank(true);
     }
-    const changingPhase = containsPhase(array, shadowed) || array.elements.some((el) => (el.type !== 'ArrowFunctionExpression' && el.type !== 'FunctionExpression') || el.params.some((param) => param.type !== 'Identifier'));
+    const changingPhase = mayChangePhase(array, shadowed) || array.elements.some((el) => (el.type !== 'ArrowFunctionExpression' && el.type !== 'FunctionExpression') || el.params.some((param) => param.type !== 'Identifier'));
     if (changingPhase) { warn('DYNAMIC_PHASE', call, 'phase changes in concurrent callbacks have nondeterministic scope'); state.phaseKnown = false; }
     const fragments = [];
     for (let i = 0; i < array.elements.length && !state.truncated; i++)
-      fragments.push(analyzeCallback(array.elements[i], childContext(ctx, `/b${i}`, { groups: [...ctx.groups, g], phaseUncertain: ctx.phaseUncertain || changingPhase })));
+      fragments.push(analyzeCallback(array.elements[i], childContext(ctx, `/b${i}`, { groups: [...ctx.groups, g], phaseUncertain: ctx.phaseUncertain || changingPhase || extraArgs })));
     if (state.truncated) fragments.push(blank(true));
     const result = merge(fragments);
+    if (extraArgs) { result.opaque = true; state.phaseKnown = false; }
     if (fragments.length === 0) result.passthrough = true;
     return result;
   };
@@ -287,7 +321,7 @@ function extractTopology(script, meta = {}, options = {}) {
       if (containsHook(items, shadowed)) warn('UNSUPPORTED_HOOK_CONTEXT', items, 'hook inside pipeline items is not analyzed');
     }
     if (!stages.length) { warn('DYNAMIC_CALLBACK', call, 'pipeline has no stage callbacks'); return blank(true); }
-    const changingPhase = stages.some((s) => containsPhase(s, shadowed) || (s.type !== 'ArrowFunctionExpression' && s.type !== 'FunctionExpression') || s.params.some((param) => param.type !== 'Identifier'));
+    const changingPhase = stages.some((s) => mayChangePhase(s, shadowed) || (s.type !== 'ArrowFunctionExpression' && s.type !== 'FunctionExpression') || s.params.some((param) => param.type !== 'Identifier'));
     if (changingPhase) { warn('DYNAMIC_PHASE', call, 'phase changes in concurrent pipeline callbacks have nondeterministic scope'); state.phaseKnown = false; }
     const count = itemList ? itemList.length : 1;
     const instances = [];
@@ -303,6 +337,7 @@ function extractTopology(script, meta = {}, options = {}) {
         if (itemList && !opaque && !part.opaque) connect(exits, part.entries);
         if (part.exits.length) exits = part.exits;
         opaque ||= part.opaque;
+        if (part.abrupt) break;
       }
       instances.push({ entries, exits, opaque: opaque || !itemList });
     }
@@ -320,6 +355,7 @@ function extractTopology(script, meta = {}, options = {}) {
       return id ? { entries: [id], exits: completed ? [id] : [], opaque } : blank(true);
     }
     if (hookCall(expr, 'parallel', shadowed) || hookCall(expr, 'pipeline', shadowed)) {
+      if (!spendExpansion(expr)) return blank(true);
       const result = hookCall(expr, 'parallel', shadowed) ? analyzeParallel(expr, ctx) : analyzePipeline(expr, ctx);
       if (!completed) { warn('UNAWAITED_CALL', expr, 'combinator promise is not awaited or returned'); result.exits = []; result.passthrough = true; }
       return result;
@@ -356,32 +392,46 @@ function extractTopology(script, meta = {}, options = {}) {
     return blank();
   };
   analyzeSequence = (statements, ctx, inCallback = false) => {
-    let entries = [], frontier = [], uncertain = false;
+    let entries = [], frontier = [], uncertain = false, opaque = false, abrupt = false;
     for (let index = 0; index < statements.length && !state.truncated; index++) {
       const statement = statements[index];
       const local = inCallback ? ctx : { ...ctx, statementIndex: index };
       let fragments = [];
       let stop = false;
       if (statement.type === 'ExpressionStatement') fragments = [analyzeExpression(statement.expression, local)];
-      else if (statement.type === 'VariableDeclaration') fragments = statement.declarations.map((d) => analyzeExpression(d.init, local));
+      else if (statement.type === 'VariableDeclaration') {
+        for (const declaration of statement.declarations) {
+          fragments.push(analyzeExpression(declaration.init, local));
+          if (declaration.id.type !== 'Identifier') {
+            warn('UNSUPPORTED_BINDING_PATTERN', declaration.id, 'destructuring binding side effects are not modeled');
+            state.phaseKnown = false;
+            fragments.push(blank(true));
+          }
+        }
+      }
       else if (statement.type === 'ReturnStatement') { fragments = [analyzeExpression(statement.argument, local, true)]; stop = true; }
-      else if (statement.type === 'ThrowStatement') { fragments = [analyzeExpression(statement.argument, local)]; stop = true; }
+      else if (statement.type === 'ThrowStatement') {
+        fragments = [analyzeExpression(statement.argument, local), blank(true)];
+        warn('ABRUPT_COMPLETION', statement, 'throw prevents normal completion of this path');
+        abrupt = true;
+        stop = true;
+      }
       else if (statement.type === 'EmptyStatement' || statement.type === 'FunctionDeclaration') {
-        if (containsHook(statement, shadowed)) { warn('UNSUPPORTED_HOOK_CONTEXT', statement, 'hook in a declared function is not analyzed'); uncertain = true; }
+        if (containsHook(statement, shadowed)) { warn('UNSUPPORTED_HOOK_CONTEXT', statement, 'hook in a declared function is not analyzed'); uncertain = opaque = true; }
       } else {
         warn('UNSUPPORTED_CONTROL_FLOW', statement, 'control flow or statement is not statically modeled');
         if (containsPhase(statement, shadowed)) state.phaseKnown = false;
-        uncertain = true;
+        uncertain = opaque = true;
       }
       for (const part of fragments) {
         if (!entries.length) entries = part.entries;
         if (!uncertain && !part.opaque) connect(frontier, part.entries);
-        if (part.opaque) { frontier = []; uncertain = true; }
+        if (part.opaque) { frontier = []; uncertain = opaque = true; }
         else if (part.exits.length) { frontier = part.passthrough ? [...new Set([...frontier, ...part.exits])] : part.exits; uncertain = false; }
       }
       if (stop) break;
     }
-    return { entries, exits: frontier, opaque: uncertain };
+    return { entries, exits: frontier, opaque, abrupt };
   };
   analyzeSequence(ast.body, { path: '', groups: [], depth: 0, statementIndex: 0, template: false, phaseUncertain: false });
   // Event payload has label/phase/seq but no source location or invocation id.
@@ -400,7 +450,7 @@ function layoutTopology(graph) {
     let column;
     if (phaseIndex.size && node.phase !== null && phaseIndex.has(node.phase)) column = phaseIndex.get(node.phase);
     else if (phaseIndex.size) {
-      const key = node.phase === null ? '\u0000unknown' : node.phase;
+      const key = node.phase;
       if (!columns.has(key)) columns.set(key, phaseIndex.size + columns.size);
       column = columns.get(key);
     } else column = node.statementIndex;

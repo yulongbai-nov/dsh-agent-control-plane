@@ -1,6 +1,6 @@
 # Workflow topology 核心
 
-仅分析脚本，不运行、不求值。此包不提供 DSH 插件、实时投影或 UI。输入是 workflow 工具的 JavaScript `script` 脚本体和 JSON `meta`，支持顶层 `await`/`return`。parser 是可信依赖：优先使用普通 Node 模块解析找到的可选 peer `acorn` 8，或者由调用方注入相同签名的 `parse`。缺 parser 返回 `PARSER_UNAVAILABLE`，没有静默的简化解析器。
+仅分析脚本，不运行、不求值。此包不提供 DSH 插件、实时投影或 UI。输入是 workflow 工具的 JavaScript `script` 脚本体和 JSON `meta`；按真实引擎的 async 函数体语法解析，支持顶层 `await`/`return`，输出偏移仍对应原脚本。parser 是可信依赖：优先使用普通 Node 模块解析找到的可选 peer `acorn` 8，或者由调用方注入相同签名的 `parse`。缺 parser 返回 `PARSER_UNAVAILABLE`，没有静默的简化解析器。
 
 ```js
 const { extractTopology, layoutTopology } = require('@dsh-agent-control-plane/workflow-topology')
@@ -15,7 +15,7 @@ const layout = layoutTopology(skeleton)
 - `groups` 的 `members` 是节点或嵌套组 ID；`expansion` 表明是否是具体展开。`warnings` 是 `{code, offset, message}`，`complete: false` 时必须提示用户结构不完整/不确定，不能将未出现的节点解释为不会执行。语法错误同样返回告警和空骨架。
 - `layoutTopology(skeleton)` 返回独立 `{version,nodes,groups}` 坐标；按 `meta.phases` 排列已知阶段，其余独立列；无声明阶段时按顶层语句。行按提取前序，组边界由成员包围盒组成；它不读取 status 或事件，也不修改骨架。空组的 `bounds` 为 `null`。
 
-保守子集：直接调用 `agent`、`phase`、`log`，以及 `parallel` 的字面量内联 thunk、`pipeline` 的字面量 items + 内联 stages。条件、循环、函数引用、带副作用的表达式、动态配置、声明/赋值遮蔽 hook 等均告警，未知依赖被省略；不处理闭包、变量传播或 JS 任意语义。执行可能提前抛错或取消，静态骨架不是运行结果。脚本及 AST、展开数有硬上限，触及上限返回告警和不完整骨架。`meta` 和 parser 由可信宿主作为数据与依赖传入，而非来自脚本运行的 JS 对象。
+保守子集：直接调用 `agent`、`phase`、`log`，以及 `parallel` 的字面量内联 thunk、`pipeline` 的字面量 items + 内联 stages。条件、循环、解构声明、`parallel` 额外实参、函数引用、带副作用的表达式、动态配置、声明/赋值遮蔽 hook 等均告警，未知依赖被省略；不处理闭包、变量传播或 JS 任意语义。并发分支可能改变 phase 时，相关 phase 保守标为未知。明确 `throw` 不向后续 pipeline 阶段传播依赖；执行也可能因其他原因提前抛错或取消，静态骨架不是运行结果。脚本、AST、节点及展开工作均有硬上限，含无节点嵌套展开；触及上限返回告警和不完整骨架。`meta` 和 parser 由可信宿主作为数据与依赖传入，而非来自脚本运行的 JS 对象。
 
 本机无需安装即可验证（`NODE_PATH` 仅配置测试进程的模块解析，产品代码无机器路径）：
 
