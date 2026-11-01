@@ -84,7 +84,7 @@ function projectWorkflow({ runId, topology, layout, events, parentSessionId, sou
   const run = { ...(runStart ? {name:runStart.name} : {}), status: !runConflict && runEnd ? runEnd.status : 'unknown' };
   const invocations = [...entries.values()].sort((a,b) => a.seq-b.seq).map((entry) => {
     const first = entry.starts[0];
-    const status = entry.invalid || entry.ends.length !== 1 ? 'unknown' : entry.ends[0];
+    const status = entry.invalid || entry.starts.length !== 1 || entry.ends.length !== 1 ? 'unknown' : entry.ends[0];
     return {
       seq:entry.seq,
       ...(first ? first : {}),
@@ -95,6 +95,7 @@ function projectWorkflow({ runId, topology, layout, events, parentSessionId, sou
   const statusByNode = {};
   const unmatched = [];
   const missingStart = invocations.some((entry) => entry.reason === 'missing-start');
+  const conflictingSeq = invocations.some((entry) => entry.reason === 'conflicting-seq');
   const children = new Set();
   const duplicateChildren = new Set();
   for (const member of invocations) if (member.childId) {
@@ -116,7 +117,7 @@ function projectWorkflow({ runId, topology, layout, events, parentSessionId, sou
     let reason = member.reason;
     const options = optionsBySeq.get(member.seq) || [];
     if (!reason && !sourceVerified) reason = 'source-unverified';
-    if (!reason && (malformed || missingStart || duplicateChildren.has(member.childId))) reason = 'invalid-events';
+    if (!reason && (malformed || missingStart || conflictingSeq || duplicateChildren.has(member.childId))) reason = 'invalid-events';
     if (!reason && topology.complete !== true) reason = 'incomplete-topology';
     if (!reason && options.length === 0) reason = 'no-candidate';
     if (!reason && options.length > 1) reason = 'ambiguous-static';

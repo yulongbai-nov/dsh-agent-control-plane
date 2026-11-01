@@ -16,7 +16,7 @@ const board = projectWorkflow({ runId, topology, layout, events, parentSessionId
 
 输出 `{version:1,runId,sourceStatus:'verified'|'unverified',parentSessionId?,topology,layout,run,statusByNode,unmatched,events,diagnostics}`。`run={name?,status:'unknown'|'completed'|'failed'|'cancelled'}`；`run-end.stopReason=error` 映射 failed。`statusByNode[nodeId]` 和 `unmatched` 的运行记录为 `{seq,label?,phase?,childId?,status,reason?}`，其中 `seq` 是 **agent 调用**的序号。`status` 是已观测到的 end outcome 或 `unknown`；没有 end 不等于 running，因为后台可跨 turn 运行，日志写入亦可能中断。静态未绑定节点也应显示 unknown，不是 waiting。`unmatched.reason` 包含 `source-unverified`、`incomplete-topology`、`template`、`ambiguous-static`、`ambiguous-runtime`、`invalid-events`、`missing-start`、`conflicting-seq`、`no-candidate`。`events` 只包含白名单安全摘录字段：`{type,runId,eventSeq?,time?,seq?,name?,label?,phase?,childId?,outcome?,stopReason?}`，按输入顺序；`eventSeq` 是 session 日志序号，`time` 是 session 时间毫秒，均不能与 `seq` 混淆。`diagnostics` 为 `{code,seq?}`；未知或无效条目不得被伪装成完成。
 
-每次重新根据全部事件重算匹配，而不是单向持久化匹配结果：新增与已绑定节点竞争的调用时撤销原映射。只有已验证 source、拓扑 `complete===true`、一个匹配确定 label/phase 的 `single` 静态调用点与一个 runtime 调用时才输出匹配；未知节点可能竞争、相同 label 的多候选、template、缺开始、seq 重复/错序、孤儿 end、无效记录均不猜。静态 `phase:null` 与无 phase 的调用匹配是必要的保守假设：若 runtime 明确给出 phase 则不绑定。实际状态、phase、静态输入或会话在源头被截断时，宿主应使 source 保持 unverified 或将 topology 标为不完整。
+每次重新根据全部事件重算匹配，而不是单向持久化匹配结果：新增与已绑定节点竞争的调用时撤销原映射。只有已验证 source、拓扑 `complete===true`、一个匹配确定 label/phase 的 `single` 静态调用点与一个 runtime 调用时才输出匹配；未知节点可能竞争、相同 label 的多候选、template、缺开始、seq 重复/错序、孤儿 end、无效记录均不猜。任一 invocation seq 存在冲突时，其他所有绑定也保守失效；冲突 invocation 的 outcome 标为 `unknown`。静态 `phase:null` 与无 phase 的调用匹配是必要的保守假设：若 runtime 明确给出 phase 则不绑定。实际状态、phase、静态输入或会话在源头被截断时，宿主应使 source 保持 unverified 或将 topology 标为不完整。
 
 ## rc.5 数据来源与缺口
 
