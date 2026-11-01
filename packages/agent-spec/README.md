@@ -17,7 +17,7 @@ const result = checkAgentSpec('spawn', {
 
 `status:'reject'` 时无 `approved`；已识别后端且仅通过静态字段/能力预检时 status **仍是 `unknown`**。`approved` 只是与 rc.5 `SubagentStartRequest` 字段同名的、经静态预检的分离副本（为空对象亦不表示运行获准），不构成路由、模型、effort、preset、权限、额度、可续聊或启动成功的保证。未知后端为 `unknown` 且**没有** `approved`，避免把不知能力的字段静默透传。`findings` 只给固定代码，不回显错误、输入或潜在秘密。
 
-当前只接受 spec 顶层 `preset`（非空字符串）与 `overrides`（普通对象，包含的键均须有值）；未知键、symbol、自定义原型、无效类型、getter 抛错一律拒绝。显式指定的字段不会静默忽略。值只读取一次；输出仅复制允许字段。为了保守，`role`、`persistence`、`schema`、未知扩展、`reasoning_effort` 等目前直接拒绝，不表示这些功能或原生字段在其他上下文不存在；`outputSchema` 和后端可选性尚未纳入此原型。
+当前只接受 spec 顶层 `preset`（非空字符串）与 `overrides`（普通对象，包含的键均须有值）；Proxy（含已撤销 Proxy）在检查原型或枚举属性前由 Node `util.types.isProxy` 拒绝，未知键、symbol、自定义原型、无效类型、getter 抛错一律拒绝。每层只枚举一次，以同一键集校验和复制，每个值只读取一次；getter 若事后添加属性，这些新属性不会进入静态副本。该快照不保证 getter 或输入无副作用，也不是运行时安全门禁。为了保守，`role`、`persistence`、`schema`、未知扩展、`reasoning_effort` 等目前直接拒绝，不表示这些功能或原生字段在其他上下文不存在；`outputSchema` 和后端可选性尚未纳入此原型。
 
 | Synthetic backend | `preset` → `agentPreset` | `overrides` → `agentOptions` | 深度/权限结论 |
 |---|---|---|---|

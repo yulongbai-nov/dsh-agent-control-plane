@@ -103,6 +103,47 @@ test('object-access failures and unknown nested keys cannot smuggle accepted fie
   }
 });
 
+test('rejects a dynamically changing ownKeys proxy before invoking any traps', () => {
+  for (const injected of ['unsupported', 'subagentDepth', Symbol('hidden')]) {
+    let traps = 0, enumerations = 0;
+    const options = new Proxy({}, {
+      getPrototypeOf() { traps++; return Object.prototype; },
+      ownKeys() { traps++; return ++enumerations === 1 ? ['model'] : ['model', injected]; },
+      getOwnPropertyDescriptor(_target, key) { traps++; return key === 'model' ? { configurable: true, enumerable: true, value: 'safe' } : undefined; },
+      get(_target, key) { traps++; return key === 'model' ? 'safe' : 'injected'; },
+    });
+    const result = check('spawn', { overrides: options });
+    assert.equal(result.status, 'reject');
+    assert.equal('approved' in result, false);
+    assert.equal(traps, 0);
+  }
+});
+
+test('rejects top-level and revoked proxies without invoking their traps', () => {
+  let traps = 0;
+  const proxy = new Proxy({}, {
+    getPrototypeOf() { traps++; return Object.prototype; },
+    ownKeys() { traps++; return ['preset']; },
+    getOwnPropertyDescriptor() { traps++; return { configurable: true, enumerable: true, value: 'standard' }; },
+    get() { traps++; return 'standard'; }
+  });
+  const result = check('spawn', proxy);
+  assert.equal(result.status, 'reject');
+  assert.equal('approved' in result, false);
+  assert.equal(traps, 0);
+  const revoked = Proxy.revocable({}, {}); revoked.revoke();
+  assert.equal(check('spawn', revoked.proxy).status, 'reject');
+  assert.equal(check('spawn', { overrides: revoked.proxy }).status, 'reject');
+});
+
+test('a getter cannot add fields to the captured option keys', () => {
+  const options = {};
+  Object.defineProperty(options, 'model', { enumerable: true, get() { options.subagentDepth = 5; options.unsupported = 'injected'; return 'safe'; } });
+  const result = check('spawn', { overrides: options });
+  assert.equal(result.status, 'unknown');
+  assert.deepEqual(result.approved, { agentOptions: { model: 'safe' } });
+});
+
 test('candidate input values are detached and only read once', () => {
   let count = 0;
   const overrides = {};
