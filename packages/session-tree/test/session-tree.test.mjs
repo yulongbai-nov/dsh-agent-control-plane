@@ -1332,6 +1332,55 @@ test('component omits unavailable right-sidebar action on independent main panel
   assert.equal(plugin.inject.includes('sidebarRight'), false);
 });
 
+test('tree row disabled semantics reflect individually available controls in both languages', () => {
+  for(const language of ['zh','en']) {
+    states=[];effects=[];pendingEffects=[];stateIndex=0;
+    const list=baseList();list.ids.push('archive','migration');list.byId.archive=summary('archive');list.byId.migration=summary('migration',{formatStatus:'migration-required'});
+    list.projectionsBySession={root:ready([child('external','external'),child('unknown','unknown'),child('amb'),child('amb'),child('normal')]),archive:{state:'loading',values:{subagentCatalog:[]}}};
+    const calls=[],locale=mockLocale();locale.setLanguage(language);let registration;
+    applyPlugin({locale,slots:{inject(_name,cb){cb();},register(options,component){if(options.name==='main')registration={options,component};}},sessions:{refreshProjections(){},refresh(){}},uiWorkspace:{openSession(target){calls.push(target);}}});
+    const actions=registration.options.inject();actions.expansion.add('root');
+    const props={...actions,useSessions:selector=>selector(list),useSessionStatus:selector=>selector(new Map()),useWorkspaces:selector=>selector({archivedSessionIds:['archive']})};
+    const flatten=node=>node&&typeof node==='object'?[node,...(node.children??[]).flat(Infinity).flatMap(flatten)]:[];
+    const rows=flatten(registration.component(props)).filter(node=>node.props?.role==='treeitem');
+    const find=id=>rows.find(row=>row.props['data-session-id']===id);
+    const parts=id=>{const nodes=flatten(find(id));return {row:find(id),caret:nodes.find(node=>node.props?.className==='caret'),button:nodes.find(node=>node.props?.className==='body'),select:nodes.find(node=>node.props?.className==='avatar-select')};};
+    const expected=language==='zh'?{unavailable:'无法打开会话',archived:'已归档',external:'外部任务',unknown:'模式未知',ambiguous:'身份存在歧义'}:{unavailable:'Cannot open session',archived:'Archived',external:'External task',unknown:'Unknown mode',ambiguous:'Ambiguous identity'};
+    for(const [id,state] of [['archive','archived'],['external','external'],['unknown','unknown']]) {
+      const {row,button,select}=parts(id);
+      assert.notEqual(row.props['aria-disabled'],true,id);
+      assert.equal(button.props.disabled,true,id);assert.equal(select.props.disabled,false,id);
+      assert.ok(row.props['aria-label'].includes(expected[state]),id);
+      assert.ok(row.props['aria-label'].includes(expected.unavailable),id);
+      for(const code of ['Enter',' '])row.props.onKeyDown({key:code,target:1,currentTarget:1,preventDefault(){}});
+    }
+    assert.equal(parts('archive').caret.props.disabled,false);
+    assert.equal(parts('archive').row.props['aria-expanded'],false);
+    parts('archive').row.props.onKeyDown({key:'ArrowRight',target:1,currentTarget:1,preventDefault(){}});
+    assert.equal(actions.expansion.has('archive'),true);
+    for(const row of rows.filter(row=>row.props['data-session-id']==='amb')) {
+      const controls=flatten(row);
+      assert.equal(row.props['aria-disabled'],true);
+      assert.ok(row.props['aria-label'].includes(expected.ambiguous));
+      assert.ok(row.props['aria-label'].includes(expected.unavailable));
+      assert.equal(controls.find(node=>node.props?.className==='caret').props.disabled,true);
+      assert.equal(controls.find(node=>node.props?.className==='body').props.disabled,true);
+      assert.equal(controls.find(node=>node.props?.className==='avatar-select').props.disabled,true);
+      for(const code of ['Enter',' '])row.props.onKeyDown({key:code,target:1,currentTarget:1,preventDefault(){}});
+    }
+    assert.deepEqual(calls,[]);
+    for(const id of ['root','migration','normal']) {
+      const {row,button,select}=parts(id);
+      assert.notEqual(row.props['aria-disabled'],true,id);
+      assert.equal(button.props.disabled,false,id);assert.equal(select.props.disabled,false,id);
+      assert.equal(row.props['aria-label'].includes(expected.unavailable),false,id);
+    }
+    for(const code of ['Enter',' '])parts('normal').row.props.onKeyDown({key:code,target:1,currentTarget:1,preventDefault(){}});
+    assert.equal(calls.length,2);
+    assert.deepEqual(calls[0],{parentSessionId:'root',childSessionId:'normal',mode:'continuable'});
+  }
+});
+
 test('ambiguous occurrences use unique keyboard focus and bilingual warning', () => {
   states = []; stateIndex = 0;
   const list = baseList(); list.ids.push('other'); list.byId.other = summary('other');

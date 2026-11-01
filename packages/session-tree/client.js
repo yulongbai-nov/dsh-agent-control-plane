@@ -11,7 +11,7 @@ window.__ModuleLoader__.load({
         panel: '会话树', intro: '独立会话树面板；原生侧栏列表与页头目录不变。展开时读取该层目录。', lineage: '会话谱系',
         'type.lead': '组长 / 默认', 'type.research': '调研', 'type.code': '开发', 'type.write': '写作', 'type.data': '数据', 'type.qa': '校验',
         'status.archived': '已归档', 'status.waiting': '等待交互', 'status.running': '运行中', 'status.completed': '最近一次已完成', 'status.inactive': '未运行', 'status.unknown': '状态未知',
-        migration: '需要迁移', external: '外部任务', unknownMode: '模式未知', ambiguous: '身份存在歧义', depthLimit: '达到显示深度上限', rowLabel: '{title}，{state}', collapse: '折叠 {title}', expand: '展开 {title}', changeAvatar: '更改 {title} 的头像', autoAvatar: '自动头像',
+        migration: '需要迁移', external: '外部任务', unknownMode: '模式未知', ambiguous: '身份存在歧义', cannotOpen: '无法打开会话', depthLimit: '达到显示深度上限', rowLabel: '{title}，{state}', collapse: '折叠 {title}', expand: '展开 {title}', changeAvatar: '更改 {title} 的头像', autoAvatar: '自动头像',
         catalogError: '目录读取失败：{error}', catalogReadError: '读取目录失败', catalogUnavailable: '宿主未提供子代理目录投影。', catalogLoading: '正在读取子代理目录…', catalogUnknown: '目录状态未知，缓存暂不显示。', retry: '重试',
         openError: '打开失败：{error}', refreshError: '刷新失败：{error}', preferencesError: '头像偏好无法保存：浏览器存储不可用或空间不足。', preferencesSaved: '头像选择已保存在此浏览器。',
         imageInvalidSize: '请选择不超过 180 KB 的 PNG 图片。', imageReadError: '无法读取头像图片。', imageInvalid: '头像文件不是有效的 PNG 数据。', imageSaveError: '头像无法保存：浏览器存储不可用或空间不足。',
@@ -22,7 +22,7 @@ window.__ModuleLoader__.load({
         panel: 'Session tree', intro: 'Independent session tree; the native sidebar and header directory are unchanged. Expanding loads that level.', lineage: 'Session lineage',
         'type.lead': 'Lead / default', 'type.research': 'Research', 'type.code': 'Development', 'type.write': 'Writing', 'type.data': 'Data', 'type.qa': 'Verification',
         'status.archived': 'Archived', 'status.waiting': 'Waiting for interaction', 'status.running': 'Running', 'status.completed': 'Last turn completed', 'status.inactive': 'Inactive', 'status.unknown': 'Status unknown',
-        migration: 'Migration required', external: 'External task', unknownMode: 'Unknown mode', ambiguous: 'Ambiguous identity', depthLimit: 'Display depth limit reached', rowLabel: '{title}, {state}', collapse: 'Collapse {title}', expand: 'Expand {title}', changeAvatar: 'Change avatar for {title}', autoAvatar: 'Automatic avatar',
+        migration: 'Migration required', external: 'External task', unknownMode: 'Unknown mode', ambiguous: 'Ambiguous identity', cannotOpen: 'Cannot open session', depthLimit: 'Display depth limit reached', rowLabel: '{title}, {state}', collapse: 'Collapse {title}', expand: 'Expand {title}', changeAvatar: 'Change avatar for {title}', autoAvatar: 'Automatic avatar',
         catalogError: 'Failed to load catalog: {error}', catalogReadError: 'Failed to read catalog', catalogUnavailable: 'The host did not provide a subagent catalog projection.', catalogLoading: 'Loading subagent catalog…', catalogUnknown: 'Catalog status unknown; cached entries are hidden.', retry: 'Retry',
         openError: 'Failed to open: {error}', refreshError: 'Failed to refresh: {error}', preferencesError: 'Could not save avatar preferences: browser storage is unavailable or full.', preferencesSaved: 'Avatar selection saved in this browser.',
         imageInvalidSize: 'Choose a PNG image no larger than 180 KB.', imageReadError: 'Could not read the avatar image.', imageInvalid: 'The avatar file is not valid PNG data.', imageSaveError: 'Could not save the avatar: browser storage is unavailable or full.',
@@ -345,7 +345,7 @@ window.__ModuleLoader__.load({
       function renderRow(row) {
         const type = avatarType(row, prefs);
         const target = navigationTarget(row);
-        const stateText = [t(`status.${row.status}`), row.migrationRequired && t('migration'), row.external && t('external'), row.unknownMode && t('unknownMode'), row.ambiguous && t('ambiguous'), row.depthLimit && t('depthLimit'), row.model, `L${row.level - 1}`].filter(Boolean).join(' · ');
+        const stateText = [t(`status.${row.status}`), row.migrationRequired && t('migration'), row.external && t('external'), row.unknownMode && t('unknownMode'), row.ambiguous && t('ambiguous'), target === null && t('cannotOpen'), row.depthLimit && t('depthLimit'), row.model, `L${row.level - 1}`].filter(Boolean).join(' · ');
         const error = ownValue(failures, row.id) ?? row.error ?? (row.catalogState === 'error' ? t('catalogReadError') : undefined);
         const label = row.title;
         const indicator = row.expanded && (error ? h('div', { className: 'branch-note error', role: 'alert', style: { marginLeft: `${row.level * 20}px` } }, t('catalogError', { error }), h('button', { type: 'button', onClick: () => retry(row.id) }, t('retry')))
@@ -357,7 +357,7 @@ window.__ModuleLoader__.load({
           tabIndex: tabStop === row.rowKey ? 0 : -1,
           'data-session-id': row.id, 'data-row-key': row.rowKey, 'aria-level': row.level, 'aria-posinset': row.posInSet, 'aria-setsize': row.setSize,
           'aria-expanded': row.expandable ? row.expanded : undefined,
-          'aria-disabled': target === null || undefined, 'aria-label': t('rowLabel', { title: label, state: stateText }),
+          'aria-disabled': row.ambiguous || undefined, 'aria-label': t('rowLabel', { title: label, state: stateText }),
           onFocus: event => { if (event.target === event.currentTarget) setFocusKey(row.rowKey); },
           onKeyDown: event => treeKeys(event, row),
           onClick: event => { if (event.target === event.currentTarget) navigate(row); }
