@@ -63,6 +63,186 @@ test('lagging observations fail closed rather than trusting old task', async () 
   assert.equal(host.title(child), undefined);
 });
 
+test('retry after unrelated task advances authoritative high during generation', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { if (++calls === 1) await gate.promise; return subject; } });
+  model.observe(lead); await settle();
+  host.task(lead, { id: 'unrelated', revision: 1, status: 'pending', subject: 'Other' });
+  gate.resolve(); await model.idle(); assert.equal(host.title(child), undefined);
+  model.observe(lead); await model.idle();
+  assert.equal(calls, 2); assert.equal(host.title(child)?.title, 'Task A');
+});
+
+test('retry after an incomplete observation invalidates pending work', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { if (++calls === 1) await gate.promise; return subject; } });
+  model.observe(lead); await settle(); model.observe(lead, 1);
+  gate.resolve(); await model.idle(); assert.equal(host.title(child), undefined);
+  model.observe(lead); await model.idle();
+  assert.equal(calls, 2); assert.equal(host.title(child)?.title, 'Task A');
+});
+
+test('retry after authorization revocation and regrant invalidates old generation', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { if (++calls === 1) await gate.promise; return subject; } });
+  model.observe(lead); await settle(); host.setAuthorized(false); host.setAuthorized(true);
+  gate.resolve(); await model.idle(); assert.equal(host.title(child), undefined);
+  model.observe(lead); await model.idle();
+  assert.equal(calls, 2); assert.equal(host.title(child)?.title, 'Task A');
+});
+
+test('a failed generator retries only on an explicit subsequent observation', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { if (++calls === 1) throw new Error('synthetic'); return subject; } });
+  model.observe(lead); await model.idle(); await settle();
+  assert.equal(calls, 1); assert.equal(host.title(child), undefined);
+  model.observe(lead); await model.idle();
+  assert.equal(calls, 2); assert.equal(host.title(child)?.title, 'Task A');
+});
+
+test('a task cut already invalid at observe time may retry without canceling newer message', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let messageSignal, calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; return subject; } });
+  model.observe(lead);
+  host.task(lead, { id: 'unrelated', revision: 1, status: 'pending', subject: 'Other' });
+  await model.idle(); assert.equal(calls, 0);
+  model.message(child, async ({ signal }) => { messageSignal = signal; await gate.promise; return 'Latest message'; });
+  await settle(); model.observe(lead); await settle();
+  assert.equal(messageSignal.aborted, false); assert.equal(calls, 0);
+  gate.resolve(); await model.idle();
+  assert.deepEqual(host.title(child), { kind: 'message', title: 'Latest message' });
+});
+
+test('same-task retry never overwrites a newer pending or completed message', async () => {
+  for (const stage of ['pending', 'completed']) {
+    const host = createSyntheticHost(); const { lead, child } = ready(host);
+    const taskGate = deferred(), messageGate = deferred(); let taskCalls = 0, messageSignal;
+    const model = createModel(host, { generate: async ({ subject }) => { taskCalls++; await taskGate.promise; return subject; } });
+    model.observe(lead); await settle();
+    model.message(child, async ({ signal }) => { messageSignal = signal; await messageGate.promise; return 'Latest conversation'; });
+    await settle();
+    if (stage === 'completed') { messageGate.resolve(); await settle(); }
+    model.observe(lead); await settle();
+    assert.equal(messageSignal.aborted, false, stage);
+    assert.equal(taskCalls, 1, stage);
+    messageGate.resolve(); taskGate.resolve(); await model.idle();
+    assert.deepEqual(host.title(child), { kind: 'message', title: 'Latest conversation' }, stage);
+  }
+});
+
+test('same-task retry never overwrites a newer pin', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; await gate.promise; return subject; } });
+  model.observe(lead); await settle(); model.rename(child, 'Pinned');
+  model.observe(lead); await settle(); assert.equal(calls, 1);
+  gate.resolve(); await model.idle();
+  assert.deepEqual(host.title(child), { kind: 'user', title: 'Pinned' });
+});
+
+test('same-task retry cannot restore an old owner after reassignment', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; await gate.promise; return subject; } });
+  model.observe(lead); await settle();
+  host.task(lead, { id: 'task', revision: 3, ownerId: 'other', status: 'in_progress', subject: 'Task A' });
+  model.observe(lead); model.observe(lead); await settle(); assert.equal(calls, 1);
+  gate.resolve(); await model.idle(); assert.equal(host.title(child), undefined);
+});
+
+test('removing the old task cannot cancel newer message work', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const taskGate = deferred(), msgGate = deferred(); let signal;
+  const model = createModel(host, { generate: async ({ subject }) => { await taskGate.promise; return subject; } });
+  model.observe(lead); await settle();
+  model.message(child, async (value) => { signal = value.signal; await msgGate.promise; return 'New message'; });
+  await settle();
+  host.task(lead, { id: 'task', revision: 3, ownerId: 'other', status: 'in_progress', subject: 'Task A' });
+  model.observe(lead); assert.equal(signal.aborted, false);
+  msgGate.resolve(); taskGate.resolve(); await model.idle();
+  assert.deepEqual(host.title(child), { kind: 'message', title: 'New message' });
+});
+
+test('a different relevant task cannot revive the old candidate over a newer message', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; await gate.promise; return subject; } });
+  model.observe(lead); await settle();
+  model.message(child, async () => 'Latest message'); await settle();
+  host.task(lead, { id: 'other', revision: 1, status: 'pending', subject: 'Other' });
+  host.task(lead, { id: 'other', revision: 2, ownerId: 'child', status: 'completed', subject: 'Other' });
+  model.observe(lead); await settle(); assert.equal(calls, 1);
+  gate.resolve(); await model.idle();
+  assert.deepEqual(host.title(child), { kind: 'message', title: 'Latest message' });
+});
+
+test('ambiguous task observation cannot clear the newer message arbitration fence', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; await gate.promise; return subject; } });
+  model.observe(lead); await settle();
+  model.message(child, async () => 'Newer message'); await settle();
+  host.task(lead, { id: 'other', revision: 1, status: 'pending', subject: 'Other' });
+  host.task(lead, { id: 'other', revision: 2, ownerId: 'child', status: 'in_progress', subject: 'Other' });
+  model.observe(lead);
+  host.task(lead, { id: 'other', revision: 3, status: 'pending', subject: 'Other' });
+  model.observe(lead); await settle(); assert.equal(calls, 1);
+  gate.resolve(); await model.idle();
+  assert.deepEqual(host.title(child), { kind: 'message', title: 'Newer message' });
+});
+
+test('a task first observed only after a newer message does not trump it', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const model = createModel(host); model.message(child, async () => 'New message'); await model.idle();
+  model.observe(lead); await model.idle();
+  assert.deepEqual(host.title(child), { kind: 'message', title: 'New message' });
+});
+
+test('same-task retry cannot cross an owner away-and-back transition', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject, revision }) => { calls++; if (revision === 2) await gate.promise; return `${subject} rev-${revision}`; } });
+  model.observe(lead); await settle();
+  host.task(lead, { id: 'task', revision: 3, ownerId: 'other', status: 'in_progress', subject: 'Task B' });
+  host.task(lead, { id: 'task', revision: 4, ownerId: 'child', status: 'in_progress', subject: 'Task C' });
+  model.observe(lead); await settle(); gate.resolve(); await model.idle();
+  assert.equal(calls, 2);
+  assert.deepEqual(host.title(child), { kind: 'task', title: 'Task C rev-4', taskId: 'task', revision: 4 });
+});
+
+test('a later observe with a new cut retries in-flight work invalidated by unrelated task changes', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); const calls = [];
+  const model = createModel(host, { generate: async (input) => { calls.push(input); if (calls.length === 1) await gate.promise; return input.subject; } });
+  model.observe(lead); await settle();
+  host.task(lead, { id: 'other', revision: 1, status: 'pending', subject: 'Other' });
+  model.observe(lead); assert.equal(calls[0].signal.aborted, true);
+  await settle(); gate.resolve(); await model.idle();
+  assert.equal(calls.length, 2);
+  assert.equal(host.title(child)?.title, 'Task A');
+});
+
+test('successful and pending task work coalesces repeated observations', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let calls = 0;
+  const model = createModel(host, { generate: async ({ subject }) => { calls++; await gate.promise; return subject; } });
+  model.observe(lead); await settle(); model.observe(lead); await settle(); assert.equal(calls, 1);
+  gate.resolve(); await model.idle(); model.observe(lead); await model.idle();
+  assert.equal(calls, 1); assert.equal(host.title(child)?.title, 'Task A');
+});
+
+test('persistent failure waits for each explicit observe without a tight loop', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host); let calls = 0;
+  const model = createModel(host, { generate: async () => { calls++; throw new Error('failure'); } });
+  model.observe(lead); await model.idle(); await settle(); assert.equal(calls, 1);
+  model.observe(lead); await model.idle(); await settle(); assert.equal(calls, 2);
+  assert.equal(host.title(child), undefined);
+});
+
 test('service closing blocks replacement until pending work quiesces', async () => {
   const host = createSyntheticHost(); const { lead } = ready(host);
   const gate = deferred(); const first = createModel(host, { generate: async ({ subject }) => { await gate.promise; return subject; } });
@@ -174,14 +354,16 @@ test('if the authoritative task changes without notification, precommit checks r
   assert.equal(host.title(child), undefined);
 });
 
-test('message work and task work share one generation revision', async () => {
+test('genuinely later task update and message share one generation revision', async () => {
   const host = createSyntheticHost(); const { lead, child } = ready(host);
   const gate = deferred(); let signal;
   const model = createModel(host);
   model.message(child, async (value) => { signal = value.signal; await gate.promise; return 'Message title'; });
-  await settle(); model.observe(lead); assert.equal(signal.aborted, true);
+  await settle();
+  host.task(lead, { id: 'task', revision: 3, ownerId: 'child', status: 'in_progress', subject: 'Later task' });
+  model.observe(lead); assert.equal(signal.aborted, true);
   gate.resolve(); await model.idle();
-  assert.equal(host.title(child).title, 'Task A');
+  assert.equal(host.title(child).title, 'Later task');
 });
 
 test('an unrelated task event must not cancel pending message work', async () => {

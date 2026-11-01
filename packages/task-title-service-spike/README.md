@@ -12,13 +12,13 @@
 
 ## 合成模型及其假设
 
-`createSyntheticHost()` 私有持有 token、任务最新状态、存活 child、标题和理想化权限；`createModel()` 是唯一模拟服务 owner。手动 `observe(lead, cut)` 对已附着 child 验证授权、完整性和 cut；有效观察中只有该 child 相关的合成任务快照改变时才递增共享 revision、abort 旧信号并合并微任务；不完整观察只使旧的任务工作失效，不无故取消消息工作。任务生成前及生成后依次复核：
+`createSyntheticHost()` 私有持有 token、任务最新状态、存活 child、标题和理想化权限；`createModel()` 是唯一模拟服务 owner。手动 `observe(lead, cut)` 对已附着 child 验证授权、完整性和 cut；有效观察中该 child 的唯一候选任务对象/修订改变或上次对应尝试可重试时才递增共享 revision、abort 旧信号并合并微任务；不完整观察只使旧的任务工作失效，不无故取消消息工作。任务生成前及生成后依次复核：
 
 1. 服务活跃、精确 lead/child 对象仍存活且父子关系相同；`authorized===true`，授权 epoch 未改变；
 2. 合成任务序列完整、仅选恰好一个该 child 的 `in_progress` 任务；`cut` 等于 host 当前高水位；生成期间高水位、task 对象、revision、owner 和状态未变化；
 3. 当前标题不是 user pin，signal/revision 仍有效，生成文本有效；**最终这些合成内存检查与 `title` 属性赋值之间无 await 或第三方回调**。
 
-`rename()` 和合成 `message()` 共用 revision/abort，模拟消息工作与任务工作互斥，避免旧结果覆盖新结果。`message()` 并不实现原服务的 provider 注册、人工消息 schema、route 或模型。`dispose()` 取消并等待生成器 quiesce 后释放模型 owner；生成器不合作会使 dispose 等待，这只是保守模型，与官方 provider 可开始 closing 后允许替换的精细生命周期**不等同**。候选策略只识别唯一 in-progress，多个活动任务、pending、完成、删除均不生成，不实现产品中“最近任务/完成后保留”的最终语义；任务移交/释放后沿用已有合成标题，不声称该标题仍是当前来源。遇到非法修订、重放或缺口后合成 Lead 的完整性永久标 false，保留先前显示值但不再声称是可信当前任务，除非另行构建经验证的恢复机制（尚无）。
+任务快照的“已观察”不等于“已提交”：独立记录生成尝试 `pending / committed / invalidated`。同一候选 pending 或 committed 时合并重复观察；高水位过期、旧 cut、授权 epoch 变化或 generator 失败使 pending 失效后，只有**下一次显式完整 observe** 才可重试，不在 catch、finally 或 idle 内自动重试；如该次观察已知 pending 所用 cut/epoch 过期，可先取消它再尝试。新消息、用户 pin 或主动 invalidate 会阻断同任务版本的重试。每次合成 `message` 同步记下该合成 Lead 的高水位为 message fence：同一旧候选即使在其他任务变化、歧义消失或首次迟到观察后也不能覆盖消息；仅当候选任务自身的 seq 晚于 fence 才可能仲裁。这个跨对象高水位是合成 host 的理想同步假设，不证明真实跨 Session 的因果顺序。`rename()` 和合成 `message()` 共用 revision/abort，模拟消息工作与任务工作互斥，避免旧结果覆盖新结果。`message()` 并不实现原服务的 provider 注册、人工消息 schema、route 或模型。`dispose()` 取消并等待生成器 quiesce 后释放模型 owner；生成器不合作会使 dispose 等待，这只是保守模型，与官方 provider 可开始 closing 后允许替换的精细生命周期**不等同**。候选策略只识别唯一 in-progress，多个活动任务、pending、完成、删除均不生成，不实现产品中“最近任务/完成后保留”的最终语义；任务移交/释放后沿用已有合成标题，不声称该标题仍是当前来源。遇到非法修订、重放或缺口后合成 Lead 的完整性永久标 false，保留先前显示值但不再声称是可信当前任务，除非另行构建经验证的恢复机制（尚无）。
 
 **“准确高水位、可直接比较最新任务及活跃身份”仅是合成 host 的理想化事实，不是当前 rc.5 已证明的读取/鉴权 seam。** `authorized` 布尔和 epoch 只能测试模型条件，不代表真实调用方、scope、跨会话权限或授权撤销机制。对过期 cut、断续修订、未知权限、来源不明确、冷会话和多任务歧义按模型不写；真实系统无法证明没有 unseen task 时，也必须 fail closed / unknown。模型不会自动接收真正事件；在冷会话 reattach 时不会重放冷期间变化，需调用者重新观察，且这不证明 durable 恢复。
 
