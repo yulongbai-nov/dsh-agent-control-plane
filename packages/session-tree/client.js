@@ -213,6 +213,13 @@ window.__ModuleLoader__.load({
       const [notice, setNotice] = React.useState(null);
       const [focusKey, setFocusKey] = React.useState(null);
       const treeRef = React.useRef(null);
+      const imageOperations = React.useRef(null);
+      if (!imageOperations.current) imageOperations.current = { images, versions: new Map(), notice: 0, active: false };
+      React.useEffect(() => {
+        const current = imageOperations.current;
+        current.active = true;
+        return () => { current.active = false; current.versions.clear(); current.notice++; };
+      }, []);
       const rows = buildRows(list, expanded, new Set(archivedIds ?? []), statuses);
 
       function fail(id, error) { setFailures(current => ({ ...current, [id]: error?.message ?? String(error) })); }
@@ -245,26 +252,45 @@ window.__ModuleLoader__.load({
         if (!saveAvatarPrefs(getStorage(), next)) { setNotice({ key: 'preferencesError' }); return; }
         setPrefs(next); setNotice({ key: 'preferencesSaved' });
       }
+      function beginImageOperation(type) {
+        const current = imageOperations.current, version = Symbol();
+        current.versions.set(type, version);
+        const notice = ++current.notice;
+        return {
+          current,
+          valid: () => current.active && current.versions.get(type) === version,
+          tell: value => { if (current.active && current.versions.get(type) === version && current.notice === notice) setNotice(value); }
+        };
+      }
       function changeImage(event) {
         const file = event.target.files?.[0];
         event.target.value = '';
         if (!file) return;
-        if (file.type !== 'image/png' || file.size > 180000) { setNotice({ key: 'imageInvalidSize' }); return; }
-        const reader = new FileReader();
-        const selectedType = imageType;
-        reader.onerror = () => setNotice({ key: 'imageReadError' });
-        reader.onload = () => {
-          if (!validImage(reader.result)) { setNotice({ key: 'imageInvalid' }); return; }
-          const next = { ...images, [selectedType]: reader.result };
-          if (!saveCustomImages(getStorage(), next)) { setNotice({ key: 'imageSaveError' }); return; }
-          setImages(next); setNotice({ key: 'imageSaved', type: selectedType });
-        };
-        reader.readAsDataURL(file);
+        const selectedType = imageType, operation = beginImageOperation(selectedType);
+        if (file.type !== 'image/png' || file.size > 180000) { operation.tell({ key: 'imageInvalidSize' }); return; }
+        let settled = false;
+        try {
+          const reader = new FileReader();
+          reader.onerror = () => { if (settled) return; settled = true; operation.tell({ key: 'imageReadError' }); };
+          reader.onload = () => {
+            if (settled) return;
+            settled = true;
+            if (!operation.valid()) return;
+            if (!validImage(reader.result)) { operation.tell({ key: 'imageInvalid' }); return; }
+            const next = { ...operation.current.images, [selectedType]: reader.result };
+            if (!saveCustomImages(getStorage(), next)) { operation.tell({ key: 'imageSaveError' }); return; }
+            operation.current.images = next;
+            setImages(next); operation.tell({ key: 'imageSaved', type: selectedType });
+          };
+          reader.readAsDataURL(file);
+        } catch { if (!settled) { settled = true; operation.tell({ key: 'imageReadError' }); } }
       }
       function resetImage() {
-        const next = { ...images }; delete next[imageType];
-        if (!saveCustomImages(getStorage(), next)) { setNotice({ key: 'imageSaveError' }); return; }
-        setImages(next); setNotice({ key: 'imageReset', type: imageType });
+        const operation = beginImageOperation(imageType), next = { ...operation.current.images };
+        delete next[imageType];
+        if (!saveCustomImages(getStorage(), next)) { operation.tell({ key: 'imageSaveError' }); return; }
+        operation.current.images = next;
+        setImages(next); operation.tell({ key: 'imageReset', type: imageType });
       }
       function treeKeys(event, row) {
         if (event.target !== event.currentTarget) return;

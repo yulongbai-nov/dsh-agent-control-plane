@@ -8,19 +8,23 @@ import vm from 'node:vm';
 // Test the actual shipped browser artifact through the same ModuleLoader seam.
 const source = await readFile(new URL('../client.js', import.meta.url), 'utf8');
 let plugin;
-let states = [], stateIndex = 0;
+let states = [], stateIndex = 0, effects = [], pendingEffects = [], mountedForTest = true, postUnmountUpdates = 0;
 const React = {
   Fragment: Symbol('fragment'),
   createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
   useState(initial) {
     const index = stateIndex++;
     if (!(index in states)) states[index] = typeof initial === 'function' ? initial() : initial;
-    return [states[index], next => { states[index] = typeof next === 'function' ? next(states[index]) : next; }];
+    return [states[index], next => { if (!mountedForTest) postUnmountUpdates++; states[index] = typeof next === 'function' ? next(states[index]) : next; }];
   },
-  useRef() {
+  useRef(initial) {
     const index = stateIndex++;
-    if (!(index in states)) states[index] = { current: null };
+    if (!(index in states)) states[index] = { current: initial ?? null };
     return states[index];
+  },
+  useEffect(callback, deps) {
+    const index = stateIndex++, previous = effects[index];
+    if (!previous || !deps || deps.some((dep,i) => !Object.is(dep,previous.deps?.[i]))) pendingEffects.push({index,callback,deps});
   }
 };
 const previousWindow = globalThis.window;
@@ -155,8 +159,13 @@ test('changing locale retranslates an existing notice without resetting the tree
   actions.expansion.add('root');
   const props = { ...actions, useSessions: selector => selector(list), useSessionStatus: selector => selector(new Map()), useWorkspaces: selector => selector({ archivedSessionIds: [] }) };
   const flatten = node => node && typeof node === 'object' ? [node, ...(node.children ?? []).flat(Infinity).flatMap(flatten)] : [];
-  function render() { stateIndex = 0; return flatten(main.component(props)); }
-  states = []; locale.setLanguage('zh');
+  function render() {
+    stateIndex = 0; pendingEffects = [];
+    const nodes = flatten(main.component(props));
+    for (const effect of pendingEffects) { effects[effect.index]?.cleanup?.(); effects[effect.index] = {deps:effect.deps,cleanup:effect.callback()}; }
+    return nodes;
+  }
+  states = []; effects = []; locale.setLanguage('zh');
   const input = render().find(node => node.type === 'input' && node.props.type === 'file');
   input.props.onChange({ target: { files: [{ type: 'image/jpeg', size: 1 }], value: 'x' } });
   let elements = render();
@@ -585,6 +594,175 @@ test('component collapse preserves another root behind an unknown-mode cached ed
   assert.deepEqual(rows.map(row=>row.props['data-session-id']),['root','other','leaf']);
   assert.equal(rows.find(row=>row.props['data-session-id']==='other').props['aria-expanded'],true);
   assert.deepEqual([...actions.expansion],['barrier','other']);
+});
+
+function avatarHarness({ strict = false } = {}) {
+  states = []; effects = []; pendingEffects = []; stateIndex = 0; mountedForTest = true; postUnmountUpdates = 0;
+  const previousWindow = globalThis.window, previousReader = globalThis.FileReader;
+  const values = new Map(), readers = [], writes = [];
+  let failWrites = false, unmounted = false;
+  globalThis.window = {localStorage:{getItem:key => values.get(key) ?? null,setItem(key,value){ if(failWrites) throw Error('blocked'); values.set(key,value); writes.push([key,value]); }}};
+  globalThis.FileReader = class {
+    constructor(){readers.push(this);}
+    readAsDataURL(file){this.file=file;}
+    finish(value){this.result=value;this.onload?.();}
+    fail(){this.onerror?.();}
+  };
+  let registration;
+  applyPlugin({slots:{inject(_name,callback){callback();},register(options,component){if(options.name==='main')registration={options,component};}},sessions:{},uiWorkspace:{}});
+  const actions = registration.options.inject(), list = baseList();
+  const props = {...actions,useSessions:selector=>selector(list),useSessionStatus:selector=>selector(new Map()),useWorkspaces:selector=>selector({archivedSessionIds:[]})};
+  const flatten = node => node && typeof node === 'object' ? [node,...(node.children ?? []).flat(Infinity).flatMap(flatten)] : [];
+  function render(){
+    stateIndex=0; pendingEffects=[];
+    const nodes=flatten(registration.component(props));
+    for(const effect of pendingEffects){
+      const first=!effects[effect.index]; effects[effect.index]?.cleanup?.();
+      let cleanup=effect.callback(); if(strict&&first){cleanup?.();cleanup=effect.callback();}
+      effects[effect.index]={deps:effect.deps,cleanup,setup:effect.callback};
+    }
+    return nodes;
+  }
+  function select(type){const nodes=render();nodes.find(node=>node.type==='select' && node.props.value && ['lead','research','code','write','data','qa'].includes(node.props.value)).props.onChange({target:{value:type}});}
+  function upload(){const nodes=render();nodes.find(node=>node.type==='input'&&node.props.type==='file').props.onChange({target:{files:[{type:'image/png',size:10}],value:'x'}});return readers.at(-1);}
+  function reset(){const nodes=render();nodes.find(node=>node.type==='button'&&node.children.includes('恢复内置图')).props.onClick();}
+  function notice(){return render().filter(node=>node.props?.role==='status').flatMap(node=>node.children).filter(value=>typeof value==='string').join(' ');}
+  function stored(){return JSON.parse(values.get('dsh-session-tree.avatar-images.v1') ?? '{}');}
+  function unmount(){if(unmounted)return;for(const effect of effects)effect?.cleanup?.();unmounted=true;mountedForTest=false;}
+  function dispose(){unmount();mountedForTest=true;globalThis.window=previousWindow;globalThis.FileReader=previousReader;}
+  return {render,select,upload,reset,notice,stored,readers,writes,unmount,dispose,updatesAfterUnmount:()=>postUnmountUpdates,setFail(value){failWrites=value;}};
+}
+const pngA = 'data:image/png;base64,iVBORw0KGgoAAAA=';
+const pngB = 'data:image/png;base64,iVBORw0KGgoAAAB=';
+const pngC = 'data:image/png;base64,iVBORw0KGgoAAAC=';
+
+test('avatar readers merge different types in either completion order', () => {
+  for(const reverse of [false,true]) {
+    const app=avatarHarness();
+    try {
+      const lead=app.upload(); app.select('code'); const code=app.upload();
+      if(reverse){code.finish(pngB);lead.finish(pngA);}else{lead.finish(pngA);code.finish(pngB);}
+      assert.deepEqual(app.stored(),{lead:pngA,code:pngB});
+      assert.ok(app.notice().includes('开发头像已保存在此浏览器'));
+    } finally {app.dispose();}
+  }
+});
+
+test('same-type latest upload and reset invalidate earlier readers', () => {
+  const app=avatarHarness();
+  try {
+    const first=app.upload(), second=app.upload(); second.finish(pngB); first.finish(pngA);
+    assert.deepEqual(app.stored(),{lead:pngB});
+    const pending=app.upload(); app.reset(); pending.finish(pngC);
+    assert.deepEqual(app.stored(),{});
+    assert.ok(app.notice().includes('组长 / 默认头像已恢复内置图'));
+  } finally {app.dispose();}
+});
+
+test('failed reset preserves committed picture but invalidates pending upload', () => {
+  const app=avatarHarness();
+  try {
+    app.upload().finish(pngA); const pending=app.upload(); app.setFail(true); app.reset(); app.setFail(false); pending.finish(pngB);
+    assert.deepEqual(app.stored(),{lead:pngA});
+    assert.ok(app.notice().includes('头像无法保存'));
+  } finally {app.dispose();}
+});
+
+test('latest errors suppress old success and failed storage never contaminates later type', () => {
+  const app=avatarHarness();
+  try {
+    const old=app.upload(), latest=app.upload(); latest.fail(); old.finish(pngA);
+    assert.deepEqual(app.stored(),{}); assert.ok(app.notice().includes('无法读取头像图片'));
+    app.setFail(true); app.upload().finish(pngA); app.setFail(false);
+    assert.deepEqual(app.stored(),{}); assert.ok(app.notice().includes('头像无法保存'));
+    app.select('code'); app.upload().finish(pngB);
+    assert.deepEqual(app.stored(),{code:pngB});
+  } finally {app.dispose();}
+});
+
+test('cross-type writes merge even before React renders again', () => {
+  const app=avatarHarness();
+  try {
+    const lead=app.upload(); app.select('code'); const code=app.upload();
+    code.finish(pngB); lead.finish(pngA);
+    assert.deepEqual(app.stored(),{code:pngB,lead:pngA});
+    const images=app.render().filter(node=>node.type==='img');
+    assert.ok(images.some(image=>image.props.src===pngA));
+  } finally {app.dispose();}
+});
+
+test('newer invalid selections, invalid image contents, and synchronous reader failures fence older work', () => {
+  const app=avatarHarness();
+  try {
+    const old=app.upload();
+    const input=app.render().find(node=>node.type==='input'&&node.props.type==='file');
+    input.props.onChange({target:{files:[{type:'image/jpeg',size:1}],value:'x'}});
+    old.finish(pngA);
+    assert.deepEqual(app.stored(),{}); assert.ok(app.notice().includes('请选择不超过 180 KB 的 PNG 图片'));
+    app.upload().finish('invalid-png');
+    assert.deepEqual(app.stored(),{}); assert.ok(app.notice().includes('头像文件不是有效的 PNG'));
+    const Previous=globalThis.FileReader; globalThis.FileReader=class {readAsDataURL(){throw Error('blocked');}};
+    try { app.upload(); assert.ok(app.notice().includes('无法读取头像图片')); } finally {globalThis.FileReader=Previous;}
+  } finally {app.dispose();}
+});
+
+test('latest operation notice stays authoritative while older different-type upload still commits', () => {
+  const app=avatarHarness();
+  try {
+    const lead=app.upload(); app.select('code'); const code=app.upload(); code.fail();
+    assert.ok(app.notice().includes('无法读取头像图片'));
+    lead.finish(pngA);
+    assert.deepEqual(app.stored(),{lead:pngA});
+    assert.ok(app.notice().includes('无法读取头像图片'));
+  } finally {app.dispose();}
+});
+
+test('single FileReader settles once and ignores later callbacks', () => {
+  const app=avatarHarness();
+  try {
+    const reader=app.upload(); reader.fail(); reader.finish(pngA);
+    assert.deepEqual(app.stored(),{}); assert.ok(app.notice().includes('无法读取头像图片'));
+    const success=app.upload(); success.finish(pngB); const writes=app.writes.length;
+    success.fail(); success.finish(pngC);
+    assert.equal(app.writes.length,writes); assert.deepEqual(app.stored(),{lead:pngB});
+    assert.ok(app.notice().includes('组长 / 默认头像已保存在此浏览器'));
+  } finally {app.dispose();}
+});
+
+test('latest image notice guarantee does not order unrelated notices', () => {
+  const app=avatarHarness();
+  try {
+    const reader=app.upload();
+    const select=app.render().find(node=>node.props?.className==='avatar-select');
+    app.setFail(true); select.props.onChange({target:{value:'code'}}); app.setFail(false);
+    assert.ok(app.notice().includes('头像偏好无法保存'));
+    reader.finish(pngA);
+    assert.ok(app.notice().includes('组长 / 默认头像已保存在此浏览器'));
+  } finally {app.dispose();}
+});
+
+test('effect replay invalidates pending work while reactivated instance accepts new work', () => {
+  const app=avatarHarness();
+  try {
+    const old=app.upload();
+    const effect=effects.find(item=>typeof item?.cleanup==='function');
+    effect.cleanup();
+    // React StrictMode setup replay is represented by re-running the captured setup.
+    effect.cleanup=effect.setup();
+    old.finish(pngA); assert.deepEqual(app.stored(),{});
+    app.upload().finish(pngB); assert.deepEqual(app.stored(),{lead:pngB});
+  } finally {app.dispose();}
+});
+
+test('unmounted or effect-replayed avatar readers cannot write afterward', () => {
+  for(const strict of [false,true]){
+    const app=avatarHarness({strict});
+    try {
+      const reader=app.upload(), before=app.writes.length; app.unmount(); reader.finish(pngA); reader.fail();
+      assert.equal(app.writes.length,before); assert.deepEqual(app.stored(),{});
+      assert.equal(app.updatesAfterUnmount(),0);
+    } finally {app.dispose();}
+  }
 });
 
 test('component omits unavailable right-sidebar action on independent main panel', () => {
