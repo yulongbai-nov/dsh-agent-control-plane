@@ -273,6 +273,9 @@ test('browser entry only needs React and host bundle is self-contained', async (
   assert.equal(manifest.exports['./client'], './client.js');
   assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml');
   assert.equal(manifest.dsh.client.platform, 'web');
+  assert.ok(manifest.files.includes('build.mjs'));
+  assert.ok(manifest.files.includes('client.template.js'));
+  assert.ok(manifest.files.includes('test'));
   assert.match(patch, /name:\s*['"]?dsh-session-tree/);
   for (const entry of ['./index.js', './client.js', './cordis.patch.yml']) await readFile(new URL('../' + entry, import.meta.url));
 });
