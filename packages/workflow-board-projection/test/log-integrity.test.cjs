@@ -30,9 +30,10 @@ test('duplicate starts or ends invalidate all matches that could be the conflict
 
 test('a later same-label start revokes an earlier seemingly unique projection', () => {
   const first = start(1,1,'A');
-  const early = project([first]);
+  const runStart = evt('run-start',0,{name:'r'});
+  const early = project([runStart,first]);
   assert.equal(early.statusByNode.a.seq,1);
-  const later = project([first,start(2,2,'A')]);
+  const later = project([runStart,first,start(2,2,'A')]);
   assert.deepEqual(Object.keys(later.statusByNode),[]);
   assert.deepEqual(later.unmatched.map((entry) => entry.reason),['ambiguous-runtime','ambiguous-runtime']);
 });

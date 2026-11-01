@@ -6,7 +6,7 @@ const ev = (type, data) => ({type:`tool-workflow/${type}`,data:{runId:'r',...dat
 const start = (seq,label,childId) => ev('agent-start',{seq,label,childId});
 const end = (seq,outcome) => ev('agent-end',{seq,outcome});
 const project = (events) => projectWorkflow({
-  runId:'r',events:events.map((event, seq) => ({...event,seq,time:100+seq})),sourceBinding:{status:'verified',runId:'r',toolCallId:'call'},
+  runId:'r',events:[ev('run-start',{name:'r'}),...events].map((event, seq) => ({...event,seq,time:100+seq})),sourceBinding:{status:'verified',runId:'r',toolCallId:'call'},
   topology:{complete:true,nodes:[{id:'b',kind:'agent',label:'B',phase:null,occurrence:'single'}]},
   layout:{nodes:[],groups:[]},
 });

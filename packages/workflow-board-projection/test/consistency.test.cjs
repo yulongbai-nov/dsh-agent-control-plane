@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { projectWorkflow: fold } = require('../index.cjs');
-const projectWorkflow = (input) => fold({...input, events:input.events.map((event, seq) => ({...event,seq,time:100+seq}))});
+const projectWorkflow = (input) => fold({...input, events:[{type:'tool-workflow/run-start',data:{runId:'r',name:'r'}},...input.events].map((event, seq) => ({...event,seq,time:100+seq}))});
 const args = () => ({runId:'r',topology:{version:1,complete:true,nodes:[{id:'a',label:'A',kind:'agent',phase:null,occurrence:'single'}]},layout:{version:1,nodes:[],groups:[]},sourceBinding:{status:'verified',runId:'r',toolCallId:'c'},events:[]});
 const event = (type,data) => ({type:`tool-workflow/${type}`,data:{runId:'r',...data}});
 

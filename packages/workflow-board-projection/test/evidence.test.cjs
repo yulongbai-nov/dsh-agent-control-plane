@@ -13,7 +13,7 @@ test('durable run-start itself is insufficient to prove current run liveness', (
 });
 
 test('source binding cannot turn invalid topology into a trustworthy unique node', () => {
-  const graph=projectWorkflow({runId:'r',topology:{nodes:[{id:'a',kind:'agent',label:'A',phase:null,occurrence:'single'}]},layout:{},sourceBinding:{status:'verified',runId:'r',toolCallId:'tool'},events:[E('agent-start',{seq:1,label:'A',childId:'c'})]});
+  const graph=projectWorkflow({runId:'r',topology:{nodes:[{id:'a',kind:'agent',label:'A',phase:null,occurrence:'single'}]},layout:{},sourceBinding:{status:'verified',runId:'r',toolCallId:'tool'},events:[E('run-start',{name:'r'}),E('agent-start',{seq:1,label:'A',childId:'c'})]});
   assert.deepEqual(graph.statusByNode,{});
   assert.equal(graph.unmatched[0].reason,'incomplete-topology');
 });
@@ -26,7 +26,7 @@ test('conflicting repeated end records cannot create an observed outcome', () =>
 });
 
 test('runtime starts with distinct children and same declared label are ambiguous across all of them', () => {
-  const graph=build([E('agent-start',{seq:1,label:'A',childId:'c1'}),E('agent-start',{seq:2,label:'A',childId:'c2'})]);
+  const graph=build([E('run-start',{name:'r'}),E('agent-start',{seq:1,label:'A',childId:'c1'}),E('agent-start',{seq:2,label:'A',childId:'c2'})]);
   assert.deepEqual(graph.statusByNode,{});
   assert.equal(graph.unmatched.length,2);
   assert.ok(graph.unmatched.every((entry)=>entry.reason==='ambiguous-runtime'));

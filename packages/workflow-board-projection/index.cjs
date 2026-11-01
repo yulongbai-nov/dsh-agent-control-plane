@@ -44,7 +44,7 @@ function projectWorkflow({ runId, topology, layout, events, parentSessionId, sou
       if (event.seq <= lastEventSeq) { malformed = true; runConflict = true; diagnostics.push({code:'INVALID_EVENT_ORDER'}); }
       lastEventSeq = event.seq;
     }
-    if (runEnd) { malformed = true; runConflict = true; diagnostics.push({code:'INVALID_RUN_ORDER'}); }
+    if (runEnd || (kind !== 'run-start' && !runStart)) { malformed = true; runConflict = true; diagnostics.push({code:'INVALID_RUN_ORDER'}); }
     const summary = { type: event.type, runId };
     if (validEventSeq(event.seq)) summary.eventSeq = event.seq;
     if (Number.isSafeInteger(event.time) && event.time >= 0) summary.time = event.time;
@@ -90,7 +90,12 @@ function projectWorkflow({ runId, topology, layout, events, parentSessionId, sou
       }
     }
   }
-  const run = { ...(runStart ? {name:runStart.name} : {}), status: !malformed && !runConflict && runEnd ? runEnd.status : 'unknown' };
+  if (runEnd && [...entries.values()].some(entry => entry.invalid || entry.starts.length !== 1 || entry.ends.length !== 1)) {
+    malformed = true;
+    runConflict = true;
+    diagnostics.push({code:'INVALID_RUN_ORDER'});
+  }
+  const run = { ...(runStart ? {name:runStart.name} : {}), status: !malformed && !runConflict && runStart && runEnd ? runEnd.status : 'unknown' };
   const invocations = [...entries.values()].sort((a,b) => a.seq-b.seq).map((entry) => {
     const first = entry.starts[0];
     const status = malformed || runConflict || entry.invalid || entry.starts.length !== 1 || entry.ends.length !== 1 ? 'unknown' : entry.ends[0];

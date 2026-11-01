@@ -55,15 +55,15 @@ test('bad sequencing on one invocation cannot claim certainty on a separate invo
 });
 
 test('real session numbering allows zero, sparse subsequences and distinct invocation seq', () => {
-  const graph=project([start(),end(7),runEnd()]);
+  const graph=project([event('run-start',0,{name:'r'}),event('agent-start',1,{seq:1,label:'A',childId:'child'}),end(7),runEnd()]);
   assert.equal(graph.run.status,'completed');
   assert.equal(graph.statusByNode.a.status,'completed');
-  assert.deepEqual(graph.events.map(({eventSeq}) => eventSeq),[0,7,20]);
+  assert.deepEqual(graph.events.map(({eventSeq}) => eventSeq),[0,1,7,20]);
 });
 
 test('malformed foreign-run events do not taint a well-formed run', () => {
   const foreign={...end(undefined),data:{runId:'foreign',seq:1,outcome:'completed'}};
-  const graph=project([start(),foreign,end(3),runEnd()]);
+  const graph=project([event('run-start',0,{name:'r'}),event('agent-start',1,{seq:1,label:'A',childId:'child'}),foreign,end(3),runEnd()]);
   assert.equal(graph.run.status,'completed');
   assert.equal(graph.statusByNode.a.status,'completed');
   assert.ok(!graph.diagnostics.some(({code})=>code==='INVALID_EVENT_SEQ'));
