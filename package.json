@@ -8,7 +8,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs packages/session-tree/test/*.test.mjs packages/task-title/test/*.test.js packages/workflow-topology/test/*.test.mjs",
+    "test": "node --test test/*.test.mjs packages/session-tree/test/*.test.mjs packages/task-title/test/*.test.js packages/workflow-topology/test/*.test.mjs packages/workflow-board-projection/test/*.test.cjs packages/workflow-board-client/test/*.test.mjs packages/sandbox-smoke/test/*.test.mjs",
     "test:workflow": "node --test packages/workflow-topology/test/*.test.cjs packages/workflow-topology/test/*.test.mjs",
     "compat": "node scripts/runtime-compat.mjs"
   }
