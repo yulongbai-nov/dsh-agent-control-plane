@@ -101,9 +101,9 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
     const parent = state.leadState.get(lead), data = state.childState.get(child);
     return active && parent && data && state.leads.get(parent.id) === lead && state.children.get(data.id) === child && data.lead === lead;
   };
-  const candidateCurrent = (parent, data, task, item, lead) => {
+  const candidateCurrent = (parent, data, task, lead) => {
     if (parent.tasks.get(task.id) !== task || task.ownerId !== data.id || task.status !== 'in_progress' ||
-        task.seq <= (item.messageCut ?? -1) || task.seq <= (item.invalidationCut ?? -1) || item.blockedLead === lead) return false;
+        task.seq <= (data.messageCut ?? -1) || task.seq <= (data.invalidationCut ?? -1) || data.blockedLead === lead) return false;
     let count = 0;
     for (const value of parent.tasks.values()) if (value.ownerId === data.id && value.status === 'in_progress' && ++count > 1) return false;
     return count === 1;
@@ -131,9 +131,9 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
       const task = candidates.length === 1 ? candidates[0] : undefined;
       const previousTask = existing?.selected;
       const changed = task !== previousTask;
-      // Synthetic watermarks fence exact task versions that existed at message/invalidation time.
-      const olderThanMessage = task !== undefined && task.seq <= (existing?.messageCut ?? -1);
-      const explicitlyInvalidated = task !== undefined && (existing?.blockedLead === lead || task.seq <= (existing?.invalidationCut ?? -1));
+      // Host-private, exact-child watermarks outlive a model handoff, not the child identity.
+      const olderThanMessage = task !== undefined && task.seq <= (data.messageCut ?? -1);
+      const explicitlyInvalidated = task !== undefined && (data.blockedLead === lead || task.seq <= (data.invalidationCut ?? -1));
       if (task === undefined || data.title?.kind === 'user' || olderThanMessage || explicitlyInvalidated) {
         if (existing) {
           if (existing.kind === 'task' && (changed || data.title?.kind === 'user' || olderThanMessage || explicitlyInvalidated)) supersede(child);
@@ -157,12 +157,12 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
       const promise = Promise.resolve().then(async () => {
         if (!active || controller.signal.aborted || item.revision !== revision || !alive(lead, child) ||
             !state.authorized() || state.authorizationEpoch() !== authorizationEpoch || !parent.valid || cut !== parent.high ||
-            data.title?.kind === 'user' || !candidateCurrent(parent, data, task, item, lead)) return;
+            data.title?.kind === 'user' || !candidateCurrent(parent, data, task, lead)) return;
         const title = await generate(Object.freeze({ subject: task.subject, taskId: task.id, revision: task.revision, signal: controller.signal }));
         // All checks and the synthetic state mutation below are synchronous; no callback or await may intervene.
         if (!active || controller.signal.aborted || item.revision !== revision || !alive(lead, child) || !state.authorized() ||
             state.authorizationEpoch() !== authorizationEpoch || !parent.valid || parent.high !== observedHigh || cut !== parent.high || data.title?.kind === 'user' ||
-            !candidateCurrent(parent, data, task, item, lead) || !nonempty(title)) return;
+            !candidateCurrent(parent, data, task, lead) || !nonempty(title)) return;
         data.title = { kind: 'task', title: title.trim(), taskId: task.id, revision: task.revision };
         attempt.status = 'committed';
       }).catch(() => {}).finally(() => {
@@ -182,7 +182,7 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
       if (!active || !data || !alive(data.lead, child) || typeof generateMessage !== 'function') throw new Error('invalid synthetic message work');
       if (!state.authorized()) return unauthorized;
       const authorizationEpoch = state.authorizationEpoch();
-      itemFor(child).messageCut = state.leadState.get(data.lead).high;
+      data.messageCut = state.leadState.get(data.lead).high;
       const item = supersede(child, 'message'), revision = item.revision;
       item.kind = 'message';
       const controller = new AbortController(); item.controller = controller;
@@ -213,10 +213,9 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
         if (data.disposed && work.has(child)) { supersede(child, 'invalidate'); work.delete(child); }
         return;
       }
-      const item = itemFor(child);
       const parent = state.leadState.get(data.lead);
-      if (parent && state.leads.get(parent.id) === data.lead) item.invalidationCut = parent.high;
-      else item.blockedLead = data.lead; // No trustworthy cut: fail closed for this exact lead lifecycle.
+      if (parent && state.leads.get(parent.id) === data.lead) data.invalidationCut = parent.high;
+      else data.blockedLead = data.lead; // No trustworthy cut: fail closed for this exact lead lifecycle.
       supersede(child, 'invalidate');
     }); },
     idle() { return transact(async () => { while (inFlight.size) await Promise.allSettled([...inFlight]); }); },

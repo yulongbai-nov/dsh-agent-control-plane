@@ -844,6 +844,123 @@ test('persistent failure waits for each explicit observe without a tight loop', 
   assert.equal(host.title(child), undefined);
 });
 
+test('message fence survives synthetic service disposal and re-registration', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const first = createModel(host); first.message(child, async () => 'Newer message'); await first.idle();
+  await first.dispose(); const second = createModel(host); second.observe(lead); await second.idle();
+  assert.deepEqual(host.title(child), { kind: 'message', title: 'Newer message' });
+});
+
+test('failed or uncommitted messages still fence old tasks across service handoff', async () => {
+  for (const mode of ['failure', 'pending']) {
+    const host = createSyntheticHost(); const { lead, child } = ready(host); const gate = deferred();
+    const first = createModel(host);
+    first.message(child, async () => {
+      if (mode === 'failure') throw new Error('synthetic generator failed');
+      await gate.promise; return 'Too late';
+    });
+    await settle(); const closing = first.dispose(); gate.resolve(); await closing;
+    const second = createModel(host); second.observe(lead); await second.idle();
+    assert.equal(host.title(child), undefined, mode);
+  }
+});
+
+test('invalidation fence survives synthetic service disposal and re-registration', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const first = createModel(host); first.invalidate(child); await first.dispose();
+  const second = createModel(host); second.observe(lead); await second.idle();
+  assert.equal(host.title(child), undefined);
+});
+
+test('revocation and regrant cannot clear same-child fence during handoff', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const first = createModel(host); first.invalidate(child); host.setAuthorized(false); await first.dispose();
+  const second = createModel(host); second.observe(lead); host.setAuthorized(true); second.observe(lead); await second.idle();
+  assert.equal(host.title(child), undefined);
+});
+
+test('both fences remain monotonic across repeated service handoffs', async () => {
+  for (const kind of ['message', 'invalidate']) {
+    const host = createSyntheticHost(); const { lead, child } = ready(host);
+    const first = createModel(host);
+    if (kind === 'message') first.message(child, async () => 'First'); else first.invalidate(child);
+    await first.idle(); await first.dispose();
+    host.task(lead, { id: 'task', revision: 3, ownerId: 'child', status: 'in_progress', subject: 'Later' });
+    const second = createModel(host);
+    if (kind === 'message') second.message(child, async () => 'Second'); else second.invalidate(child);
+    await second.idle(); await second.dispose();
+    const third = createModel(host); third.observe(lead); await third.idle();
+    assert.deepEqual(host.title(child), kind === 'message' ? { kind: 'message', title: 'Second' } : undefined, kind);
+    host.task(lead, { id: 'task', revision: 4, ownerId: 'child', status: 'in_progress', subject: 'Newest' });
+    third.observe(lead); await third.idle(); assert.equal(host.title(child)?.title, 'Newest', kind);
+  }
+});
+
+test('new task revision after service handoff is not blocked by the old message fence', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const first = createModel(host); first.message(child, async () => 'Message'); await first.idle(); await first.dispose();
+  host.task(lead, { id: 'task', revision: 3, ownerId: 'child', status: 'in_progress', subject: 'New task' });
+  const second = createModel(host); second.observe(lead); await second.idle();
+  assert.deepEqual(host.title(child), { kind: 'task', title: 'New task', taskId: 'task', revision: 3 });
+});
+
+test('user pin remains protected across synthetic service handoff', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const first = createModel(host); first.rename(child, 'Pinned'); await first.dispose();
+  const second = createModel(host); second.observe(lead); await second.idle();
+  assert.deepEqual(host.title(child), { kind: 'user', title: 'Pinned' });
+});
+
+test('same child id recreated after handoff does not inherit a prior synthetic fence', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const first = createModel(host); first.invalidate(child); await first.dispose(); host.disposeChild(child);
+  const replacement = host.createChild('child', lead);
+  const second = createModel(host); second.observe(lead); await second.idle();
+  assert.equal(host.title(replacement)?.title, 'Task A');
+});
+
+test('same lead id recreated after handoff does not bind the old child fence', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const first = createModel(host); first.invalidate(child); await first.dispose();
+  host.disposeLead(lead); host.disposeChild(child);
+  const nextLead = host.createLead('lead'), nextChild = host.createChild('child', nextLead);
+  host.task(nextLead, { id: 'task', revision: 1, status: 'pending', subject: 'New' });
+  host.task(nextLead, { id: 'task', revision: 2, ownerId: 'child', status: 'in_progress', subject: 'New' });
+  const second = createModel(host); second.observe(nextLead); await second.idle();
+  assert.equal(host.title(nextChild)?.title, 'New');
+});
+
+test('explicitly invalidating an already idle disposed child cannot disturb its replacement', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let signal;
+  const model = createModel(host, { generate: async (input) => {
+    if (input.revision === 3) { signal = input.signal; await gate.promise; }
+    return input.subject;
+  } });
+  model.observe(lead); await model.idle();
+  assert.equal(host.title(child)?.title, 'Task A');
+  host.disposeChild(child); const replacement = host.createChild('child', lead);
+  host.task(lead, { id: 'task', revision: 3, ownerId: 'child', status: 'in_progress', subject: 'New' });
+  model.observe(lead); await settle(); model.invalidate(child);
+  assert.equal(signal.aborted, false);
+  gate.resolve(); await model.idle();
+  assert.deepEqual(host.title(replacement), { kind: 'task', title: 'New', taskId: 'task', revision: 3 });
+  assert.equal(host.title(child)?.title, 'Task A');
+});
+
+test('noncooperative old work blocks handoff until it actually settles', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let signal;
+  const first = createModel(host, { generate: async (input) => { signal = input.signal; await gate.promise; return input.subject; } });
+  first.observe(lead); await settle(); first.invalidate(child);
+  let closed = false; const closing = first.dispose().then(() => { closed = true; });
+  await settle(); assert.equal(signal.aborted, true); assert.equal(closed, false);
+  assert.throws(() => createModel(host), /already owned/);
+  gate.resolve(); await closing;
+  const second = createModel(host); second.observe(lead); await second.idle();
+  assert.equal(host.title(child), undefined);
+});
+
 test('service closing blocks replacement until pending work quiesces', async () => {
   const host = createSyntheticHost(); const { lead } = ready(host);
   const gate = deferred(); const first = createModel(host, { generate: async ({ subject }) => { await gate.promise; return subject; } });
