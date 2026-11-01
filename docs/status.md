@@ -6,7 +6,7 @@
 |---|---|---|---|
 | R1 递归团队 | 无团队实现包 | [原始深度调研](../../dsh-mocks/research/depth.md)是现状分析，不是本仓库实现或验收 | 未开始：团队 L0–L3、L4 类型化拒绝及恢复未实现 |
 | R2 团队级深度 | [Agent Spec 预检](../packages/agent-spec/README.md)只输出 unknown | `node --test packages/agent-spec/test/*.test.mjs` 合成字段能力测试；不得将 `subagentDepth` 当相对预算 | 原型：没有团队范围设置与覆盖多条路径的原子门禁 |
-| R3 手动建队 | [TeamService 接缝研究](../packages/team-control-spike/README.md) | `test/rc5.baseline.cjs` 用真实服务和内存替身验证字段未透传；不是完整 Host 或 UI | 原型：成员、模型、工具集选择及真实 roster 写入尚未扩展 |
+| R3 手动建队 | [TeamService 接缝研究](../packages/team-control-spike/README.md) | 历史试验曾用安装版服务和内存替身观察字段未透传，但运行时未强制校验组件身份，非当前版本保证；不是完整 Host 或 UI | 原型：成员、模型、工具集选择及真实 roster 写入尚未扩展 |
 | R4 自动建队 | 无团队实现包 | 尚无自动角色建议或一键创建的实现测试 | 未开始：建议、确认、撤销和权限未实现 |
 | R5 归档与唤醒 | [Team 门禁参考模型](../packages/team-control-spike/README.md) | `node --test packages/team-control-spike/test/gate.test.cjs` 验证单 owner 内存模型，不接原生服务 | 原型：显式消息拒绝、同 ID 唤醒及持久恢复没有接入；隐藏不等于归档 |
 | R6 Agent Spec | [Agent Spec 预检](../packages/agent-spec/README.md) | `node --test packages/agent-spec/test/*.test.mjs`；静态子集的结果仍是 unknown | 原型：未接 Team/workflow、工具集、授权或递归预算，未知后端不透传 |
