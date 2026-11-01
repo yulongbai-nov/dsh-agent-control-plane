@@ -17,7 +17,9 @@ unsubscribe()
 
 有记录时，`read` 和 `observe` 返回冻结的 `{version:1,state,revision,sessionId,runId,sourceStatus:'unverified',hasStart,startEventSeq,lastEventSeq,observedOutcome,lifecycle}`：事件引用是来源记录 seq；`startEventSeq:null` 表示未知；`observedOutcome` 是传入的 end 声称（没有 end 时为 null），不代表真实终态或已落盘。revision 只属于这个进程内的这个 run，按实际变化增一，不能跨重启比较；无记录返回 `{state:'unknown'}`。记录仅保存这些原始值及用来检测重放冲突的 start/end 白名单事件，不接受脚本、prompt、参数、名称、标签、模型、`sourceBinding`/`verified` 等字段。尽管不保存正文，session/run ID 与事件序号仍是敏感元数据，调用方应限制展示与披露。`sourceStatus:'unverified'` 始终与 lifecycle 分离，不能升级为 verified。
 
-`subscribe(key, listener)` 精确过滤两个键，watch 只在状态原子提交之后按 revision 顺序同步通知 `{sessionId,runId,revision}`，快照/通知均冻结；异常及异步 rejection 被消费，取消可重复调用。同步通知期间任何 `observe` 均抛出 `REENTRANT`（包括不同 run），以防一个监听器自触发递归扰乱顺序；监听器应排队后处理，并自行处理被拒绝的写入。异步回调/其它闭包仍能耗时、访问全局或稍后重入，本组件不提供沙箱、隔离或背压。订阅后读取一次 revision，丢通知/重连时重读；不存在跨进程保证。每份订阅各自取消，运行中已取消的订阅不会再收到当前通知。
+`subscribe(key, listener)` 只接受**受信的同步监听器**：监听器负责自行处理所有异步工作及其 rejection，不得依赖本组件捕获返回值；普通同步抛错与其他监听器隔离。watch 精确过滤两个键，仅在内存状态提交之后按 revision 顺序同步通知 `{sessionId,runId,revision}`，快照/通知均冻结；取消可重复调用。
+
+为兼容意外返回的普通原生 Promise，代码用加载时捕获的原生 `Promise.prototype.then` 尽力附加 rejection handler；这并非安全保证：真实 Promise 的 `constructor` 或 `Symbol.species` 可抛错，甚至返回恶意构造器或生成新的未处理 rejection；Promise 代理无法被识别为原生 Promise。在这些情况下附 handler 可能失败或引发不受控后果，未处理 rejection 可能终止进程。不会读取/执行普通 thenable 的 `then`，也不安装全局异常处理、不修改调用方对象。测试中的恶意 Promise 在隔离子进程内证实了上述限制。同步通知期间任何 `observe` 均抛出 `REENTRANT`（包括不同 run），以防一个监听器自触发递归扰乱顺序；监听器应排队后处理，并自行处理被拒绝的写入。即使是同步监听器也能耗时、访问全局或安排后续重入，本组件不提供沙箱、隔离或背压。订阅后读取一次 revision，丢通知/重连时重读；不存在跨进程保证。每份订阅各自取消，运行中已取消的订阅不会再收到当前通知。
 
 函数输入只接受无代理、无 accessor 的 plain/null-prototype 记录及有限原始标量；键和序号会一次验证并复制，避免 getter/proxy 和可变引用。`maxRuns` 上限 1,024、`maxListeners` 32（可以下调），ID 最长 256 UTF-16 code units；到达上限显式 `LIMIT`。限额不能替代 caller 授权或过程隔离。`read(key)` 和 `subscribe(key, ...)` **不检查用户、工作区或会话授权**：只供已授权同进程 host 内部使用，不可直接暴露工具、Remote 或客户端。
 

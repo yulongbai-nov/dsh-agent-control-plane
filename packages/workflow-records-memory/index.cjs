@@ -1,5 +1,8 @@
 'use strict';
-const {types:{isProxy}}=require('node:util');
+const {types:{isProxy,isPromise}}=require('node:util');
+const call=Function.call.bind(Function.call);
+const promiseThen=Promise.prototype.then;
+const ignoreRejection=()=>{};
 const codeError=(code)=>Object.assign(new Error(code),{code});
 const invalid=()=>{throw codeError('INVALID_INPUT');};
 const record=(input,allowed,required=allowed)=>{
@@ -69,11 +72,17 @@ function createMemoryRecords(options){
     try {
       for(const registration of [...listeners]) {
         if(!listeners.has(registration) || registration.key.sessionId!==key.sessionId || registration.key.runId!==key.runId) continue;
-        try {Promise.resolve(registration.listener(notice)).catch(()=>{});} catch {}
+        try {
+          const returned=registration.listener(notice);
+          // Compatibility only: then may run hostile constructor/species code and throw.
+          // Listeners are trusted and must handle their own asynchronous work.
+          if(isPromise(returned)) call(promiseThen,returned,undefined,ignoreRejection);
+        } catch {}
       }
     } finally {notifying=false;}
     return snapshot;
   };
+  // Trusted synchronous listener only; any async work must catch its own errors.
   const subscribe=(rawKey,listener)=>{
     const key=keyOf(rawKey);
     if(typeof listener!=='function'||isProxy(listener)) invalid();

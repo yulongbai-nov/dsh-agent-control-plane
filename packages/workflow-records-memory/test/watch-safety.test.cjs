@@ -25,7 +25,7 @@ test('only matching session/run subscribers receive notices',()=>{
  assert.equal(a.length,1);assert.equal(b.length,1);
 });
 
-test('listener throws and asynchronous rejection do not affect committed state',async()=>{
+test('synchronous throw is isolated and ordinary rejection is consumed best-effort',async()=>{
  const records=createMemoryRecords();
  records.subscribe(key,()=>{throw new Error('bad');});
  records.subscribe(key,()=>Promise.reject(new Error('bad async')));
@@ -59,12 +59,12 @@ test('unsubscribed listener in current dispatch is not invoked after teardown',(
  assert.deepEqual(calls,['first']);
 });
 
-test('thenable result cannot reenter after notification silently via its getter',async()=>{
- const records=createMemoryRecords();const attempted=[];
- records.subscribe(key,()=>({get then(){try{records.observe(key,end);}catch(e){attempted.push(e.code);} return undefined;}}));
- records.observe(key,start);
- assert.deepEqual(attempted,['REENTRANT']);
- assert.equal(records.read(key).revision,1);
+test('listener return thenables are not observed or executed as input',()=>{
+ const records=createMemoryRecords();let effects=0;
+ const thenable={get then(){effects++;throw Error('untrusted thenable');}};
+ records.subscribe(key,()=>thenable);
+ assert.equal(records.observe(key,start).revision,1);
+ assert.equal(effects,0);
 });
 
 test('two subscriptions of the same callback have independent lifetimes',()=>{
