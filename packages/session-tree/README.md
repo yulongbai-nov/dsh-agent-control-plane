@@ -8,7 +8,7 @@ Community plugin, not affiliated with DeepSeek Harness.
 
 - 用根作用域 `useSessions` / `useSessionStatus` / `useWorkspaces` 展示根会话、当前目录投影和归档状态。每次展开调用 `ctx.sessions.refreshProjections(id)`；只请求被展开的层。子节点按各层 `values.subagentCatalog` 构建，打开时给 `ctx.uiWorkspace.openSession({parentSessionId, childSessionId, mode})` 传该层**直接**父 ID。收起父节点时只清理当前可见且允许展开的已展开后代，不穿过歧义、迁移、unknown/external 等不可展开边界，也不影响其他根；不可见或受阻节点遗留的展开状态保留，未来目录恢复后可能重新出现。再次进入主面板保留当前展开状态。
 - 会话列表/投影由 rc.5 共享 store 实时更新；根列表删除后不再显示，目录成员由宿主目录为准，**不假定**可从摘要是否缺席推断子节点被删除。归档 ID 来自 Workspace 集合，显示为归档并禁止打开，与原生 Workspace 浏览器一致。缺少可靠运行基线的目录 fallback 行显示「状态未知」，不把未知当作完成或空闲；正常结束状态只在有可用运行基线和 `subagentTiming.lastTurnCompleted` 时显示。此处的归档是 Workspace Session 归档，不是尚未实现的 Team 成员归档。
-- 非歧义的 migration-required 节点可打开但不可展开；external 条目不可导航；目录读取失败提供重试。`idle` 的空目录只是可能过期的缓存提示，仍可展开以读取；只有状态为 `ready` 且目录明确为空时才视为叶子。`idle` 且无目录按未加载处理；缓存的非空目录仍可显示。已请求但宿主仍无响应时显示加载中并保留重试入口；`ready` 但无目录显示投影不可用，不伪装成空列表。已存在的投影若状态缺失或无效则提示「目录状态未知」并可重试，不把空缓存当作确定叶子，也不展示或导航其缓存子项；缓存仍参与保守冲突预扫，状态恢复为 `ready` 后重新显示。已知 `idle` 非空、`loading` 和 `error` 的缓存显示行为不变；无论缓存状态如何，宿主仍负责最终身份与权限验证。`refreshProjections()` 在宿主内部会合并 in-flight 请求，重试不会强制中断卡住的请求。
+- 非歧义的 migration-required 节点可打开但不可展开；external 条目不可导航；目录读取失败提供重试。`idle` 的空目录只是可能过期的缓存提示，仍可展开以读取；只有状态为 `ready` 且目录明确为空时才视为叶子。`idle` 且无目录按未加载处理；缓存的非空目录仍可显示。已请求但宿主仍无响应时显示加载中并保留重试入口；`ready` 但无目录显示投影不可用，不伪装成空列表。已存在的投影若状态缺失或无效则提示「目录状态未知」并可重试，不把空缓存当作确定叶子，也不展示或导航其缓存子项；缓存仍参与保守冲突预扫，状态恢复为 `ready` 后重新显示。已知 `idle` 非空、`loading` 和 `error` 的缓存显示行为不变；无论缓存状态如何，宿主仍负责最终身份与权限验证。`refreshProjections()` 在宿主内部会合并 in-flight 请求，重试不会强制中断卡住的请求；面板为每个可见节点的刷新与重试跟踪当前意图，收起时撤销相应当前可见非歧义行的错误意图而不取消宿主请求，过期结果不覆盖新意图。面板刷新调用在微任务中发起，尚未发出的旧意图会跳过；这些竞态仅用替身模拟，不声称 rc.5 已发生该问题或验证真实 React 时序。
 - 在当前快照中，从可见根沿已缓存的已知模式目录预扫（包括尚未展开的目录，不触发新加载）；同父重复、跨父重复、根 ID 又作为子 ID 或祖先环被标为「身份存在歧义」，受影响行不能导航、展开或修改共享头像偏好。错误/加载态保留的旧目录也保守参与冲突检查，可能产生暂时性误报，并不证明当前真实身份有冲突；后续快照更新时重新计算。未加载或无法到达的目录不在检查范围，因此无提示**不等于**全局唯一或已授权；宿主仍负责身份、权限与导航校验。行键独立于 session ID，用于区分重复出现位置和键盘焦点。按 session ID 索引的摘要、目录、错误和本地偏好只读取自身属性，特殊名称如 `__proto__` 不借用原型值；自身 getter 仍按原规则读取，本面板不保证抵御恶意 getter、Proxy 或受破坏的运行环境，也不声称宿主会产生此类 ID。
 - 仅本原型的保守策略：子目录条目的模式为 unknown、缺失或无效时不导航、不展开并提示「模式未知」。rc.5 官方允许使用 unknown 地址打开只读历史，并在获取身份前禁用续聊；本原型的额外限制不声称是官方硬约束。unknown/external 行仍可修改按 ID 保存的本地头像偏好，只有身份歧义行禁用该选择。
 - 六张内置头像来自已提供的 mock。手动选择单会话类型优先，其次按可能可见的 role、agentPreset、标题关键词推断，未知回退组长图；不会声称 rc.5 目前对所有会话暴露 Agent Spec、工具集或模型。可在面板选择本地 PNG 替换某个类型（≤180 KB，建议 144×144），也可恢复默认；会话类型和自定义图片存在**当前浏览器 localStorage**，清除站点数据会丢失，不与其他设备同步。存储不可用/满时提示且不伪报保存成功。同一组件实例中，不同类型的异步成功写入合并，同类型以后一次选图或重置为准；即使新操作读/写失败，旧 pending 也不会复活，失败重置保留此前已保存头像。卸载后迟到的读取不再写存储或状态。头像操作之间以最新意图决定状态提示；会话打开、刷新或头像偏好等其他通知不参与此顺序，可能被迟到的有效头像提示覆盖。跨组件实例、标签页及其他进程不做同步或冲突保证；StrictMode 只用替身模拟 effect 清理/重挂载，真实 GUI 尚未验证。
@@ -26,15 +26,15 @@ node --test packages/session-tree/test/*.test.mjs
 
 从本目录执行也可以：`npm test`。修改 `client.template.js` 或 `avatars/*.png` 后执行 `node packages/session-tree/build.mjs` 生成 `client.js`，再运行检查。原图是可编辑资源，生成产物把它们嵌入 ModuleLoader 单 JS，避免假设 profile 包的静态资源有公开 URL；`--check` 对比生成字节，防止模板与入口不一致。正式分发只需 package.json `files` 中列出的运行产物。
 
-Host 侧已有只读冒烟：使用本机安装版 Electron 的 `ELECTRON_RUN_AS_NODE=1` 和 app.asar 内 Cordis，`new Context().plugin(await import('./index.js'))` 成功。测试通过真实的 `client.js` ModuleLoader factory，但 React hooks 和宿主服务是测试替身，不等价于真实宿主端到端测试。rc.5 `uiWorkspace.openSession` 返回 `void`，内部负责导航和历史加载；插件可提示同步异常，测试中的 Promise 拒绝处理仅为防御其他实现，**不能保证捕获 rc.5 内部异步失败**。注册、会话导航、权限错误和 UI 样式仍须经用户批准后在真实 GUI 实测。
+Host 侧已有只读冒烟：使用本机安装版 Electron 的 `ELECTRON_RUN_AS_NODE=1` 和 app.asar 内 Cordis，`new Context().plugin(await import('./index.js'))` 成功。测试通过真实的 `client.js` ModuleLoader factory，但 React hooks 和宿主服务是测试替身，不等价于真实宿主端到端测试。rc.5 `uiWorkspace.openSession` 返回 `void`，内部负责导航和历史加载；插件可提示同步异常，测试中的 Promise 拒绝处理仅为防御其他实现，**不能保证捕获 rc.5 内部异步失败**。注册、会话导航、权限错误和 UI 样式仍需真实 GUI 验证；只能在先证明安全隔离且用户批准的独立环境验收，不使用既有 GUI 或真实 profile。
 
-`package.json` 遵循已安装 rc.5 插件的 `dsh.bundle.patch`、`dsh.client.inject`、`exports["./client"]` 和浏览器 `window.__ModuleLoader__.load` 约定。host `apply` 空实现；browser 唯一 `require` 是 host 注入的 `react`。版本门故意限定 rc.5，不使用兼容豁免。本任务没有安装包、改 profile/app.asar 或提交。以后若用户明确批准安装，才可按本机官方插件管理器的 `file:` 方案安装，并在已有 GUI 重启/刷新后手动验证，不承诺热更新。
+`package.json` 遵循已安装 rc.5 插件的 `dsh.bundle.patch`、`dsh.client.inject`、`exports["./client"]` 和浏览器 `window.__ModuleLoader__.load` 约定。host `apply` 空实现；browser 唯一 `require` 是 host 注入的 `react`。版本门故意限定 rc.5，不使用兼容豁免。原型已提交、未安装，也未改真实 profile/app.asar。未来 GUI 验收仅在先证明安全隔离且用户批准的独立环境进行，不使用既有 GUI 或真实 profile；不承诺热更新。
 
 ### 主题和语言的实际依赖
 
 - 运行时需要 rc.5 的官方 `locale` 服务和 `--dsw-alias-*` 主题变量；manifest 的 `dsh.client.inject` 用于激活排序，客户端 `inject` 要求对应服务可用。插件按官方协议在所属 `ctx.effect` 注册中英字典并在卸载时释放，主面板通过 slot 的 `locale` 注入翻译函数；侧栏标签用 `locale.bind` 动态读取。宿主会话标题、模型和宿主错误是外部数据，不由插件翻译。
 - CSS 仅引用安装版 rc.5 已存在的语义 alias（焦点使用 `brand-primary`、状态分别使用 `state-idle/business/success/warn-primary`），透明及继承不是固定色；没有颜色 fallback。组件内 `<style>` 随面板卸载，不修改全局样式。缺少官方主题或未来 token 改名会导致样式缺失，不能用单测证明两种主题的对比度或布局一致性。
-- 测试使用与 rc.5 协议对应的 locale/slot 替身，覆盖中英渲染、重新注册及卸载，不等同于真实 GUI 的实时语言切换验证。受本任务“不安装、不改 profile”的限制，现有 GUI 无法加载此改动；浅/深色与 Plugin Manager 并排、Tab/方向键/屏幕阅读器、切语言和控制台 slot crash 检查均待用户批准安装后在现有 GUI 完成。
+- 测试使用与 rc.5 协议对应的 locale/slot 替身，覆盖中英渲染、重新注册及卸载，不等同于真实 GUI 的实时语言切换验证。受本任务“不安装、不改 profile”的限制，现有 GUI 无法加载此改动；浅/深色与 Plugin Manager 并排、Tab/方向键/屏幕阅读器、切语言和控制台 slot crash 均未验证，须在先证明安全隔离且用户批准的独立环境检查，不使用既有 GUI 或真实 profile。
 
 ## 真侧栏树：CR-003 决策与差距
 

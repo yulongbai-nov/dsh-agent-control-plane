@@ -216,6 +216,13 @@ window.__ModuleLoader__.load({
       const [notice, setNotice] = React.useState(null);
       const [focusKey, setFocusKey] = React.useState(null);
       const treeRef = React.useRef(null);
+      const lifecycle = React.useRef({ active: false, generation: 0 });
+      const refreshIntents = React.useRef(new Map());
+      React.useLayoutEffect(() => {
+        const current = lifecycle.current;
+        current.active = true;
+        return () => { current.active = false; current.generation++; refreshIntents.current.clear(); };
+      }, []);
       const imageOperations = React.useRef(null);
       if (!imageOperations.current) imageOperations.current = { images, versions: new Map(), notice: 0, active: false };
       React.useEffect(() => {
@@ -226,21 +233,44 @@ window.__ModuleLoader__.load({
       const rows = buildRows(list, expanded, new Set(archivedIds ?? []), statuses);
       const tabStop = rows.some(item => item.rowKey === focusKey) ? focusKey : rows[0]?.rowKey;
 
-      function fail(id, error) { setFailures(current => ({ ...current, [id]: error?.message ?? String(error) })); }
-      function clearFailure(id) { setFailures(current => { const next = { ...current }; delete next[id]; return next; }); }
+      function clearFailures(ids) {
+        setFailures(current => { const next = { ...current }; for (const id of ids) delete next[id]; return next; });
+      }
+      function trackRefresh(id, operation) {
+        const token = Symbol(), current = lifecycle.current, generation = current.generation;
+        const valid = () => current.active && current.generation === generation && refreshIntents.current.get(id) === token;
+        refreshIntents.current.set(id, token);
+        clearFailures([id]);
+        const result = Promise.resolve().then(() => { if (valid()) return operation(); });
+        result.then(() => {
+          if (valid()) refreshIntents.current.delete(id);
+        }, error => {
+          if (valid()) {
+            refreshIntents.current.delete(id);
+            setFailures(previous => ({ ...previous, [id]: error?.message ?? String(error) }));
+          }
+        }).catch(() => {});
+      }
       function toggle(row) {
         if (!row.expandable) return;
         const next = new Set(expanded);
-        clearFailure(row.id);
-        const operation = toggleBranch(row, next, refreshProjection, rows);
+        // Apply the same visible-only Set updates without issuing a host request yet.
+        toggleBranch(row, next, () => undefined, rows).catch(() => {});
+        if (row.expanded) {
+          const closed = new Set([...expanded].filter(id => !next.has(id)));
+          const index = rows.findIndex(candidate => candidate.rowKey === row.rowKey);
+          for (let i = index + 1; i < rows.length && rows[i].level > row.level; i++) {
+            if (!rows[i].ambiguous) closed.add(rows[i].id);
+          }
+          for (const id of closed) refreshIntents.current.delete(id);
+          clearFailures(closed);
+        } else trackRefresh(row.id, () => retryBranch(row.id, refreshProjection));
         expansion.clear();
         for (const id of next) expansion.add(id);
         setExpanded(next);
-        operation.catch(error => fail(row.id, error));
       }
       function retry(id) {
-        clearFailure(id);
-        retryBranch(id, refreshProjection).catch(error => fail(id, error));
+        trackRefresh(id, () => retryBranch(id, refreshProjection));
       }
       function navigate(row) {
         const target = navigationTarget(row);

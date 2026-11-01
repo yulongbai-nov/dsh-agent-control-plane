@@ -64,6 +64,13 @@ function mockLocale() {
     }
   };
 }
+function commitMockEffects() {
+  for (const effect of pendingEffects) {
+    effects[effect.index]?.cleanup?.();
+    effects[effect.index]={deps:effect.deps,cleanup:effect.callback(),setup:effect.callback,layout:effect.layout};
+  }
+  pendingEffects=[];
+}
 function applyPlugin(ctx) {
   const effects = [];
   ctx.locale ??= mockLocale();
@@ -281,7 +288,7 @@ test('idle cached empty catalogs can expand, refresh and become authoritative', 
 });
 
 test('disclosure UI refreshes an idle cached empty root without preloading', async () => {
-  states = []; stateIndex = 0;
+  states = []; effects = []; pendingEffects = []; stateIndex = 0;
   const list = baseList(), calls = [];
   list.projectionsBySession.root = { state: 'idle', error: null, values: { subagentCatalog: [] } };
   let registration;
@@ -291,7 +298,7 @@ test('disclosure UI refreshes an idle cached empty root without preloading', asy
     uiWorkspace: { openSession() {} }
   });
   const props = { ...registration.options.inject(), useSessions: selector => selector(list), useSessionStatus: selector => selector(new Map()), useWorkspaces: selector => selector({ archivedSessionIds: [] }) };
-  function render() { stateIndex = 0; return registration.component(props); }
+  function render() { stateIndex = 0; pendingEffects=[]; const node=registration.component(props);commitMockEffects();return node; }
   function flatten(node) { return node && typeof node === 'object' ? [node, ...(node.children ?? []).flat(Infinity).flatMap(flatten)] : []; }
   let elements = flatten(render());
   const root = elements.find(node => node.props?.['data-session-id'] === 'root');
@@ -303,6 +310,183 @@ test('disclosure UI refreshes an idle cached empty root without preloading', asy
   elements = flatten(render());
   assert.deepEqual(calls, ['root']);
   assert.ok(elements.some(node => node.props?.['data-session-id'] === 'a'));
+});
+
+function refreshHarness({refresh, strict=false}={}) {
+  states=[];effects=[];pendingEffects=[];stateIndex=0;mountedForTest=true;postUnmountUpdates=0;
+  let registration;
+  applyPlugin({slots:{inject(_name,callback){callback();},register(options,component){if(options.name==='main')registration={options,component};}},sessions:{refreshProjections:refresh,refresh(){}},uiWorkspace:{openSession(){}}});
+  const list=baseList(),actions=registration.options.inject();
+  list.projectionsBySession.root={state:'loading',values:{subagentCatalog:[child('a')]}};
+  list.projectionsBySession.a={state:'loading',values:{subagentCatalog:[]}};
+  const props={...actions,useSessions:selector=>selector(list),useSessionStatus:selector=>selector(new Map()),useWorkspaces:selector=>selector({archivedSessionIds:[]})};
+  const flatten=node=>node&&typeof node==='object'?[node,...(node.children??[]).flat(Infinity).flatMap(flatten)]:[];
+  function render(){
+    stateIndex=0;pendingEffects=[];const nodes=flatten(registration.component(props));
+    for(const effect of pendingEffects){const first=!effects[effect.index];effects[effect.index]?.cleanup?.();let cleanup=effect.callback();if(strict&&first){cleanup?.();cleanup=effect.callback();}effects[effect.index]={deps:effect.deps,cleanup,setup:effect.callback,layout:effect.layout};}
+    return nodes;
+  }
+  function caret(id){const nodes=render(),row=nodes.find(node=>node.props?.['data-session-id']===id);assert.ok(row,`missing ${id}`);flatten(row).find(node=>node.props?.className==='caret').props.onClick({currentTarget:{closest(){}}});}
+  function retry(){const button=render().find(node=>node.type==='button'&&node.children.includes('重试'));assert.ok(button);button.props.onClick();}
+  function alert(){return render().filter(node=>node.props?.role==='alert').flatMap(node=>node.children).filter(text=>typeof text==='string').join(' ');}
+  function layoutUnmount(){for(const effect of effects)if(effect?.layout)effect.cleanup?.();mountedForTest=false;}
+  function dispose(){for(const effect of effects)effect?.cleanup?.();mountedForTest=true;}
+  return {list,actions,render,caret,retry,alert,layoutUnmount,dispose,updatesAfterUnmount:()=>postUnmountUpdates};
+}
+function deferred(){let resolve,reject;const promise=new Promise((yes,no)=>{resolve=yes;reject=no;});return {promise,resolve,reject};}
+const flushRefresh=()=>new Promise(resolve=>setImmediate(resolve));
+
+test('refresh callbacks run after expansion state is committed, before reentrant actions', async () => {
+  const pending=[];let app,first=true;
+  app=refreshHarness({refresh:id=>{
+    const request=deferred();pending.push({id,...request});
+    if(first){first=false;app.caret('root');app.caret('root');}
+    return request.promise;
+  }});
+  try {
+    app.caret('root');await flushRefresh();
+    assert.equal(pending.length,2);
+    pending[1].resolve();await flushRefresh();pending[0].reject(Error('superseded'));await flushRefresh();
+    assert.doesNotMatch(app.alert(),/superseded/);
+    assert.equal(app.actions.expansion.has('root'),true);
+  } finally {app.dispose();}
+});
+
+test('synchronous adapter reentrancy cannot make an older refresh the latest intent', async () => {
+  const requests=[];let app,first=true;
+  app=refreshHarness({refresh:()=>{
+    const request=deferred();requests.push(request);
+    if(first){first=false;app.retry();}
+    return request.promise;
+  }});
+  try {
+    app.actions.expansion.add('root');
+    app.retry();await flushRefresh();assert.equal(requests.length,2);
+    requests[1].resolve();await flushRefresh();requests[0].reject(Error('older reentrant request'));await flushRefresh();
+    assert.doesNotMatch(app.alert(),/older reentrant request/);
+  } finally {app.dispose();}
+});
+
+test('refresh completion from closed or superseded expansion cannot override latest', async () => {
+  const pending=[];const app=refreshHarness({refresh:id=>{const request=deferred();pending.push({id,...request});return request.promise;}});
+  try {
+    app.caret('root');await flushRefresh();app.caret('root');app.caret('root');await flushRefresh();
+    assert.equal(pending.length,2);
+    pending[1].resolve();await flushRefresh();pending[0].reject(Error('old failure'));await flushRefresh();
+    assert.equal(app.alert(),'');
+    app.retry();await flushRefresh();app.retry();await flushRefresh();
+    pending[3].reject(Error('new failure'));await flushRefresh();pending[2].resolve();await flushRefresh();
+    assert.match(app.alert(),/new failure/);
+    app.caret('root');app.caret('root');await flushRefresh();assert.equal(app.alert(),'');
+  } finally {app.dispose();}
+});
+
+test('closing a parent invalidates pending visible descendants but not another root', async () => {
+  const pending=[];const app=refreshHarness({refresh:id=>{const request=deferred();pending.push({id,...request});return request.promise;}});
+  try {
+    app.list.ids.push('other');app.list.byId.other=summary('other');app.list.projectionsBySession.other={state:'loading',values:{subagentCatalog:[]}};
+    app.caret('root');await flushRefresh();app.caret('a');await flushRefresh();app.caret('other');await flushRefresh();app.caret('root');
+    pending.find(item=>item.id==='a').reject(Error('hidden failure'));pending.find(item=>item.id==='other').reject(Error('other failure'));await flushRefresh();
+    assert.match(app.alert(),/other failure/);app.caret('root');await flushRefresh();
+    assert.doesNotMatch(app.alert(),/hidden failure/);
+  } finally {app.dispose();}
+});
+
+test('closing invalidates pending descendants even while their rows become non-expandable', async () => {
+  const pending=[];const app=refreshHarness({refresh:id=>{const request=deferred();pending.push({id,...request});return request.promise;}});
+  try {
+    app.caret('root');await flushRefresh();app.caret('a');await flushRefresh();
+    app.list.projectionsBySession.a=ready([]);
+    app.caret('root');
+    app.list.projectionsBySession.a={state:'loading',values:{subagentCatalog:[]}};
+    app.caret('root');
+    // A was blocked at close and remains expanded; reopening must not revive its old request.
+    pending.find(item=>item.id==='a').reject(Error('old blocked descendant'));await flushRefresh();
+    assert.doesNotMatch(app.alert(),/old blocked descendant/);
+  } finally {app.dispose();}
+});
+
+test('ambiguous descendant and independent root retain their shared host request on parent close', async () => {
+  const shared=deferred();const app=refreshHarness({refresh:()=>shared.promise});
+  try {
+    app.list.ids.push('other');app.list.byId.other=summary('other');
+    app.list.projectionsBySession.a={state:'loading',values:{subagentCatalog:[child('nested')]}};
+    app.list.projectionsBySession.nested={state:'loading',values:{subagentCatalog:[]}};
+    app.list.projectionsBySession.other={state:'loading',values:{subagentCatalog:[]}};
+    app.caret('root');await flushRefresh();app.caret('a');await flushRefresh();app.caret('nested');await flushRefresh();app.caret('other');await flushRefresh();
+    app.list.projectionsBySession.other={state:'loading',values:{subagentCatalog:[child('nested')]}};
+    let nodes=app.render(), nested=nodes.find(node=>node.props?.['data-session-id']==='nested');
+    assert.equal(nested.props['aria-disabled'],true);
+    app.caret('root');
+    assert.equal(app.actions.expansion.has('nested'),true);
+    assert.equal(app.actions.expansion.has('other'),true);
+    shared.reject(Error('still active shared request'));await flushRefresh();
+    assert.match(app.alert(),/still active shared request/);
+    app.list.projectionsBySession.other={state:'loading',values:{subagentCatalog:[]}};
+    app.caret('root');nodes=app.render();
+    assert.ok(nodes.some(node=>node.props?.role==='alert'&&node.children.some(text=>typeof text==='string'&&text.includes('still active shared request'))));
+  } finally {app.dispose();}
+});
+
+test('a closed descendant request cannot reappear as an error when ancestor reopens', async () => {
+  const pending=[];const app=refreshHarness({refresh:id=>{const request=deferred();pending.push({id,...request});return request.promise;}});
+  try {
+    app.caret('root');await flushRefresh();app.caret('a');await flushRefresh();app.caret('root');app.caret('root');await flushRefresh();app.caret('a');await flushRefresh();
+    const requests=pending.filter(item=>item.id==='a');assert.equal(requests.length,2);
+    requests[1].resolve();await flushRefresh();requests[0].reject(Error('old descendant failure'));await flushRefresh();
+    assert.doesNotMatch(app.alert(),/old descendant failure/);
+  } finally {app.dispose();}
+});
+
+test('shared refresh promises only affect the latest intent and latest failure remains visible', async () => {
+  const shared=deferred();const app=refreshHarness({refresh:()=>shared.promise});
+  try {
+    app.caret('root');await flushRefresh();app.caret('root');app.caret('root');await flushRefresh();app.retry();await flushRefresh();
+    shared.reject(Error('shared failure'));await flushRefresh();
+    assert.match(app.alert(),/shared failure/);
+  } finally {app.dispose();}
+});
+
+test('StrictMode layout effect replay fences pre-replay refresh completion', async () => {
+  const pending=[];const app=refreshHarness({refresh:()=>{const request=deferred();pending.push(request);return request.promise;}});
+  try {
+    app.caret('root');await flushRefresh();
+    const effect=effects.find(item=>item?.layout);assert.ok(effect);
+    effect.cleanup();effect.cleanup=effect.setup();
+    pending[0].reject(Error('previous generation'));await flushRefresh();
+    assert.doesNotMatch(app.alert(),/previous generation/);
+    app.retry();await flushRefresh();pending[1].reject(Error('current generation'));await flushRefresh();
+    assert.match(app.alert(),/current generation/);
+  } finally {app.dispose();}
+});
+
+test('refresh rejection with a throwing message accessor has no unhandled promise', async () => {
+  const unhandled=[];const listener=reason=>unhandled.push(reason);process.on('unhandledRejection',listener);
+  const bad=Object.defineProperty({},'message',{get(){throw Error('bad message');}});
+  const app=refreshHarness({refresh:()=>Promise.reject(bad)});
+  try {app.caret('root');await flushRefresh();await flushRefresh();assert.deepEqual(unhandled,[]);}
+  finally {app.dispose();process.off('unhandledRejection',listener);}
+});
+
+test('refresh intent skips superseded not-yet-dispatched host work', async () => {
+  const calls=[];const app=refreshHarness({refresh:id=>{calls.push(id);return Promise.resolve();}});
+  try {
+    app.caret('root');app.caret('root');await flushRefresh();
+    assert.deepEqual(calls,[]);
+    app.caret('root');await flushRefresh();assert.deepEqual(calls,['root']);
+  } finally {app.dispose();}
+});
+
+test('refresh synchronous throw is displayed while mounted, never after layout unmount', async () => {
+  for(const strict of [false,true]) {
+    const pending=deferred();let calls=0;
+    const app=refreshHarness({strict,refresh:()=>{calls++;if(calls===1)throw Error('sync error');return pending.promise;}});
+    try {
+      app.caret('root');await flushRefresh();assert.match(app.alert(),/sync error/);
+      app.retry();await flushRefresh();app.layoutUnmount();pending.reject(Error('after unmount'));await flushRefresh();
+      assert.equal(app.updatesAfterUnmount(),0);
+    } finally {app.dispose();}
+  }
 });
 
 test('nonempty cached catalog remains visible on expansion and migration remains closed', () => {
@@ -357,13 +541,13 @@ test('unknown catalog states keep conservative conflict evidence but do not show
 
 test('unknown catalog state warns in both languages, hides children and permits retry', async () => {
   for (const language of ['zh','en']) {
-    states=[];stateIndex=0;const locale=mockLocale();locale.setLanguage(language);let registration,calls=0;
+    states=[];effects=[];pendingEffects=[];stateIndex=0;const locale=mockLocale();locale.setLanguage(language);let registration,calls=0;
     applyPlugin({locale,slots:{inject(_name,callback){callback();},register(options,component){if(options.name==='main')registration={options,component};}},sessions:{refreshProjections(){calls++;},refresh(){}},uiWorkspace:{openSession(){}}});
     const list=baseList();list.projectionsBySession.root={state:'alien',values:{subagentCatalog:[child('cached')]}};
     const actions=registration.options.inject();actions.expansion.add('root');
     const props={...actions,useSessions:selector=>selector(list),useSessionStatus:selector=>selector(new Map()),useWorkspaces:selector=>selector({archivedSessionIds:[]})};
     const flatten=node=>node&&typeof node==='object'?[node,...(node.children??[]).flat(Infinity).flatMap(flatten)]:[];
-    const render=()=>{stateIndex=0;return flatten(registration.component(props));};
+    const render=()=>{stateIndex=0;pendingEffects=[];const nodes=flatten(registration.component(props));commitMockEffects();return nodes;};
     let nodes=render();
     assert.equal(nodes.some(node=>node.props?.['data-session-id']==='cached'),false);
     const warning=nodes.find(node=>node.props?.role==='status'&&node.children.some(text=>typeof text==='string'&&text.includes(language==='zh'?'目录状态未知':'Catalog status unknown')));
@@ -558,13 +742,13 @@ test('component persists and resets prototype-named avatar IDs without false err
 
 test('prototype-named roots show only their own genuine refresh errors', async () => {
   for (const id of ['__proto__','constructor','toString']) {
-    states=[];stateIndex=0;let registration, shouldFail=true;
+    states=[];effects=[];pendingEffects=[];stateIndex=0;let registration, shouldFail=true;
     applyPlugin({slots:{inject(_name,callback){callback();},register(options,component){if(options.name==='main')registration={options,component};}},sessions:{refreshProjections(){return shouldFail ? Promise.reject(Error(`real ${id} failure`)) : Promise.resolve();},refresh(){}},uiWorkspace:{openSession(){}}});
     const list={phase:'ready',ids:[id],byId:{[id]:summary(id)},projectionsBySession:{[id]:{state:'loading',values:{subagentCatalog:[]}}}};
     const actions=registration.options.inject();
     const props={...actions,useSessions:selector=>selector(list),useSessionStatus:selector=>selector(new Map()),useWorkspaces:selector=>selector({archivedSessionIds:[]})};
     const flatten=node=>node&&typeof node==='object'?[node,...(node.children??[]).flat(Infinity).flatMap(flatten)]:[];
-    const render=()=>{stateIndex=0;return flatten(registration.component(props));};
+    const render=()=>{stateIndex=0;pendingEffects=[];const nodes=flatten(registration.component(props));commitMockEffects();return nodes;};
     let nodes=render();
     nodes.find(node=>node.props?.className==='caret').props.onClick({currentTarget:{closest(){}}});
     await new Promise(resolve=>setImmediate(resolve));
@@ -814,7 +998,7 @@ function avatarHarness({ strict = false } = {}) {
     for(const effect of pendingEffects){
       const first=!effects[effect.index]; effects[effect.index]?.cleanup?.();
       let cleanup=effect.callback(); if(strict&&first){cleanup?.();cleanup=effect.callback();}
-      effects[effect.index]={deps:effect.deps,cleanup,setup:effect.callback};
+      effects[effect.index]={deps:effect.deps,cleanup,setup:effect.callback,layout:effect.layout};
     }
     return nodes;
   }
@@ -940,7 +1124,7 @@ test('effect replay invalidates pending work while reactivated instance accepts 
   const app=avatarHarness();
   try {
     const old=app.upload();
-    const effect=effects.find(item=>typeof item?.cleanup==='function');
+    const effect=effects.find(item=>!item?.layout && typeof item?.cleanup==='function');
     effect.cleanup();
     // React StrictMode setup replay is represented by re-running the captured setup.
     effect.cleanup=effect.setup();
