@@ -7,14 +7,14 @@
 - [会话树实验包](packages/session-tree/README.md)：独立主面板，支持逐层加载、导航、六种头像和键盘操作；不是聊天时常驻的侧边栏树，R7/R8 尚未验收。
 - [标题 provider 原型](packages/task-title/README.md)：只在现有的人类消息调度下读取团队任务，不能仅因任务变化刷新标题；与原 provider 互斥，不建议安装，R9 未完成。
 - [工作流拓扑核心](packages/workflow-topology/README.md)：保守静态分析并生成确定性布局，不执行脚本；[运行事件投影](packages/workflow-board-projection/README.md) 只在来源有独立证明时匹配，歧义保留 unmatched；[工作流看板组件](packages/workflow-board-client/README.md) 可渲染静态图、节点表与事件。[来源候选观察器](packages/workflow-source-observer/README.md) 的结果始终未经认证，不应当作真实绑定。它们尚未接入实时宿主/GUI，R10/R11 未完成。
-- [本地遥测内存原型](packages/personal-telemetry/README.md) 仅对合成数据验证 SQLite 数值快照与幂等事务；没有磁盘数据库、真实数据接入或报表，R18 未完成。
+- [本地遥测内存原型](packages/personal-telemetry/README.md) 仅对合成数据验证 SQLite 数值快照与幂等事务；没有磁盘数据库、真实数据接入或报表，R18 未完成。[晋升建议原型](packages/workflow-recommendation/README.md) 只在调用方断言完整的合成聚合上给条件性建议，不执行晋升，不代表 R15/R16 已完成。
 - [rc.5 隔离内存冒烟](packages/sandbox-smoke/README.md) 加载安装版 Cordis、模块加载器、slot 与会话投影，使用测试替身而非真实 GUI；[GUI 隔离前置检查](packages/sandbox-e2e/README.md) 尚未满足安全门槛。两者及只读版本/标记检查均不能代替端到端验收；团队功能尚未实现。
 
 关键实现假设修正在 [设计决策](docs/architecture-decisions.md)。原始规格、mock 与调研在相邻目录 `../dsh-mocks/`。
 
 ## 检查
 
-需要 Node.js 24；不需要安装依赖即可运行基础检查（含拓扑布局、运行投影、看板、来源候选、遥测内存原型及隔离测试的纯测试；不包括完整解析器和 Electron 集成测试）。缺少 Acorn 时，跨包解析互操作用例会显式跳过：
+需要 Node.js 24；不需要安装依赖即可运行基础检查（含拓扑布局、运行投影、看板、来源候选、晋升建议、遥测内存原型及隔离测试的纯测试；不包括完整解析器和 Electron 集成测试）。缺少 Acorn 时，跨包解析互操作用例会显式跳过：
 
 ```bash
 npm test
