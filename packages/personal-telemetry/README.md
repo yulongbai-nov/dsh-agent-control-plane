@@ -27,7 +27,7 @@ try {
 
 ## 幂等与原子性
 
-以 sessionKey 为主键，sourceIdentity 必须一致；更高 asOfSeq 替换该会话的最新数值，同一 seq 的相同 unit 不动、缺失 unit 可补齐、不同数值冲突则拒绝，旧 seq 不能回退。高 seq 若缺 unit 则返回 `null`，不沿用旧快照。批处理在 SQLite 本地事务中全成或全回滚，包括同 seq 冲突；abort 只在本次同步事务之前/期间边界检查并回滚，不声称可中断正在执行的同步 SQLite 调用。
+以 sessionKey 为主键，sourceIdentity 必须一致；更高 asOfSeq 替换该会话的最新数值，同一 seq 的相同 unit 不动、缺失 unit 可补齐、不同数值冲突则拒绝，旧 seq 不能回退。高 seq 若缺 unit 则返回 `null`，不沿用旧快照。关键输入字段按每项读取一次，使用同一捕获值执行校验、冲突判定和存储；getter 抛错会回滚批处理。批处理在 SQLite 本地事务中全成或全回滚，包括同 seq 冲突；abort 只在本次同步事务之前/期间边界检查并回滚，不声称可中断正在执行的同步 SQLite 调用。
 
 快照 cursor 只描述**该次读取时**的已知投影；源 session log 和 SQLite 不是跨库事务，本层无法证明快照是否追上源尾、缺页、取消或后续 append。输出 `freshness:'unknown'` 恒为未知，不把 source 未知/不完整标为完整，也不能根据 cursor 相等推导实时同步。后续 adapter 应负责安全、幂等的真实日志重建以及身份和 source 世代变化处理，且在无法证明完整时保持 unknown。
 

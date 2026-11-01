@@ -141,6 +141,128 @@ test('cancelled ingestion leaves all previous data untouched', () => {
   } finally { store.close(); }
 });
 
+test('critical request and snapshot getters are captured once before validation and storage', () => {
+  const store = setup(), hits = Object.create(null);
+  const once = (object, field, initial, changed) => Object.defineProperty(object, field, {
+    enumerable: true,
+    get() { hits[field] = (hits[field] ?? 0) + 1; return hits[field] === 1 ? initial : changed; }
+  });
+  try {
+    const first = tokenUsage(), second = sessionStats(), values = {};
+    for (const [key, value] of Object.entries(first)) once(first, key, value, 'SECRET_CHANGED');
+    for (const [key, value] of Object.entries(second)) once(second, key, value, 'SECRET_CHANGED');
+    once(values, 'tokenUsage', first, { prompt: 'SECRET_CHANGED' });
+    once(values, 'sessionStats', second, { reply: 'SECRET_CHANGED' });
+    const snapshot = {};
+    once(snapshot, 'kind', 'sequenced', 'migration-required');
+    once(snapshot, 'asOfSeq', 5, 9007199254740993n);
+    once(snapshot, 'values', values, { tokenUsage: null, sessionStats: null });
+    const input = {};
+    once(input, 'sessionKey', KEY, OTHER);
+    once(input, 'sourceIdentity', SOURCE, NEW_SOURCE);
+    once(input, 'snapshot', snapshot, null);
+    assert.equal(store.ingest(input), 'inserted');
+    const row = store.get(KEY);
+    assert.equal(row.asOfSeq, 5);
+    assert.equal(row.sourceIdentity, SOURCE);
+    assert.deepEqual(row.tokenUsage, tokenUsage());
+    assert.deepEqual(row.sessionStats, sessionStats());
+    assert.equal(store.get(OTHER), null);
+    assert.ok(Object.values(hits).every(n => n === 1), JSON.stringify(hits));
+  } finally { store.close(); }
+});
+
+test('an unvalidated second seq cannot poison SQLite with an unsafe bigint', () => {
+  const store = setup();
+  try {
+    let reads = 0;
+    const snapshot = { kind: 'sequenced', values: {} };
+    Object.defineProperty(snapshot, 'asOfSeq', { get() { reads++; return reads <= 3 ? 5 : 9007199254740993n; } });
+    assert.equal(store.ingest(req({ snapshot })), 'inserted');
+    assert.equal(reads, 1);
+    assert.equal(store.get(KEY).asOfSeq, 5);
+  } finally { store.close(); }
+});
+
+test('unstable same-sequence getter cannot hide a conflicting unit or admit invalid cursor', () => {
+  const store = setup();
+  try {
+    store.ingest(req());
+    const before = store.get(KEY);
+    let reads = 0;
+    const conflict = { kind: 'sequenced', values: { tokenUsage: tokenUsage(2), sessionStats: sessionStats() } };
+    Object.defineProperty(conflict, 'asOfSeq', { get() { return ++reads === 1 ? 10 : 11; } });
+    assert.throws(() => store.ingest(req({ snapshot: conflict })), { code: 'SEQUENCE_CONFLICT' });
+    assert.equal(reads, 1);
+    assert.deepEqual(store.get(KEY), before);
+    let stringReads = 0;
+    const conflictString = { kind: 'sequenced', values: { tokenUsage: tokenUsage(2) } };
+    Object.defineProperty(conflictString, 'asOfSeq', { get() { return ++stringReads === 1 ? 10 : '10'; } });
+    assert.throws(() => store.ingest(req({ snapshot: conflictString })), { code: 'SEQUENCE_CONFLICT' });
+    assert.equal(stringReads, 1);
+    assert.deepEqual(store.get(KEY), before);
+    const bad = { kind: 'sequenced', values: {} };
+    Object.defineProperty(bad, 'asOfSeq', { get() { return 9007199254740993n; } });
+    assert.throws(() => store.ingest(req({ sessionKey: OTHER, snapshot: bad })), { code: 'INVALID_SNAPSHOT' });
+    assert.equal(store.get(OTHER), null);
+  } finally { store.close(); }
+});
+
+test('a counter getter cannot write a value changed after validation', () => {
+  const store = setup();
+  try {
+    const token = tokenUsage();
+    let reads = 0;
+    Object.defineProperty(token, 'outputTokens', { get() { return ++reads === 1 ? 21 : 9223372036854775807n; } });
+    assert.equal(store.ingest(req({ snapshot: { kind: 'sequenced', asOfSeq: 10, values: { tokenUsage: token } } })), 'inserted');
+    assert.equal(reads, 1);
+    assert.equal(store.get(KEY).tokenUsage.outputTokens, 21);
+  } finally { store.close(); }
+});
+
+test('batch validates the same getter-captured key and source it stores', () => {
+  const store = setup();
+  try {
+    store.ingest(req());
+    const before = store.get(KEY);
+    let keys = 0, sources = 0;
+    const conflict = { snapshot: snap(10, 2) };
+    Object.defineProperties(conflict, {
+      sessionKey: { get() { return ++keys === 1 ? KEY : OTHER; } },
+      sourceIdentity: { get() { return ++sources === 1 ? SOURCE : NEW_SOURCE; } }
+    });
+    assert.throws(() => store.ingestBatch([req({ sessionKey: OTHER }), conflict]), { code: 'SEQUENCE_CONFLICT' });
+    assert.equal(keys, 1); assert.equal(sources, 1);
+    assert.deepEqual(store.get(KEY), before);
+    assert.equal(store.get(OTHER), null);
+  } finally { store.close(); }
+});
+
+test('throwing input getters roll back earlier writes and preserve existing rows', () => {
+  const throws = [
+    () => Object.defineProperty(req(), 'sessionKey', { get() { throw new Error('key failure'); } }),
+    () => Object.defineProperty(req(), 'sourceIdentity', { get() { throw new Error('source failure'); } }),
+    () => Object.defineProperty(req(), 'snapshot', { get() { throw new Error('snapshot failure'); } }),
+    () => { const s = snap(); Object.defineProperty(s, 'kind', { get() { throw new Error('kind failure'); } }); return req({ snapshot: s }); },
+    () => { const s = snap(); Object.defineProperty(s, 'asOfSeq', { get() { throw new Error('seq failure'); } }); return req({ snapshot: s }); },
+    () => { const s = snap(); Object.defineProperty(s, 'values', { get() { throw new Error('values failure'); } }); return req({ snapshot: s }); },
+    () => { const s = snap(); Object.defineProperty(s.values, 'tokenUsage', { get() { throw new Error('unit failure'); } }); return req({ snapshot: s }); },
+    () => { const s = snap(); Object.defineProperty(s.values, 'sessionStats', { get() { throw new Error('unit failure'); } }); return req({ snapshot: s }); },
+    () => { const s = snap(); Object.defineProperty(s.values.tokenUsage, 'outputTokens', { get() { throw new Error('counter failure'); } }); return req({ snapshot: s }); },
+    () => { const s = snap(); Object.defineProperty(s.values.sessionStats, 'llmMs', { get() { throw new Error('counter failure'); } }); return req({ snapshot: s }); }
+  ];
+  for (const makeBad of throws) {
+    const store = setup();
+    try {
+      store.ingest(req()); const before = store.get(KEY);
+      assert.throws(() => store.ingestBatch([req({ sessionKey: OTHER }), makeBad()]), /failure/);
+      assert.equal(store.get(OTHER), null);
+      assert.deepEqual(store.get(KEY), before);
+      assert.equal(store.ingest(req({ sessionKey: OTHER })), 'inserted');
+    } finally { store.close(); }
+  }
+});
+
 test('version migrations are atomic, reentrant and reject unknown future schema', () => {
   const empty = new DatabaseSync(':memory:');
   try {

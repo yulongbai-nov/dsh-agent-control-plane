@@ -25,13 +25,18 @@ function unit(value, fields) {
 }
 function normalize({ sessionKey, sourceIdentity, snapshot } = {}) {
   checkId(sessionKey); checkId(sourceIdentity);
-  if (!snapshot || snapshot.kind !== 'sequenced' || !Number.isSafeInteger(snapshot.asOfSeq) || snapshot.asOfSeq < -1 || Object.is(snapshot.asOfSeq, -0) || !snapshot.values || typeof snapshot.values !== 'object' || Array.isArray(snapshot.values)) {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
     fail('INVALID_SNAPSHOT', 'A sequenced authoritative projection snapshot is required');
   }
+  const { kind, asOfSeq, values } = snapshot;
+  if (kind !== 'sequenced' || !Number.isSafeInteger(asOfSeq) || asOfSeq < -1 || Object.is(asOfSeq, -0) || !values || typeof values !== 'object' || Array.isArray(values)) {
+    fail('INVALID_SNAPSHOT', 'A sequenced authoritative projection snapshot is required');
+  }
+  const { tokenUsage, sessionStats } = values;
   return {
-    sessionKey, sourceIdentity, asOfSeq: snapshot.asOfSeq,
-    tokenUsage: unit(snapshot.values.tokenUsage, TOKEN),
-    sessionStats: unit(snapshot.values.sessionStats, STATS),
+    sessionKey, sourceIdentity, asOfSeq,
+    tokenUsage: unit(tokenUsage, TOKEN),
+    sessionStats: unit(sessionStats, STATS),
     freshness: 'unknown'
   };
 }
