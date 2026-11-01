@@ -1,0 +1,12 @@
+{
+  "name": "@dsh-agent-control-plane/sandbox-e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
