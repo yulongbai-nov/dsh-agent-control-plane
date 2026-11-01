@@ -49,7 +49,9 @@ NODE
 
 这些结果只说明极小空程序和几条负例。进一步的 Electron Node 模式探针将全局文件元数据收窄到 `/`、`/Applications`、`/dev`、`/usr`、`/System` 本身，并只允许读取系统库及签名 app 目录；禁止 `mach-lookup` 且只允许 `process-exec` 时空进程仍可启动，`stat('/Users/yulong')` 返回 EPERM。缺 `process-exec` 则启动器被拒绝。这不是完整应用、浏览器或 IPC canary；`process-exec` 也不是可直接移植的精确子进程白名单。
 
-早期更宽的 Node 研究策略仍允许**全局文件元数据**、广泛 `mach-lookup`/进程操作，并覆盖全部 Homebrew cellar。两个探针都未验证 symlink/hardlink、Keychain/IPC、全部文件访问、子进程、临时目录写入或精确回连。它们既不证明隔离安全，也不能用于启动 DSH；必须先按下列门槛完成白名单、正反 canary 和完整进程树验证。
+**重要网络反例：**Electron Node 模式使用 `(allow network-inbound (local ip "localhost:*"))` 时，`127.0.0.1:0` 临时监听能成功，但 `0.0.0.0:0` 通配地址也能绑定；每个前台测试立即关闭 listener。该规则不能作为「只能监听 loopback」的 OS 保证，不能只凭它启动待测服务。当前 macOS 的 sandbox parser 拒绝 `127.0.0.1:*`、`127.0.0.1/32:*` 和 `localhost:0` 作为此 filter；`localhost:65535` 不允许随机端口。必须找到受验证的监听隔离，或使用独立网络命名空间/VM，不能仅依赖 CLI `--host` 自我约束。
+
+早期更宽的 Node 研究策略仍允许**全局文件元数据**、广泛 `mach-lookup`/进程操作，并覆盖全部 Homebrew cellar。上述探针未验证 symlink/hardlink、Keychain/IPC、全部文件访问、子进程、临时目录写入或精确回连。它们既不证明隔离安全，也不能用于启动 DSH；必须先按下列门槛完成白名单、正反 canary 和完整进程树验证。
 
 **Keychain 负例：**在拒绝 `/Users/yulong` 文件访问且拒绝 `mach-lookup` 到 `com.apple.securityd` 后，运行 `/usr/bin/security list-keychains -d user` 仍以 0 退出。测试丢弃 stdout、只记录退出状态，未尝试读取、打印或发送任何凭据。成功列举 API 本身不证明秘密可以读取，但也不能以该规则声称隔离成功。需在专用临时账号/虚拟机创建**合成凭据 canary**，对完整进程树证明不可读取、且正向对照有效；不能对用户实际 Keychain 做试探。
 
