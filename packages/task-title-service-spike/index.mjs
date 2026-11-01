@@ -73,6 +73,7 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
   const work = new Map(), inFlight = new Set();
   let active = true, closePromise, mutating = false;
   const reentrant = Object.freeze({ status: 'reentrant' });
+  const unauthorized = Object.freeze({ status: 'unauthorized' });
   function transact(operation) {
     if (mutating) return reentrant;
     mutating = true;
@@ -146,7 +147,8 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
       if (!changed && (!existing?.attempt || existing.attempt.status !== 'invalidated' || existing.attempt.blocked)) continue;
       if (!changed && existing.kind !== 'task') continue;
       const item = supersede(child), revision = item.revision;
-      const authorizationEpoch = state.authorizationEpoch(), observedHigh = parent.high;
+      // An abort listener may revoke and regrant; never adopt its later epoch.
+      const authorizationEpoch = observationAuthorizationEpoch, observedHigh = parent.high;
       const attempt = { status: 'pending', blocked: false, cut, authorizationEpoch };
       item.selected = task;
       item.attempt = attempt;
@@ -178,11 +180,12 @@ export function createModel(host, { generate = async ({ subject }) => subject } 
     message(child, generateMessage) { return transact(() => {
       const data = state.childState.get(child);
       if (!active || !data || !alive(data.lead, child) || typeof generateMessage !== 'function') throw new Error('invalid synthetic message work');
+      if (!state.authorized()) return unauthorized;
+      const authorizationEpoch = state.authorizationEpoch();
       itemFor(child).messageCut = state.leadState.get(data.lead).high;
       const item = supersede(child, 'message'), revision = item.revision;
       item.kind = 'message';
       const controller = new AbortController(); item.controller = controller;
-      const authorizationEpoch = state.authorizationEpoch();
       const promise = Promise.resolve().then(async () => {
         if (!alive(data.lead, child) || controller.signal.aborted || item.revision !== revision ||
             !state.authorized() || state.authorizationEpoch() !== authorizationEpoch || data.title?.kind === 'user') return;

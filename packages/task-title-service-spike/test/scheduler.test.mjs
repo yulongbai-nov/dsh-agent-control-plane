@@ -320,6 +320,111 @@ test('guard is released before invoking and awaiting task generator', async () =
   assert.deepEqual(host.title(child), { kind: 'user', title: 'Pinned' });
 });
 
+test('abort listener revoke-regrant cannot launder an old observation into a new epoch', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(), calls = [];
+  const model = createModel(host, { generate: async (input) => {
+    calls.push(input.revision);
+    if (input.revision === 2) {
+      input.signal.addEventListener('abort', () => { host.setAuthorized(false); host.setAuthorized(true); }, { once: true });
+      await gate.promise;
+    }
+    return input.subject;
+  } });
+  model.observe(lead); await settle();
+  host.task(lead, { id: 'task', revision: 3, ownerId: 'child', status: 'in_progress', subject: 'New task' });
+  model.observe(lead); gate.resolve(); await model.idle();
+  assert.deepEqual(calls, [2]); assert.equal(host.title(child), undefined);
+  model.observe(lead); await model.idle();
+  assert.deepEqual(calls, [2, 3]); assert.equal(host.title(child)?.title, 'New task');
+});
+
+test('unauthorized message does not cancel pending authorized task or resume on later grant', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let taskSignal, messages = 0;
+  const model = createModel(host, { generate: async ({ signal, subject }) => { taskSignal = signal; await gate.promise; return subject; } });
+  model.observe(lead); await settle(); host.setAuthorized(false);
+  const result = model.message(child, async () => { messages++; return 'unauthorized'; });
+  assert.deepEqual(result, { status: 'unauthorized' }); assert.ok(Object.isFrozen(result));
+  assert.equal(taskSignal.aborted, false);
+  host.setAuthorized(true); gate.resolve(); await model.idle();
+  assert.equal(messages, 0); assert.equal(host.title(child), undefined);
+  model.message(child, async () => { messages++; return 'authorized'; }); await model.idle();
+  assert.equal(messages, 1); assert.equal(host.title(child)?.title, 'authorized');
+});
+
+test('an unauthorized message establishes no message fence over a later explicit task observe', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const model = createModel(host);
+  host.setAuthorized(false);
+  assert.deepEqual(model.message(child, async () => 'discarded'), { status: 'unauthorized' });
+  host.setAuthorized(true); model.observe(lead); await model.idle();
+  assert.deepEqual(host.title(child), { kind: 'task', title: 'Task A', taskId: 'task', revision: 2 });
+});
+
+test('message replacement also binds the authorization epoch before abort listeners', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let messageCalls = 0;
+  const model = createModel(host, { generate: async ({ signal, subject }) => {
+    signal.addEventListener('abort', () => { host.setAuthorized(false); host.setAuthorized(true); }, { once: true });
+    await gate.promise; return subject;
+  } });
+  model.observe(lead); await settle();
+  model.message(child, async () => { messageCalls++; return 'message'; });
+  gate.resolve(); await model.idle();
+  assert.equal(messageCalls, 0); assert.equal(host.title(child), undefined);
+  model.message(child, async () => { messageCalls++; return 'message'; }); await model.idle();
+  assert.equal(messageCalls, 1); assert.deepEqual(host.title(child), { kind: 'message', title: 'message' });
+});
+
+test('abort host mutations cannot make an old observation dispatch stale task work', async () => {
+  for (const mode of ['child-replaced', 'lead-replaced', 'new-task', 'owner-changed']) {
+    const host = createSyntheticHost(); const { lead, child } = ready(host);
+    const gate = deferred(), calls = []; let replacement;
+    const model = createModel(host, { generate: async (input) => {
+      calls.push([input.taskId, input.revision]);
+      if (input.revision === 2) {
+        input.signal.addEventListener('abort', () => {
+          if (mode === 'child-replaced') { host.disposeChild(child); replacement = host.createChild('child', lead); }
+          if (mode === 'lead-replaced') { host.disposeLead(lead); host.createLead('lead'); }
+          if (mode === 'new-task') {
+            host.task(lead, { id: 'other', revision: 1, status: 'pending', subject: 'Other' });
+            host.task(lead, { id: 'other', revision: 2, ownerId: 'child', status: 'in_progress', subject: 'Other' });
+          }
+          if (mode === 'owner-changed') host.task(lead, { id: 'task', revision: 4, ownerId: 'other', status: 'in_progress', subject: 'B' });
+        }, { once: true });
+        await gate.promise;
+      }
+      return input.subject;
+    } });
+    model.observe(lead); await settle();
+    host.task(lead, { id: 'task', revision: 3, ownerId: 'child', status: 'in_progress', subject: 'B' });
+    model.observe(lead); gate.resolve(); await model.idle();
+    assert.deepEqual(calls, [['task', 2]], mode); assert.equal(host.title(child), undefined, mode);
+    model.observe(lead); await model.idle();
+    if (mode === 'child-replaced') {
+      assert.deepEqual(calls, [['task', 2], ['task', 3]], mode);
+      assert.equal(host.title(replacement)?.title, 'B');
+    } else assert.deepEqual(calls, [['task', 2]], mode);
+  }
+});
+
+test('explicit message invalidation after epoch laundering preserves user intent', async () => {
+  const host = createSyntheticHost(); const { lead, child } = ready(host);
+  const gate = deferred(); let messageCalls = 0;
+  const model = createModel(host, { generate: async ({ signal, subject }) => {
+    signal.addEventListener('abort', () => { host.setAuthorized(false); host.setAuthorized(true); }, { once: true });
+    await gate.promise; return subject;
+  } });
+  model.observe(lead); await settle();
+  model.message(child, async () => { messageCalls++; return 'rejected old intent'; });
+  gate.resolve(); await model.idle();
+  model.observe(lead); await model.idle();
+  assert.equal(messageCalls, 0); assert.equal(host.title(child), undefined);
+  model.message(child, async () => { messageCalls++; return 'new intent'; }); await model.idle();
+  assert.equal(messageCalls, 1); assert.equal(host.title(child)?.title, 'new intent');
+});
+
 test('synchronous host mutations in abort cannot authorize an outdated candidate', async () => {
   for (const mode of ['high', 'ambiguous', 'owner', 'authorization', 'disposed']) {
     const host = createSyntheticHost(); const { lead, child } = ready(host);
