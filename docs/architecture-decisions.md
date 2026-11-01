@@ -35,7 +35,9 @@ rc.5 的 `dsh-session-title/README.zh.md`「提供方」及实现明确：已有
 
 Sol/max 独立分析建议：可信来源至少覆盖三个**不同边界**，优先上游受控 seam，否则再评估版本锁定的小 fork，复用现有执行器而不新造 scheduler：（1）Host 认证原始 session 事件、已解析的实际工具定义及 wrapper dispatch lineage；（2）工具执行分支到 run/job 所有权的交接；（3）engine 真正接收并交给 guest 的不可变 accepted-init 与 run 对应关系。**这些尚未实现，任何一边缺失都不构成来源认证。** around 可以不调用或多次调用 `next`，一次原始调用可能产生 0..N 个 leaf attempt；应由受控 Host 为每个 attempt 分配独立身份，而非假设 call↔run 一一对应。原始参数、wrapper 变换后的有效参数、引擎实际 accepted script/meta 必须分别表示；若不同，只能展示有证据的变换，不能用原始脚本画实际运行拓扑。来源认证、开始受理、运行结局及 durable coverage 相互独立；证据冲突/缺失为 unknown，启用前的历史和在途运行不可仅靠旧 `tool/call` 升级。
 
-如要保证 durable accepted 先于运行受理，现有同步 `start()` 旁边的异步 observer 不够：必须另设计显式 opt-in 的异步 admission/write-ahead 契约，先封存 guest 真正消费的 init、提交可幂等的 accepted/run receipt，再调度/确认；这会改变调用时序，不得冒充透明替换。receipt 已提交但调度前崩溃时执行仍 unknown。若必须保持当前同步 API 及语义，则不能承诺 durable/verified 模式。Session 原始事件是否 durable 又是单独的来源门槛。此方案尚无实现或可安装工件。
+如要保证 durable accepted 先于运行受理，现有同步 `start()` 旁边的异步 observer 不够：必须另设计显式 opt-in 的异步 admission/write-ahead 契约，先封存 guest 真正消费的 init、提交可幂等的 accepted/run receipt，再调度/确认；这会改变调用时序，不得冒充透明替换。receipt 已提交但调度前崩溃时执行仍 unknown。若必须保持当前同步 API 及语义，则不能承诺 durable/verified 模式。Session 原始事件是否 durable 又是单独的来源门槛。后台 job 归属也需 registry 完成注册之后独立确认，starter/结果中的 ID 不构成凭证。此方案尚无实现或可安装工件。
+
+进一步的 Sol/max 建议：使用 Host 自有的因果图表示原始调用 → 每个 wrapper/next → 0..N terminal attempts → engine admissions，不使用可变 ambient currentCall；重入获得独立身份，跨 scope 重绑定需明确授权。输入必须是有界惰性数据和封存后执行器实际消费的值，不能将对任意 JS getter/Proxy 的观测克隆称为透明。该威胁模型假定可信 Host/engine/store 和受控插件群；任意同进程代码可更改它们时，冻结、哈希和私有 WeakMap 并不能提供隔离。缺少强制边界时 required-provenance 必须返回 unsupported。证据、日志来源 durable cut、实际执行状态、job 注册与授权各自保留独立维度。
 
 无论哪个方案，Host-owned companion store/read-model 必须使用独立版本化 snapshot/watch；原生 Session 投影同步折叠 session 事件，不可在 `wire.view` 偷读会变化的外部 store。同步内存关联不等于持久化：独立 storage 和 Session 日志不具事务，崩溃可能留下 orphan/incomplete；旧记录和缺失终态应保留 unknown。想恢复历史拓扑必须有合法授权的实际来源快照，或可验证的精确事件引用与摘要；保存功能脚本不同于数值遥测，须单独说明隐私边界。
 
