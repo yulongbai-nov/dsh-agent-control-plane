@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
 // Test the actual shipped browser artifact through the same ModuleLoader seam.
@@ -262,7 +263,7 @@ test('clicking disclosure restores row focus so keyboard navigation remains avai
 });
 
 test('generated browser entry matches its source and six PNG assets', () => {
-  execFileSync(process.execPath, [new URL('../build.mjs', import.meta.url).pathname, '--check']);
+  execFileSync(process.execPath, [fileURLToPath(new URL('../build.mjs', import.meta.url)), '--check']);
 });
 
 test('browser entry only needs React and host bundle is self-contained', async () => {
