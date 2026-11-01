@@ -22,4 +22,23 @@ rc.5 的 `dsh-session-title/README.zh.md`「提供方」及实现明确：已有
 
 ## 004 · 代码审查运行时限制
 
-当前公开的 `workflow` 的 `agent()` 支持按次指定 `provider` 与 `model`，但没有 reasoning-effort 参数；rc.5 `dsh-workflow-ptc/lib/index.js` 的 host `childRequest` 只透传 `prompt/provider/model/schema`。因此请求对象里伪造 `reasoning_effort: 'max'` 既不受支持，也不能证明生效。要如实进行 Sol/max 审查，需要运行时提供该控制，或用户明确允许变更会影响其他新会话的默认配置。本项目不暗改该配置。
+当前公开的 `workflow` 的 `agent()` 支持按次指定 `provider` 与 `model`，但没有 reasoning-effort 参数；rc.5 `dsh-workflow-ptc/lib/index.js` 的 host `childRequest` 只透传 `prompt/provider/model/schema`。因此请求对象里伪造 `reasoning_effort: 'max'` 既不受支持，也不能证明生效。可并行用独立的 `subagent` 显式请求 `gpt-6.1-sol` 和 `max` 补足；不可把 workflow 默认档位冒称 max，也不暗改全局配置。
+
+## 005 · Workflow 来源、运行状态与持久性
+
+原生 run-start 没有 callId；`tools/result` 可被同名 scoped 工具、around 执行器或结果处理器改写，因此 [来源观察器](../packages/workflow-source-observer/README.md) 只输出 `unverified`，不能构成真实绑定。运行结果的失败和取消可能没有 runId；前台结果返回太晚，后台返回仅表示受理，不是完成。
+
+候选路线需要按实际验收比较，不预先引入完整的新引擎：
+
+- **直接继承现有 engine 的最小 spike**：rc.5 导出的 `PtcWorkflowEngine` 可研究以合法单 provider 子类重用执行逻辑，在 `start(request)` 返回后同步观察实际 request 与 runId；不能凭此推断工具调用、后台 job、工具拒绝或静态调用点。测试/配置与取消行为经验证前，只是候选，不是产品实现。
+- **薄 fork workflow 工具**：若需要精确工具/后台 job 以及前台失败和取消链路，在实际执行体记录有效参数和引擎 runId；仍调用原引擎。around 可改写有效 exec，所以关联原始 tool/call 必须额外核对身份和摘要。老记录来源不能猜。
+
+无论哪个方案，Host-owned companion store/read-model 必须使用独立版本化 snapshot/watch；原生 Session 投影同步折叠 session 事件，不可在 `wire.view` 偷读会变化的外部 store。同步内存关联不等于持久化：独立 storage 和 Session 日志不具事务，崩溃可能留下 orphan/incomplete；旧记录和缺失终态应保留 unknown。想恢复历史拓扑必须有合法授权的实际来源快照，或可验证的精确事件引用与摘要；保存功能脚本不同于数值遥测，须单独说明隐私边界。
+
+## 006 · 个人遥测的事实与披露边界
+
+当前遥测仅处理 caller 提供的合成内存快照。实施持久库前需区分 observed/provisional cut 与 durable-source cut：`session/event` 可先于异步持久化，冷观察也可能补出内存中断闭合事件。恢复时必须核对来源世代与尾部，事实和 cursor 同事务、purge tombstone 防止回填复活。`sessionQuery` 不提供调用方授权；工具、Remote、面板必须实施自己的范围授权。
+
+官方子会话投影是会话累计，fork 可能继承相同工作；不能将子会话总数或多次快照差值无条件记作单次 invocation 或跨会话总成本。tokenUsage 最终样本可修正早期流式值，asOfSeq 单调不意味着数值单调。缺证据标 unknown/覆盖率，不将统计表中的零当作确定的真实零费用。
+
+不主动发网络请求不等于数据永不离开本机：工具返回值可能进入模型请求，Remote 可跨机。默认本地统计与模型可见查询、Remote、export 是不同披露通道，需明确用户授权和调用方范围；当前原型不开放这些通道。
