@@ -8,7 +8,7 @@ npm test
 node preflight.mjs                 # 当前预期退出码 1，表示安全条件不足
 ```
 
-当前系统上 `node --check preflight.mjs && npm test` 为 2/2。此测试只验证**设计状态不会误报可运行**；不证明沙盒、安全性、Web UI 或验收通过。
+`node --check preflight.mjs && npm test` 包含真实 CLI 子进程测试，覆盖缺失、非字符串或空白版本、非法 JSON、读取失败、版本不匹配（退出码 2），以及精确 rc.5 的阻断报告（退出码 1）。测试只验证**设计状态不会误报可运行**；不证明沙盒、安全性、Web UI 或验收通过。
 
 ## 只读调研结论和必须避免的命令
 

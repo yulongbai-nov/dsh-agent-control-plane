@@ -21,9 +21,14 @@ export function evidenceSummary() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  process.exitCode = 2;
   let installedVersion;
   try {
     const manifest = JSON.parse(await readFile(runtime, 'utf8'));
+    if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest) ||
+        typeof manifest.desktopVersion !== 'string' || manifest.desktopVersion.trim() === '') {
+      throw new Error('缺少有效的 desktopVersion 字符串');
+    }
     installedVersion = manifest.desktopVersion;
   } catch (error) {
     console.error(`无法读取安装版元数据：${error.code ?? error.message}`);
