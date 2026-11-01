@@ -80,9 +80,13 @@ function projectWorkflow({ runId, topology, layout, events, parentSessionId, sou
         } else entry.starts.push({label:data.label, ...(own(data,'phase') ? {phase:data.phase} : {}),childId:data.childId});
       } else {
         if (!OUTCOMES.has(data.outcome)) {
+          malformed = true;
           entry.invalid = true;
           diagnostics.push({code:'INVALID_AGENT_END',seq:data.seq});
-        } else entry.ends.push(data.outcome);
+        } else {
+          if (entry.ends.length) malformed = true;
+          entry.ends.push(data.outcome);
+        }
       }
     }
   }
