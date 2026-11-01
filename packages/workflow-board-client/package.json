@@ -1,0 +1,10 @@
+{
+  "name": "@dsh-agent-control-plane/workflow-board-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./index.mjs" },
+  "files": ["index.mjs", "test", "README.md"],
+  "engines": { "node": ">=24" },
+  "scripts": { "test": "node --test test/*.test.mjs" }
+}
