@@ -2,15 +2,9 @@
 // Synthetic-only native rc.5 research. The PTC runtime below never executes code.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const crypto = require('node:crypto');
-const fs = require('node:fs');
-const { pathToFileURL } = require('node:url');
-
-const root = '/Applications/DeepSeek Harness.app/Contents/Resources/app.asar';
-const packages = `${root}/dsh/node_modules/@deepseek-ai/`;
-const load = (path) => import(pathToFileURL(packages + path).href);
-const enginePath = `${packages}dsh-workflow-ptc/lib/index.js`;
-const expectedEngineSha256 = 'c7718bc30bcdfb33de38e2011096f2edddccba536b8891c4e6ea456a41fbf19c';
+// This helper imports Node built-ins only; no installed app module is loaded
+// until loadPinned verifies the installed baseline for this environment.
+const { loadPinned } = require('./baseline-gate.cjs');
 const config = { provider: 'fake', maxConcurrentAgents: 1, maxTotalAgents: 10, maxItemsPerCall: 10, syncTimeoutMs: 500 };
 const request = () => ({
   script: 'return 1;',
@@ -27,9 +21,7 @@ function deferred() {
 }
 
 async function environment(options = {}) {
-  const [{ Context }, { default: PtcWorkflowEngine }] = await Promise.all([
-    load('cordis/lib/index.js'), load('dsh-workflow-ptc/lib/index.js'),
-  ]);
+  const [{ Context }, { default: PtcWorkflowEngine }] = await loadPinned();
   const ctx = new Context();
   const reached = deferred();
   const events = [];
@@ -83,17 +75,6 @@ function detach(value) {
   // Used only to capture the synthetic event as seen at a known instant.
   return structuredClone(value);
 }
-
-test('pinned installed engine source and desktop metadata match baseline', () => {
-  const desktop = JSON.parse(fs.readFileSync(`${root}/package.json`, 'utf8'));
-  const pkg = JSON.parse(fs.readFileSync(`${packages}dsh-workflow-ptc/package.json`, 'utf8'));
-  assert.equal(desktop.version, '0.2.1-rc.5');
-  assert.equal(desktop.dshBuildCommit, 'd4db512a969fccf0c5cc7ec8fe38e9c1d27af916');
-  assert.equal(desktop.dshBuildDirty, false);
-  assert.equal(pkg.version, '0.2.1-rc.5');
-  assert.equal(pkg.license, 'MIT');
-  assert.equal(crypto.createHash('sha256').update(fs.readFileSync(enginePath)).digest('hex'), expectedEngineSha256);
-});
 
 test('ordinary fixture: begin returns detached data; prior request args and meta do not alias', async () => {
   const env = await environment({ pending: true });

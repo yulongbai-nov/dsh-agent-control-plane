@@ -9,7 +9,8 @@
 - 来源为本机 `DeepSeek Harness.app/Contents/Resources/app.asar` 内 `dsh/node_modules/@deepseek-ai/dsh-workflow-ptc/lib/index.js`；归档根包与该包版本 `0.2.1-rc.5`，归档根包构建元数据 `dshBuildCommit=d4db512a969fccf0c5cc7ec8fe38e9c1d27af916`、`dshBuildDirty=false`。这是安装元数据，不是远端 tag、供应链身份或代码签名的独立认证。
 - 该文件 66,267 字节、670 行、SHA-256 `c7718bc30bcdfb33de38e2011096f2edddccba536b8891c4e6ea456a41fbf19c`；主要 guest 编译源码内嵌为单个长字符串。包自身 LICENSE 是 MIT，`Copyright (c) 2026 DeepSeek`；如将来复制其代码，须保留完整版权与许可。本研究并未复制其实现。
 - 编译 ESM 入口可由安装版 Electron 的 Node 模式直接读取并加载其已有归档依赖；测试通过表明**该固定本机组合**可运行合成测试，并不保证其他版本、原生 app 中完整插件链或可部署产品可构建。仅运行一个真实 provider，未尝试同时注册第二引擎。
-- 测试先核对 Desktop 元数据、包版本和 engine SHA-256；不同安装应视为未知基线，不能把结果套用到其他构建。测试无需 npm install，无生成 fork、无写 app/config。
+- **每次测试创建 environment 前**，[`baseline-gate.cjs`](test/baseline-gate.cjs) 同步核对 Desktop 版本/commit/dirty、engine 包版本/许可和 engine 入口 SHA-256；任何字段不符、读取或解析失败均在调用任一安装包 loader 之前抛错。此前独立 pin 测试不足以阻止其他测试继续，该做法已移除。主测试文件及 gate 在此之前只加载 Node 内建模块与本地 gate，不导入 Cordis 或 workflow 实现。
+- 这是本地研究的**基线不匹配防错，不是供应链认证或完整安装完整性保证**：没有核对 Cordis、engine 依赖、Electron 可执行文件的 hash/签名；检查与 ESM import 分离，无法排除检查后应用文件变化（TOCTOU）或进程内模块缓存已被污染。须保证测试环境及应用安装在测试期间可信且静止。不同安装应视为未知基线；测试无需 npm install，无生成 fork、无写 app/config。
 
 ## 原生控制流与别名
 
@@ -23,12 +24,15 @@
 
 ## 可复现测试切片
 
-运行环境是已安装的对应 macOS rc.5 Electron，`ELECTRON_RUN_AS_NODE=1` 不启动图形界面。自仓库根目录：
+从仓库根目录先运行纯合成的 loader 守卫测试（不读取或导入安装版），再以已安装的对应 macOS rc.5 Electron 运行原生引擎测试；`ELECTRON_RUN_AS_NODE=1` 不启动图形界面：
 
 ```sh
+node --test packages/workflow-accepted-init-spike/test/baseline-gate.test.cjs
 ELECTRON_RUN_AS_NODE=1 '/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness' \
   --test packages/workflow-accepted-init-spike/test/native.rc5.integration.cjs
 ```
+
+合成 [`baseline-gate.test.cjs`](test/baseline-gate.test.cjs) 注入内存读取器与 loader spy，逐项验证 Desktop/包版本、build commit/dirty、许可、engine hash 不符、metadata 解析失败和读取失败时 loader 调用次数均为零；其中 hash mismatch 使用合成内容的真实 SHA-256。没有伪造一个通过固定 hash 的合成源；成功路径由下述真实 pin 的原生测试覆盖。
 
 [`native.rc5.integration.cjs`](test/native.rc5.integration.cjs) 所有用例均为上述完全内存合成环境，具体断言：
 
