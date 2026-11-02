@@ -71,7 +71,13 @@ dist/                           pack.mjs 生成的可发布产物（gitignored�
 2. **真机 E2E 优先**：行为级用例跑在真实 DSH + 真实 Chromium 上；只有 regression 才补单测。
 3. **零成本 CI**：官方 Messages mock + 隔离 profile，PR 门禁不花模型钱。
 4. **不改宿主**：不修改签名应用、不触碰用户 profile/会话；所有写入都要有快照/回滚。
-5. **人类与 agent 都能贡献**：见 [AGENTS.md](AGENTS.md) 与 [CONTRIBUTING.md](CONTRIBUTING.md)。
+5. **人类与 agent 都能贡献**：所有改动走 **PR 流程**（分支 → PR → `ci-smoke` 绿 → `pr-review` 自动审查 → 人类合并），
+   见 [AGENTS.md](AGENTS.md) 与 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## E2E 报告与录像
+
+每次运行生成：`artifacts/latest/report/report.html`（带每个用例的 webm 录像 + 用例说明）与 `report.md`/`summary.json`。
+发布版把完整报告打包成 GitHub Release 附件 `e2e-report-<version>.zip`；README 里链接最近一次 Release。
 
 ## 文档
 

@@ -5,6 +5,11 @@
 ## [0.2.0] — 2026-11-02
 
 ### Added
+- **每个用例的录像 + 排版报告**：`video: on`，`e2e/reporters/test-report.mjs` 生成
+  `report.html`（内嵌播放器 + 用例说明）/`report.md`/`summary.json`；`delivery/pack-report.mjs` 打包为 Release 附件；
+  `e2e/test-cases.mjs` 维护每条用例「在验证什么」。
+- **PR 工作流**：`.github/workflows/pr-review.yml` 自动评论 diff 摘要 + 审查清单；`AGENTS.md`/`CONTRIBUTING.md`
+  规定所有改动走 PR（不直接 push main），CI 绿 + 人类合并。
 - 常驻侧栏会话树（R7）：vendor `@orphiczhou/dsh-session-tree`（MIT），懒展开、工作区分组、搜索/排序、
   置顶/重命名/Fork/归档、`tree_send`、SessionTree inspect provider。
 - 六类任务头像（R8）：组长/调研/开发/写作/数据/校验；标题关键词推断、手动覆盖、localStorage 持久、

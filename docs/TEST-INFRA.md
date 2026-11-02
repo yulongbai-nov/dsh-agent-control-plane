@@ -91,7 +91,16 @@
 若必须验收桌面壳，用 self-hosted macOS runner（本机已有安装版）跑同一命令。
 真实模型不进 PR CI：需要 secret 且产生费用；建议放 nightly 手动触发。
 
-## 7. 失败自动取证（截图 / 视频 / GIF / trace）
+## 7. 全量录像与报告（每个用例，成功也算）
+
+- `playwright.config.mjs`：`video: 'on'`，每个用例都录 webm（跳过用例除外）。
+- `e2e/reporters/test-report.mjs`：运行结束生成 `artifacts/latest/report/`：
+  `report.html`（内嵌每个用例的播放器 + 用例说明）、`report.md`、`summary.json`、`videos/*.webm`、失败截图。
+- 用例的「在验证什么」来自 `e2e/test-cases.mjs`（新增用例必须补一行）。
+- `delivery/pack-report.mjs` 把报告压成 `dist/e2e-report-<version>.zip`（GitHub Release 附件）；
+  CI 的 e2e job 也会打包并作为 `e2e-evidence` artifact 上传。
+
+## 8. 失败自动取证（截图 / 视频 / GIF / trace）
 
 - `e2e/playwright.config.mjs`：`screenshot: 'only-on-failure'`、`video: 'retain-on-failure'`、
   `trace: 'retain-on-failure'`，并注册 `./reporters/failure-evidence.mjs`。
@@ -104,13 +113,15 @@
   实测产出：`failure.png` (1440×900)、`failure.webm` (67 KB)、`failure.gif` (480×300, 42 帧, 327 KB)、
   `trace.zip` (~1 MB)。
 
-## 8. 命令速查
+## 9. 命令速查
 
 ```sh
 # 离线真实 GUI（零模型调用）
 node e2e/run-e2e.mjs
 # 确定性 mock 模型（官方 Messages mock，零成本，CI 用这个）
 node e2e/run-e2e.mjs --mock-model
+# 打包最近一次报告（HTML + 每个用例的 webm 录像）
+node delivery/pack-report.mjs
 # 真实模型验收（2 次调用）
 node e2e/run-e2e.mjs --real-model
 # 失败取证自检
@@ -118,9 +129,11 @@ DSH_E2E_SELF_FAIL=1 node e2e/run-e2e.mjs
 # 纯 Node 无头 CI 模式（不依赖桌面 app）
 DSH_E2E_HOME=/tmp/dsh-home DSH_E2E_ROOT=/tmp/dsh-e2e \
 DSH_E2E_DSH_BIN=$(npm prefix -g)/bin/dsh node e2e/run-e2e.mjs --mock-model
+# 打包最近一次报告（HTML + 每个用例的 webm 录像）
+node delivery/pack-report.mjs
 ```
 
-## 9. 下一步
+## 10. 下一步
 
 1. ~~接入官方 `llm-mock-server`~~ ✅ 已完成（默认层；`--mock-model`）。
 2. 用官方 mock 的 `tool_call_success`（`toolName`/`toolArguments`）确定性驱动 `workflow` 与
