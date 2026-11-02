@@ -11,7 +11,7 @@ function run(dir,overrides={}){return cp.spawnSync(process.execPath,[path.join(r
 (async()=>{
  const first=tree('one'),second=tree('two');const a=run(first),b=run(second);assert.equal(a.status,0,a.stderr);assert.equal(b.status,0,b.stderr);assert.deepEqual(JSON.parse(a.stdout),JSON.parse(b.stdout));
  const staged=await import(pathToFileURL(path.join(first,'client/rows/lineage-plan.mjs')).href);
- const list={ids:['root'],byId:{root:{id:'root',title:'root',running:false,retainedBy:{}}},projectionsBySession:{root:{state:'ready',values:{subagentCatalog:[{id:'child',mode:'continuable',label:'child'}]}},child:{state:'ready',values:{subagentCatalog:[]}}}};
+ const list={phase:'ready',ids:['root'],byId:{root:{id:'root',title:'root',running:false,retainedBy:{}}},projectionsBySession:{root:{state:'ready',values:{subagentCatalog:[{id:'child',mode:'continuable',label:'child'}]}},child:{state:'ready',values:{subagentCatalog:[]}}}};
  const rows=staged.planLineage({rootId:'root',scopeRootIds:['root'],list,expanded:new Set(['root']),archived:new Set(),statuses:new Map(),archivedFilter:'default'});
  assert.deepEqual(rows.map(row=>row.target),[{parentSessionId:'root',childSessionId:'child',mode:'continuable'}]);
  const replay=run(first);assert.notEqual(replay.status,0);assert.match(replay.stderr,/target already exists/);

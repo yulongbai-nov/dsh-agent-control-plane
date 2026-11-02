@@ -4,17 +4,17 @@ import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/c
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceBrowserProps } from '../contract/slots.ts'
 import type { SessionNode, SessionRowState } from '../tree.ts'
-import { planLineage, type LineageRow } from './lineage-plan.mjs'
+import { canInspectScope, planLineage, type LineageRow } from './lineage-plan.mjs'
 
 type Target = { parentSessionId:SessionId, childSessionId:SessionId, mode:'one-shot'|'continuable' }
 type Props = {
-  root:SessionNode; scopeRootIds:readonly SessionId[]; list:SessionListState; statuses:unknown;
+  root:SessionNode; scopeRootIds:readonly SessionId[]; list:SessionListState; statuses:unknown; conflictedRoot:boolean;
   rowState:SessionRowState; t:WorkspaceBrowserProps['t'];
   refreshLineage:(id:SessionId)=>Promise<unknown>|void; openLineage:(target:Target)=>void;
   renderNative:(toggle:ReactNode, expanded:boolean|undefined, groupId:string|undefined)=>ReactNode;
 }
 
-export function LineageGraft({ root, scopeRootIds, list, statuses, rowState, t, refreshLineage, openLineage, renderNative }:Props) {
+export function LineageGraft({ root, scopeRootIds, list, statuses, rowState, t, refreshLineage, openLineage, renderNative, conflictedRoot }:Props) {
   const [expanded,setExpanded]=useState<Set<string>>(()=>new Set())
   const [failure,setFailure]=useState(false)
   const generation=useRef(0)
@@ -23,7 +23,9 @@ export function LineageGraft({ root, scopeRootIds, list, statuses, rowState, t, 
   const removedFocus=useRef<{ node:HTMLElement, id:string, unambiguous:boolean, ancestors:string[] }|null>(null)
   const groupRef=useRef<HTMLDivElement|null>(null)
   useEffect(()=>()=>{generation.current++},[])
-  const rootOpen=expanded.has(root.id)
+  const blocked=conflictedRoot||!canInspectScope({rootId:root.id,scopeRootIds,list})
+  useLayoutEffect(()=>{if(blocked){generation.current++;setExpanded(current=>current.size?new Set():current);setFailure(false)}},[blocked])
+  const rootOpen=!blocked&&expanded.has(root.id)
   const rows=rootOpen ? planLineage({rootId:root.id,scopeRootIds,list,expanded,archived:new Set(rowState.archivedSessionIds),statuses,archivedFilter:rowState.archivedFilter}) : []
   useLayoutEffect(()=>{
     const snapshot=removedFocus.current;removedFocus.current=null
@@ -34,9 +36,10 @@ export function LineageGraft({ root, scopeRootIds, list, statuses, rowState, t, 
     const rowNode=target?[...nodes].find(node=>node.dataset.lineageKey===target.rowKey):undefined
     const openButton=rowNode?.querySelector<HTMLButtonElement>('[data-lineage-open]')
     if(openButton&&!openButton.disabled)openButton.focus()
-    else if(rootToggle.current?.isConnected)rootToggle.current.focus()
+    else if(rootToggle.current?.isConnected&&!rootToggle.current.disabled)rootToggle.current.focus()
   })
   const toggle=(id:string, open:boolean):void=>{
+    if(blocked)return
     const next=new Set(expanded)
     if(open)next.add(id)
     else if(id===root.id)next.clear()
@@ -62,7 +65,7 @@ export function LineageGraft({ root, scopeRootIds, list, statuses, rowState, t, 
     return controls?.querySelector<HTMLButtonElement>('[data-lineage-open]:not(:disabled)')??controls?.querySelector<HTMLButtonElement>('[data-lineage-toggle]:not(:disabled)')??null
   }
   const focusRow=(row:LineageRow|undefined):boolean=>{const control=row?controlFor(elementFor(row.rowKey)):null;if(!control)return false;control.focus();return true}
-  const focusRoot=():boolean=>{if(!rootToggle.current?.isConnected)return false;rootToggle.current.focus();return true}
+  const focusRoot=():boolean=>{if(!rootToggle.current?.isConnected||rootToggle.current.disabled)return false;rootToggle.current.focus();return true}
   const focusAdjacent=(index:number,step:1|-1):boolean=>{for(let i=index;i>=0&&i<rows.length;i+=step)if(focusRow(rows[i]))return true;return false}
   const handleRowKey=(event:KeyboardEvent<HTMLDivElement>,row:LineageRow):void=>{
     if(!(event.target instanceof HTMLElement)||event.target.closest('[data-lineage-key]')!==event.currentTarget)return
@@ -83,7 +86,7 @@ export function LineageGraft({ root, scopeRootIds, list, statuses, rowState, t, 
     else handled=focusAdjacent(index+1,1)
     if(handled){event.preventDefault();event.stopPropagation()}
   }
-  const toggleRoot=root.blank ? null : <button ref={rootToggle} type="button" aria-expanded={rootOpen} aria-label={t(rootOpen?'lineage.collapse':'lineage.expand',{ title:root.title })} onKeyDown={(event:KeyboardEvent<HTMLButtonElement>)=>{let handled=false;if(event.key==='ArrowRight'&&!rootOpen){toggle(root.id,true);handled=true}else if(event.key==='ArrowLeft'&&rootOpen){toggle(root.id,false);handled=true}else if((event.key==='ArrowDown'||event.key==='ArrowRight')&&rootOpen)handled=focusAdjacent(0,1);if(handled){event.preventDefault();event.stopPropagation()}}} onClick={(event:MouseEvent<HTMLButtonElement>)=>{event.stopPropagation();toggle(root.id,!rootOpen)}}>{rootOpen?'▾':'▸'}</button>
+  const toggleRoot=root.blank ? null : <button ref={rootToggle} type="button" disabled={blocked} aria-expanded={blocked?undefined:rootOpen} aria-label={t(blocked?'lineage.unavailable':rootOpen?'lineage.collapse':'lineage.expand',{ title:root.title })} onKeyDown={(event:KeyboardEvent<HTMLButtonElement>)=>{let handled=false;if(event.key==='ArrowRight'&&!rootOpen){toggle(root.id,true);handled=true}else if(event.key==='ArrowLeft'&&rootOpen){toggle(root.id,false);handled=true}else if((event.key==='ArrowDown'||event.key==='ArrowRight')&&rootOpen)handled=focusAdjacent(0,1);if(handled){event.preventDefault();event.stopPropagation()}}} onClick={(event:MouseEvent<HTMLButtonElement>)=>{event.stopPropagation();toggle(root.id,!rootOpen)}}>{rootOpen?'▾':'▸'}</button>
   const renderChild=(row:LineageRow):ReactNode=>{
     const target=row.target
     let focusNode:HTMLDivElement|null=null
@@ -101,5 +104,5 @@ export function LineageGraft({ root, scopeRootIds, list, statuses, rowState, t, 
       {(childRows.get(row.rowKey)?.length??0)>0&&<div role="group">{childRows.get(row.rowKey)?.map(renderChild)}</div>}
     </div>
   }
-  return <Fragment>{renderNative(toggleRoot,root.blank?undefined:rootOpen,rootOpen?groupId:undefined)}{rootOpen&&<div id={groupId} ref={groupRef} role="group">{failure&&<div role="alert">{t('lineage.error')}</div>}{rows.filter(row=>row.level===2).map(renderChild)}</div>}</Fragment>
+  return <Fragment>{renderNative(toggleRoot,root.blank||blocked?undefined:rootOpen,rootOpen?groupId:undefined)}{rootOpen&&<div id={groupId} ref={groupRef} role="group">{failure&&<div role="alert">{t('lineage.error')}</div>}{rows.filter(row=>row.level===2).map(renderChild)}</div>}</Fragment>
 }

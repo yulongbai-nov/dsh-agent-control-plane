@@ -38,6 +38,7 @@ import {
 } from '../tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './Rows.tsx'
 import { LineageGraft } from './LineageGraft.tsx'
+import { duplicateWorkspaceRoots } from './lineage-plan.mjs'
 import { AnimatedRows } from './AnimatedRows.tsx'
 import { FLAT_SESSION_ORDER_KEY, type SessionGroupBy } from '../stores.ts'
 import { WorkspacePickFlow } from '../WorkspacePicker.tsx'
@@ -264,6 +265,8 @@ type SessionTreeProps = Pick<
   shortcuts: readonly import('@deepseek-ai/dsh-client-shortcuts/client').ShortcutCatalogEntry[]
   /** Always-mounted Session list snapshot. */
   list: SessionListState
+  /** Duplicate Workspace membership blocks lineage without changing native rows. */
+  ambiguousWorkspaceRoots: ReadonlySet<string> | null
   /** Host account home for POSIX hover-path abbreviation. */
   home?: string | undefined
   /** Workspaces in Host group order with browser-projected Session order. */
@@ -316,7 +319,7 @@ function EmptySessions({ rowState, onLeaveArchivedOnly, t }: Pick<SessionTreePro
 
 /** The scrolling session tree; unmounting drops the sessions subscription and the session watermarks. */
 function SessionTree({
-  list, useSessionStatus, startSession, open, refreshLineage, openLineage, workspaces, ungroupedSessionIds,
+  list, useSessionStatus, startSession, open, refreshLineage, openLineage, ambiguousWorkspaceRoots, workspaces, ungroupedSessionIds,
   rowState, onLeaveArchivedOnly,
   workspaceReady, animationResetKey, usePanelInfo,
   onRenameRequest, onDeleteRequest, onSessionRenameRequest,
@@ -622,7 +625,7 @@ function SessionTree({
             },
           }
           return (
-            <LineageGraft key={node.id} root={node} scopeRootIds={group.sessions.map(session => session.id)} list={list} statuses={statuses} rowState={rowState} t={t} refreshLineage={refreshLineage} openLineage={openLineage} renderNative={(lineageToggle,lineageExpanded,lineageGroupId) => <SessionNodeItem
+            <LineageGraft key={node.id} root={node} scopeRootIds={group.sessions.map(session => session.id)} list={list} statuses={statuses} rowState={rowState} t={t} refreshLineage={refreshLineage} openLineage={openLineage} conflictedRoot={ambiguousWorkspaceRoots===null||ambiguousWorkspaceRoots.has(node.id)} renderNative={(lineageToggle,lineageExpanded,lineageGroupId) => <SessionNodeItem
               node={node}
               currentId={current}
               now={now}
@@ -690,7 +693,7 @@ function SessionTree({
 
 /** The flat "In one list" body: every session is one draggable top-level row. */
 function FlatList({
-  list, sessionIds, rowState, onLeaveArchivedOnly, useSessionStatus, open, refreshLineage, openLineage, onSessionRenameRequest,
+  list, sessionIds, rowState, onLeaveArchivedOnly, useSessionStatus, open, refreshLineage, openLineage, ambiguousWorkspaceRoots, onSessionRenameRequest,
   usePanelInfo, setSessionOrder, workspaceReady, animationResetKey,
   revealSessionId, onSessionRevealed, renderSlot, t,
 }: Pick<
@@ -699,6 +702,7 @@ function FlatList({
   | 'open'
   | 'refreshLineage'
   | 'openLineage'
+  | 'ambiguousWorkspaceRoots'
   | 'onSessionRenameRequest'
   | 'renderSlot'
   | 'usePanelInfo'
@@ -751,7 +755,7 @@ function FlatList({
           const normalizeHalf = (half: 'before' | 'after'): 'before' | 'after' =>
             node.blank ? 'after' : half
           return (
-            <LineageGraft key={node.id} root={node} scopeRootIds={rows.map(row => row.id)} list={list} statuses={statuses} rowState={rowState} t={t} refreshLineage={refreshLineage} openLineage={openLineage} renderNative={(lineageToggle,lineageExpanded,lineageGroupId) => <SessionNodeItem
+            <LineageGraft key={node.id} root={node} scopeRootIds={rows.map(row => row.id)} list={list} statuses={statuses} rowState={rowState} t={t} refreshLineage={refreshLineage} openLineage={openLineage} conflictedRoot={ambiguousWorkspaceRoots===null||ambiguousWorkspaceRoots.has(node.id)} renderNative={(lineageToggle,lineageExpanded,lineageGroupId) => <SessionNodeItem
               node={node}
               currentId={currentId}
               now={now}
@@ -951,6 +955,7 @@ export function WorkspaceBrowser({
     })),
     [storedWorkspaces, defaultWorkspaceName],
   )
+  const ambiguousWorkspaceRoots = useMemo(() => duplicateWorkspaceRoots(workspaces), [workspaces])
   const workspacePhase = useWorkspaces(state => state.phase)
   const workspaceStreamState = useWorkspaces(state => state.state)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
@@ -976,6 +981,9 @@ export function WorkspaceBrowser({
   }
   const leaveArchivedOnly = (): void => { actions.setArchivedFilter('default') }
   const workspaceReady = workspacePhase === 'ready' && workspaceStreamState !== 'loading'
+  // Native rows may remain visible on a Workspace stream error, but their
+  // lineage scope must not trust a stale or incomplete membership snapshot.
+  const lineageWorkspaceReady = workspacePhase === 'ready' && workspaceStreamState === 'idle'
   const mainSessionId = Object.values(list.byId)
     .find(session => (session.retainedBy.mainView ?? 0) > 0)?.id
   const currentBlank = mainSessionId !== undefined && list.byId[mainSessionId]?.blank === true
@@ -1440,6 +1448,7 @@ export function WorkspaceBrowser({
                 open={guardedOpen}
                 refreshLineage={refreshLineage}
                 openLineage={openLineage}
+                ambiguousWorkspaceRoots={lineageWorkspaceReady ? ambiguousWorkspaceRoots : null}
                 onSessionRenameRequest={requestSessionRename}
                 renderSlot={renderSlot}
                 setSessionOrder={saveSessionOrder}
@@ -1470,6 +1479,7 @@ export function WorkspaceBrowser({
                 open={guardedOpen}
                 refreshLineage={refreshLineage}
                 openLineage={openLineage}
+                ambiguousWorkspaceRoots={lineageWorkspaceReady ? ambiguousWorkspaceRoots : null}
                 insertWorkspaceBefore={insertWorkspaceBefore}
                 revealSessionId={revealSessionId}
                 onSessionRevealed={acknowledgeSessionReveal}

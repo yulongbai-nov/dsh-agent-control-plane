@@ -5,7 +5,7 @@ declare module 'react' {
  export type KeyboardEvent<T>={key:string,target:EventTarget,currentTarget:T,preventDefault():void,stopPropagation():void};
  export const Fragment:any;
  export function useEffect(f:()=>void|(()=>void), deps:unknown[]):void;
- export function useLayoutEffect(f:()=>void|(()=>void)):void;
+ export function useLayoutEffect(f:()=>void|(()=>void),deps?:unknown[]):void;
  export function useRef<T>(value:T):{current:T};
  export function useId():string;
  export function useState<T>(v:T|(()=>T)):[T,(value:T|((p:T)=>T))=>void];
