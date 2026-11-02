@@ -1,4 +1,44 @@
-# R1–R18 实现与验收状态（CR-002）
+# R1–R18 实现与验收状态
+
+> **2026-11-02 交付后状态。** 需求真源仍是 [v0.2 spec](../../dsh-mocks/spec/DSH-控制面-spec-v0.2.md)，
+> 本表只登记"当前仓库交付物"的状态。判定口径：✅ 有真机 E2E 证据；🟡 部分（已安装/可用，但验收不完整）；
+> 🔴 未实现。**旧表（2026-11-01，交付前）保留在文末作为历史快照。**
+
+## 当前交付物（v0.1）
+
+| 需求 | 交付形态 | 真机证据 | 状态 |
+|---|---|---|---|
+| R1 递归团队 | `dsh-agent-teams-model-override`（pinned git） | 工具对 agent 可见（`TOOL_YES`）；未跑 L0→L3 全链 | 🟡 |
+| R2 团队级深度 | 无（仅原生全局 maxDepth） | — | 🔴 |
+| R3 手动建队 | 官方 Agent Team 面板 + 每成员模型创建工具 | 插件加载、Plugins 页可见 | 🟡 |
+| R4 自动建队 | 无 | — | 🔴 |
+| R5 归档与唤醒 | 官方归档 + 插件冷恢复 | 未做归档期拒绝语义 E2E | 🟡 |
+| R6 Agent Spec | 同 R1 组件（provider/model/effort） | 工具可见性实测；真实 spawn 未在 E2E 发起 | 🟢 面 |
+| R7 常驻侧栏树 | `third_party/dsh-session-tree`（vendor + 头像层） | E2E：树渲染、折叠、筛选、行菜单 | ✅ |
+| R8 六类头像 | 同上 | E2E：推断、手动覆盖、刷新持久、恢复自动 | ✅ |
+| R9 任务驱动标题 | 无 | — | 🔴 |
+| R10 workflow 图 | `dsh-workflow-map@1.0.0` | E2E：入口可用、不崩溃、可回会话 | 🟡 |
+| R11 节点看板 | 同 R10（地图内节点/进度） | 未验双向联动 | 🟡 |
+| R12 缓存友好 | 无（遥测可见 cache 指标） | — | 🔴 |
+| R13 安装/升级/回滚 | `delivery/` + `dshmarket` | 装 5 组件→回滚恢复原 7 bundle 实测；E2E 插件页 | ✅ |
+| R14 权限默认 | 未改动 | 文档说明（用户已放弃自动审查默认） | ⚪ |
+| R15 workflow 统计 | `dsh-local-telemetry`（部分） | 遥测落库 rows>0 | 🟡 |
+| R16 utility 库 | 无 | — | 🔴 |
+| R17 视觉/无障碍 | 各插件沿用官方 token | 浅色主题截图；深色/locale/键盘待补 | 🟡 |
+| R18 本地遥测 | `dsh-local-telemetry@0.2.1` | 隔离 SQLite 落库/查询；导出/清除待验 | 🟡 |
+
+**E2E 汇总**：`node e2e/run-e2e.mjs --mock-model` → 12 passed / 3 skipped（零模型调用）；
+`--real-model` → 14 passed（2 次真实调用）；用户数据隔离审计通过。详见 `DELIVERY.md`。
+
+## 本轮（v0.1）交付边界
+
+- 已安装到独立 `e2e` profile 并真机验收；**未改动** `desktop` profile、签名 app、用户会话。
+- 组件全部固定版本/commit；第三方均为 MIT、无外部网络依赖（调研见 `DELIVERY.md`）。
+- 未做：R2/R4/R9/R12/R16；深化方案见 [REMAINING-REQUIREMENTS-PLAN.md](REMAINING-REQUIREMENTS-PLAN.md)。
+
+---
+
+## 历史状态（2026-11-01，交付前快照）
 
 截至 2026-11-01，需求真源是相邻 [v0.2 spec](../../dsh-mocks/spec/DSH-控制面-spec-v0.2.md)；这里仅登记实现与证据，不复制或放宽验收要求。状态含义：**未开始**＝尚无对应实现；**原型**＝有局部代码或合成实验，不能替代实际功能；**待验证**＝实现已具备需真实运行验收；**验收通过**＝完整实现且所需端到端验收有证据。单个通过的合成测试不能提升整项状态；以下无任何一项标记验收通过。文档或测试可能在本表之后更新，检查最新提交和 spec。
 

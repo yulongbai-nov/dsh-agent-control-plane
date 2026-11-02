@@ -1,6 +1,7 @@
 # DSH Agent 控制面 · 最终交付（2026-11-02）
 
-> **状态：可安装、可回滚、可打包；真机 E2E 14/14 通过（含 2 次真实模型调用）。**
+> **状态：可安装、可回滚、可打包；真机 E2E 14/14 通过（含 2 次真实模型调用）；
+> 确定性 mock 模型层 + CI 无头模式已验证（12/12），失败用例自动截图/视频/GIF/trace。**
 > 目标宿主：DeepSeek Harness 桌面版 `0.2.1-rc.5`。未修改签名应用、未改动 `desktop` profile、
 > 未触碰用户会话与 GUI。
 
@@ -27,8 +28,9 @@
 ## 3. 真机 E2E 结果
 
 ```
-node e2e/run-e2e.mjs            -> 11 passed, 3 skipped   (零模型调用)
-node e2e/run-e2e.mjs --real-model -> 14 passed            (2 次真实模型调用)
+node e2e/run-e2e.mjs              -> 12 passed, 4 skipped   (零模型调用)
+node e2e/run-e2e.mjs --mock-model -> 12 passed, 4 skipped   (确定性本地 mock 模型，CI 用)
+node e2e/run-e2e.mjs --real-model -> 14 passed              (2 次真实模型调用)
 ```
 
 | 验证点 | 结果 |
@@ -94,6 +96,16 @@ node delivery/pack.mjs   # -> dist/*.tgz + INSTALL.md + manifest.json
   总成本远低于 12 元预算（每次约 1.2 万 token）。
 - 回归 E2E 默认零模型调用；`--real-model` 固定 2 次，不循环跑。
 
+## 6.5 测试基建（2026-11-02 补充）
+
+- **mock 模型层**：`e2e/mock-provider/`（OpenAI 兼容、SSE、429/500/超时注入、录制/回放、无依赖）。
+  真实 GUI 验证：模型显示 `mock-echo`，零真实调用。
+- **官方测试基建**：上游 `@deepseek-ai/dsh-llm-mock-server` / `llm-replay` / `session-snapshot` 等
+  rc.5 已发布；DSH 默认 adapter 走 Messages 协议，建议下一步切换（见 `docs/TEST-INFRA.md` §3）。
+- **CI/CD**：npm 版 DSH 纯 Node 无头可跑（本机实测 12/12），GitHub Actions 工作流在
+  `.github/workflows/e2e.yml`（mock 模型零成本 + 证据 artifact 上传）。
+- **失败取证**：截图 / 视频 / GIF / trace 自动归档；GIF 由 ffmpeg 抽帧 + gifenc 合成。
+
 ## 7. 已知缺口与建议下一步
 
 1. **R9 标题**：需扩展标题服务（fork/上游 seam），否则只能做「会话备注/标签」降级。
@@ -106,4 +118,6 @@ node delivery/pack.mjs   # -> dist/*.tgz + INSTALL.md + manifest.json
 
 - 新增：`third_party/`、`e2e/`、`delivery/`、`dist/`、`docs/evidence/`。
 - 未改：`/Applications/DeepSeek Harness.app`、`~/.dsh/profiles/desktop`、用户会话/凭据/工作区。
-- 旧的研究包与历史文档保留原样；`docs/status.md` 是本次交付之前的状态记录。
+- 旧研究包保留；`docs/status.md` 已更新为交付后状态（历史表在文末）。
+- 文档一致性审计：`docs/CONSISTENCY-AUDIT-2026-11-02.md`；剩余需求方案：`docs/REMAINING-REQUIREMENTS-PLAN.md`；
+  测试基建：`docs/TEST-INFRA.md`。

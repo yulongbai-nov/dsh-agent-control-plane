@@ -1,4 +1,11 @@
-# 安装、回滚与 GUI 验收清单（CR-008，未来模板）
+# 安装、回滚与 GUI 验收清单（CR-008，历史模板，已被交付取代）
+
+> **2026-11-02 更新：本页已被交付取代。** 当前可执行的安装/回滚/打包命令在仓库根
+> [DELIVERY.md](../DELIVERY.md) 与 [delivery/README.md](../delivery/README.md)：
+> `node delivery/install.mjs --profile <p>` / `node delivery/uninstall.mjs --profile <p>` / `node delivery/pack.mjs`。
+> 真机 E2E 见 [e2e/README.md](../e2e/README.md)。本页以下内容保留为**历史验收清单**（VM 隔离方案未采用），
+> 不再作为安装门槛；`desktop` profile 的写入仍需用户同意并保留快照。
+
 
 > **状态：阻断，未安装、未演练回滚、未完成真实 GUI 验收。** 目前没有可验收的完整产品包，独立 GUI 沙盒的安全条件也尚未证明。本页是未来交付负责人用于审查的模板，不是当前可执行操作手册；不得据此修改用户 profile、已签名 app 或运行中的 GUI。mock、单元测试和内存替身集成均不等于安装或 GUI 验收。
 

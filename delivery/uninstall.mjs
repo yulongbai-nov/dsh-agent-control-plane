@@ -17,6 +17,8 @@ import { fileURLToPath } from 'node:url'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const HOME = homedir()
+// Honour an isolated $DSH_HOME (CI / throwaway test profiles).
+const DSH_HOME_ROOT = process.env.DSH_HOME || join(HOME, '.dsh')
 const DSH = process.env.DSH_BIN || '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh'
 const argv = process.argv.slice(2)
 const flag = (name, fallback) => {
@@ -29,7 +31,7 @@ const fail = (message) => {
   console.error(`[uninstall] ERROR: ${message}`)
   process.exit(1)
 }
-const profileDir = join(HOME, '.dsh/profiles', PROFILE)
+const profileDir = join(DSH_HOME_ROOT, 'profiles', PROFILE)
 const receiptPath = join(profileDir, '.control-plane-install.json')
 if (!existsSync(receiptPath)) fail(`no install receipt at ${receiptPath}; nothing to roll back automatically`)
 const receipt = JSON.parse(readFileSync(receiptPath, 'utf8'))

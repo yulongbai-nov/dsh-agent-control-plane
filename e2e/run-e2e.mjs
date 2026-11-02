@@ -21,6 +21,8 @@ import { fileURLToPath } from 'node:url'
 
 const DSH = process.env.DSH_E2E_DSH_BIN || '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh'
 const HOME = homedir()
+// CI / npm-CLI mode: point the whole run at an isolated $DSH_HOME instead of ~/.dsh.
+const DSH_HOME_ROOT = process.env.DSH_E2E_HOME || join(HOME, '.dsh')
 const HARNESS = dirname(fileURLToPath(import.meta.url))
 const REPO = resolve(HARNESS, '..')
 const PROFILE = process.env.DSH_E2E_PROFILE || 'e2e'
@@ -32,6 +34,7 @@ const args = process.argv.slice(2)
 const RESET_STATE = args.includes('--reset-state')
 const REAL_MODEL = args.includes('--real-model')
 const NO_INSTALL = args.includes('--no-install')
+const MOCK_MODEL = args.includes('--mock-model')
 
 const requiredBundles = [
   'dsh-control-plane-session-tree',
@@ -45,7 +48,7 @@ const log = (...a) => console.log('[run-e2e]', ...a)
 const sanitize = (s) => String(s ?? '').replace(/token=[A-Za-z0-9_-]+/g, 'token=<redacted>')
 const sha256 = (p) => (existsSync(p) ? createHash('sha256').update(readFileSync(p)).digest('hex') : null)
 const listSessionsDirs = () =>
-  existsSync(join(HOME, '.dsh/sessions')) ? readdirSync(join(HOME, '.dsh/sessions')).sort() : []
+  existsSync(join(DSH_HOME_ROOT, 'sessions')) ? readdirSync(join(DSH_HOME_ROOT, 'sessions')).sort() : []
 const tcpOpen = (port) =>
   new Promise((resolveConn) => {
     const s = connect({ host: '127.0.0.1', port }, () => {
@@ -73,21 +76,36 @@ const runCommand = (cmd, argv, opts = {}) =>
 
 if (PROFILE === 'desktop') throw new Error('refusing to run E2E against the desktop profile')
 
-const profileDir = join(HOME, '.dsh/profiles', PROFILE)
+const profileDir = join(DSH_HOME_ROOT, 'profiles', PROFILE)
 
 // --- profile bootstrap: copy web template, apply isolation patch, install bundles ---
 if (!NO_INSTALL) {
   if (!existsSync(join(profileDir, 'package.json'))) {
-    const web = join(HOME, '.dsh/profiles/web')
-    if (!existsSync(web)) throw new Error(`no web profile template at ${web}`)
-    cpSync(web, profileDir, { recursive: true })
-    log(`created profile "${PROFILE}" from the web template`)
+    if (process.env.DSH_E2E_HOME) {
+      // CI: the npm CLI creates the profile from its shipped template.
+      const code = await runCommand(DSH, ['--profile', PROFILE, '--from-default-profile', 'web', '--dump-config'], {
+        stdio: 'ignore',
+        env: { ...process.env, DSH_HOME: DSH_HOME_ROOT, DSH_BIN: DSH },
+      })
+      if (code !== 0) throw new Error('failed to create the profile from the shipped web template')
+      log(`created profile "${PROFILE}" from the shipped web template (npm CLI)`)
+    } else {
+      const web = join(HOME, '.dsh/profiles/web')
+      if (!existsSync(web)) throw new Error(`no web profile template at ${web}`)
+      cpSync(web, profileDir, { recursive: true })
+      log(`created profile "${PROFILE}" from the web template`)
+    }
   }
   const patchPath = join(profileDir, 'cordis.patch.yml')
   const marker = '# --- dsh-agent-control-plane e2e isolation ---'
   const current = existsSync(patchPath) ? readFileSync(patchPath, 'utf8') : ''
   if (!current.includes(marker)) {
-    appendFileSync(patchPath, '\n' + readFileSync(join(HARNESS, 'profile-patch.yml'), 'utf8'))
+    const isolationPatch = readFileSync(join(HARNESS, 'profile-patch.yml'), 'utf8').replaceAll('/tmp/dsh-e2e', ROOT)
+    // A fresh shipped-template profile ships an inline empty array `[]`; entries
+    // cannot be appended after it, so replace it in that case.
+    const emptyArray = current.trim() === '' || current.trim().endsWith('[]')
+    if (existsSync(patchPath) && !emptyArray) appendFileSync(patchPath, '\n' + isolationPatch)
+    else writeFileSync(patchPath, isolationPatch)
     log('applied the e2e isolation patch (state redirected under', STATE + ')')
   }
   const pkg = JSON.parse(readFileSync(join(profileDir, 'package.json'), 'utf8'))
@@ -95,14 +113,16 @@ if (!NO_INSTALL) {
   const missing = requiredBundles.filter((name) => !bundles.includes(name))
   if (missing.length) {
     log('installing control-plane bundles:', missing.join(', '))
-    const code = await runCommand(process.execPath, [join(REPO, 'delivery/install.mjs'), '--profile', PROFILE, '--yes'])
+    const code = await runCommand(process.execPath, [join(REPO, 'delivery/install.mjs'), '--profile', PROFILE, '--yes'], {
+      env: { ...process.env, DSH_HOME: DSH_HOME_ROOT, DSH_BIN: DSH },
+    })
     if (code !== 0) throw new Error('delivery install failed')
   }
 }
 
 if (!existsSync(join(profileDir, 'package.json'))) throw new Error(`test profile missing: ${profileDir}`)
 
-const HOST_PATTERN = `dsh-desktop-host/lib/cli.js (${PROFILE}|--profile ${PROFILE})`
+const HOST_PATTERN = `(dsh-desktop-host/lib/cli.js|@deepseek-ai/dsh/lib/bin.js) (${PROFILE}|--profile ${PROFILE})`
 const leftover = await grep(HOST_PATTERN)
 if (leftover.length) throw new Error(`another ${PROFILE} instance is already running:\n${leftover.join('\n')}`)
 
@@ -118,15 +138,60 @@ if (RESET_STATE) {
 }
 mkdirSync(WORKSPACE, { recursive: true })
 
+// --- optional deterministic model layer: local OpenAI-compatible mock provider ---
+let mockProvider = null
+let mockPatchPath = null
+let originalProfilePatch = null
+let mockRecordPath = null
+if (MOCK_MODEL) {
+  mockRecordPath = join(STATE, 'mock-provider', 'requests.jsonl')
+  mkdirSync(dirname(mockRecordPath), { recursive: true })
+  mockProvider = spawn(process.execPath, [join(HARNESS, 'mock-provider/server.mjs'), '--record', mockRecordPath], {
+    stdio: ['ignore', 'pipe', 'inherit'],
+  })
+  const mockUrl = await new Promise((resolveMock, rejectMock) => {
+    let out = ''
+    const timer = setTimeout(() => rejectMock(new Error('mock provider start timeout')), 10_000)
+    mockProvider.stdout.on('data', (d) => {
+      out += d
+      const m = out.match(/MOCK_PROVIDER_URL=(\S+)/)
+      if (m) {
+        clearTimeout(timer)
+        resolveMock(m[1])
+      }
+    })
+  })
+  log('mock model provider:', mockUrl)
+  mockPatchPath = join(profileDir, 'cordis.patch.yml')
+  originalProfilePatch = readFileSync(mockPatchPath, 'utf8')
+  appendFileSync(
+    mockPatchPath,
+    '\n# --- mock model (transient, restored after the run) ---\n' +
+      '- id: llm-pi-ai\n  name: "@deepseek-ai/dsh-llm-pi-ai"\n  config:\n    providers:\n      e2e-mock:\n' +
+      `        api: openai-completions\n        baseURL: ${mockUrl}\n        apiKeyEnv: E2E_MOCK_KEY\n` +
+      '        models:\n          - id: mock-echo\n            contextWindow: 32768\n            maxTokens: 2048\n' +
+      '            reasoningEfforts: false\n' +
+      '- id: agent-default-model\n  name: "@deepseek-ai/dsh-agent-default-model"\n  config:\n' +
+      '    provider: e2e-mock\n    model: mock-echo\n',
+  )
+  log('default model switched to e2e-mock/mock-echo for this run')
+}
+
 // --- pre-run isolation snapshot of the user's real DSH home ---
-const userWorkspaceHashBefore = sha256(join(HOME, '.dsh/storages/workspace.json'))
-const userCredentialsHashBefore = sha256(join(HOME, '.dsh/.credentials.yaml'))
+const userWorkspaceHashBefore = sha256(join(DSH_HOME_ROOT, 'storages/workspace.json'))
+const userCredentialsHashBefore = sha256(join(DSH_HOME_ROOT, '.credentials.yaml'))
 const userSessionsBefore = listSessionsDirs()
 
 // --- boot the instance ---
 const env = { ...process.env }
-delete env.DSH_HOME // share the real ~/.dsh home: that is where the credentials live
-delete env.DSH_AGENTS_HOME
+if (MOCK_MODEL) env.E2E_MOCK_KEY = 'dsh-e2e-mock'
+if (process.env.DSH_E2E_HOME) {
+  env.DSH_HOME = process.env.DSH_E2E_HOME
+  env.DSH_AGENTS_HOME = join(process.env.DSH_E2E_HOME, 'agents')
+} else {
+  delete env.DSH_HOME // share the real ~/.dsh home: that is where the credentials live
+  delete env.DSH_AGENTS_HOME
+}
 const t0 = Date.now()
 const child = spawn(DSH, ['--profile', PROFILE, '--host', '127.0.0.1', '--port', '0', '--no-open'], {
   cwd: WORKSPACE,
@@ -172,7 +237,7 @@ let testExitCode = 1
 try {
   const pw = spawn(
     process.execPath,
-    [join(HARNESS, 'node_modules/playwright/cli.js'), 'test', '--config', join(HARNESS, 'playwright.config.mjs'), '--reporter=list'],
+    [join(HARNESS, 'node_modules/playwright/cli.js'), 'test', '--config', join(HARNESS, 'playwright.config.mjs')],
     {
       cwd: HARNESS,
       env: {
@@ -182,6 +247,13 @@ try {
         DSH_E2E_RUN_DIR: runDir,
         DSH_E2E_ROOT: ROOT,
         DSH_E2E_REAL_MODEL: REAL_MODEL ? '1' : '0',
+        // Passthrough so `DSH_E2E_SELF_FAIL=1 node e2e/run-e2e.mjs` runs the
+        // deliberate-failure evidence self-check; the evidence reporter also
+        // receives the same runId as this runner's run directory.
+        DSH_E2E_SELF_FAIL: process.env.DSH_E2E_SELF_FAIL || '',
+        DSH_E2E_RUN_ID: runId,
+        DSH_E2E_MOCK_MODEL: MOCK_MODEL ? '1' : '0',
+        DSH_E2E_MOCK_RECORD: mockRecordPath || '',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     },
@@ -216,8 +288,8 @@ try {
   results.leftoverProcesses = leftoverAfter
   log(`instance stopped; port ${port} released=${portReleased}; leftover ${PROFILE} processes=${leftoverAfter.length}`)
 
-  const userWorkspaceHashAfter = sha256(join(HOME, '.dsh/storages/workspace.json'))
-  const userCredentialsHashAfter = sha256(join(HOME, '.dsh/.credentials.yaml'))
+  const userWorkspaceHashAfter = sha256(join(DSH_HOME_ROOT, 'storages/workspace.json'))
+  const userCredentialsHashAfter = sha256(join(DSH_HOME_ROOT, '.credentials.yaml'))
   const userSessionsAfter = listSessionsDirs()
   results.isolation = {
     userWorkspaceJsonUnchanged: userWorkspaceHashBefore === userWorkspaceHashAfter,
@@ -232,6 +304,19 @@ try {
     `isolation: workspace.json unchanged=${results.isolation.userWorkspaceJsonUnchanged}, ` +
       `sessions dirs unchanged=${results.isolation.userSessionsDirUnchanged}, credentials unchanged=${results.isolation.userCredentialsUnchanged}`,
   )
+
+  // Restore the profile patch and stop the mock provider even when tests failed.
+  if (originalProfilePatch !== null && mockPatchPath) writeFileSync(mockPatchPath, originalProfilePatch)
+  if (mockProvider && mockProvider.exitCode === null) {
+    mockProvider.kill('SIGTERM')
+    await new Promise((r) => setTimeout(r, 300))
+    if (mockProvider.exitCode === null) mockProvider.kill('SIGKILL')
+  }
+  if (mockRecordPath && existsSync(mockRecordPath)) {
+    const lines = readFileSync(mockRecordPath, 'utf8').trim().split('\n').filter(Boolean).length
+    results.mockProvider = { record: mockRecordPath, requests: lines }
+    log('mock provider: model requests served =', lines)
+  }
 
   const latest = join(ARTIFACTS, 'latest')
   rmSync(latest, { recursive: true, force: true })

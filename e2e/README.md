@@ -7,10 +7,12 @@
 
 ```sh
 cd e2e
-npm install            # 首次：安装 playwright 1.64.1（浏览器缓存已在 ~/Library/Caches/ms-playwright）
-node run-e2e.mjs       # 离线套件（11 条，零模型请求）
-node run-e2e.mjs --real-model   # 追加 3 条真实模型/遥测用例（约 2 次模型调用）
-node run-e2e.mjs --reset-state  # 清空隔离状态后重跑
+npm install                    # 首次：安装 playwright 1.64.1（浏览器缓存已在 ~/Library/Caches/ms-playwright）
+node run-e2e.mjs               # 离线套件（12 条，零模型请求）
+node run-e2e.mjs --mock-model  # 追加确定性 mock 模型层（零成本，CI 用这个）
+node run-e2e.mjs --real-model  # 追加 3 条真实模型/遥测用例（约 2 次模型调用）
+node run-e2e.mjs --reset-state # 清空隔离状态后重跑
+DSH_E2E_SELF_FAIL=1 node run-e2e.mjs  # 取证自检：故意失败一次，验证截图/视频/GIF/trace
 ```
 
 运行器自动完成：缺失时从 `web` 模板创建 `e2e` profile → 注入隔离 patch →
@@ -38,12 +40,32 @@ node run-e2e.mjs --reset-state  # 清空隔离状态后重跑
 | `04-plugins` | Plugins 页列出 5 个控制面插件；dshmarket 提供 Plugin Market 入口 |
 | `05-workflow-map` | 侧栏「工作流地图」入口可打开且不崩溃，可回到会话 |
 | `06-real-model` | 真实回复 + token 用量；`spawn_teammate_with_model` 对 agent 可见；遥测 SQLite 有真实事件行 |
+| `07-mock-model` | 本地 OpenAI 兼容 mock provider 的确定性回复，且零真实模型调用（`--mock-model`） |
+| `99-self-check` | 仅 `DSH_E2E_SELF_FAIL=1` 时故意失败，用于验证失败取证链路 |
 
 ## 证据
 
 - 截图与 console 报告：`/tmp/dsh-e2e/artifacts/latest/`（每次运行覆盖）
 - 汇总：`/tmp/dsh-e2e/artifacts/last-run.json`（启动耗时、端口、残留进程、隔离审计）
 - 仓库内留存：`docs/evidence/2026-11-02/`
+
+## 失败取证
+
+失败用例自动留：`failure.png`、`failure.webm`、`failure.gif`、`trace.zip`、`error.txt`、`evidence.json`，
+目录 `${DSH_E2E_ARTIFACTS}/failures/<runId>/<test-slug>/`；`DSH_E2E_SELF_FAIL=1` 可自检整条链路。
+实现与 CI 上传见 `reporters/README.md` 与仓库 `docs/TEST-INFRA.md`。
+
+## CI / 无头模式
+
+GitHub Actions 用 npm 版 DSH（纯 Node，不依赖 Electron）跑同一套 mock E2E：见
+`.github/workflows/e2e.yml`。本地模拟 CI：
+
+```sh
+DSH_E2E_HOME=/tmp/dsh-home DSH_E2E_ROOT=/tmp/dsh-e2e \
+DSH_E2E_DSH_BIN=$(npm prefix -g)/bin/dsh node e2e/run-e2e.mjs --mock-model
+```
+
+（CI 里需要 `npm i -g @deepseek-ai/dsh@0.2.1-rc.5 pnpm@11.28.5`；profile 由 npm CLI 的 shipped template 自动创建。）
 
 ## 注意
 

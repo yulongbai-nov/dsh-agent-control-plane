@@ -1,0 +1,99 @@
+name: e2e
+
+# Headless real-GUI E2E for the DSH agent control plane.
+#
+# Verified locally (2026-11-02) against the npm CLI, not the Electron desktop app:
+#   - `@deepseek-ai/dsh@0.2.1-rc.5` runs on plain Node 24 (no Electron dependency);
+#     `dsh --profile <p> --host 127.0.0.1 --port 0 --no-open` serves the real Web UI.
+#   - The whole flow (profile bootstrap -> plugin install -> mock model -> Chromium)
+#     passes 12/12 with an isolated $DSH_HOME and zero model cost.
+#
+# Coverage limit: this runs core + Web GUI. The signed Electron desktop shell
+# cannot run on a Linux runner; desktop-shell fidelity is covered by the local
+# macOS run (`node e2e/run-e2e.mjs --mock-model`) or a self-hosted macOS runner.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-mock:
+    name: E2E (mock model, headless)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DSH_E2E_HOME: ${{ runner.temp }}/dsh-home
+      DSH_E2E_ROOT: ${{ runner.temp }}/dsh-e2e
+      DSH_TELEMETRY_DISABLED: '1'
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install DSH CLI and pnpm
+        run: |
+          npm install -g @deepseek-ai/dsh@0.2.1-rc.5 pnpm@11.28.5
+          echo "DSH_E2E_DSH_BIN=$(npm prefix -g)/bin/dsh" >> "$GITHUB_ENV"
+          echo "DSH_BIN=$(npm prefix -g)/bin/dsh" >> "$GITHUB_ENV"
+
+      - name: Install E2E dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Chromium (headless, no xvfb needed)
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run E2E against an isolated profile with the local mock model
+        run: node e2e/run-e2e.mjs --mock-model
+
+      - name: Upload E2E evidence (screenshots, GIFs, traces, isolation report)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-evidence
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            ${{ env.DSH_E2E_ROOT }}/artifacts
+            ${{ env.DSH_E2E_ROOT }}/runs
+            ${{ env.DSH_E2E_HOME }}/profiles/e2e/cordis.patch.yml
+
+  pack:
+    name: Package deliverable
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Build dist artifacts
+        run: node delivery/pack.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: control-plane-dist
+          path: dist/
+
+  # The legacy research test suite is not a CI gate yet: `npm test` currently has
+  # 27 red tests, all inside packages/synthetic-telemetry-ledger (a non-deployed
+  # research spike). Triage them separately before adding this job as required.
+  # legacy-unit:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with: { node-version: 24 }
+  #     - run: npm ci
+  #     - run: npm test

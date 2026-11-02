@@ -5,7 +5,12 @@
 > 以下内容保留为历史调研记录；`docs/status.md` 是交付前的状态。
 
 
-独立开发仓库，目标是在不修改签名应用的前提下实现会话树、动态团队和可视化工作流。当前为开发阶段：**尚未安装到 DSH，也没有完成 GUI 验收**。
+独立开发仓库，目标是在不修改签名应用的前提下实现会话树、动态团队和可视化工作流。
+
+**2026-11-02 现状**：控制面 v0.1 已交付——5 个外部插件组件装入独立 `e2e` profile，真机 GUI E2E 14/14 通过
+（含 2 次真实模型调用），安装/回滚/打包闭环已实测，用户 `desktop` profile 与会话未被触碰。
+安装与回滚见 [DELIVERY.md](DELIVERY.md)，测试见 [e2e/README.md](e2e/README.md)。
+R2/R4/R9/R12/R16 仍未实现，方案见 [docs/REMAINING-REQUIREMENTS-PLAN.md](docs/REMAINING-REQUIREMENTS-PLAN.md)。
 
 ## 当前进度
 

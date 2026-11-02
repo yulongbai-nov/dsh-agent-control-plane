@@ -22,6 +22,8 @@ import { fileURLToPath } from 'node:url'
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const HOME = homedir()
+// Honour an isolated $DSH_HOME (CI / throwaway test profiles).
+const DSH_HOME_ROOT = process.env.DSH_HOME || join(HOME, '.dsh')
 const DSH = process.env.DSH_BIN || '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh'
 const argv = process.argv.slice(2)
 const flag = (name, fallback) => {
@@ -48,7 +50,7 @@ const COMPONENTS = [
   { name: 'dshmarket', spec: 'dshmarket@1.73.8', covers: 'R13' },
 ]
 
-const profileDir = join(HOME, '.dsh/profiles', PROFILE)
+const profileDir = join(DSH_HOME_ROOT, 'profiles', PROFILE)
 if (!existsSync(join(profileDir, 'package.json'))) {
   if (PROFILE === 'desktop') fail(`desktop profile not found at ${profileDir}`)
   const web = join(HOME, '.dsh/profiles/web')

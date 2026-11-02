@@ -3,6 +3,10 @@
 # (so the run uses the real login/credentials) but every mutable root is moved
 # under $DSH_E2E_ROOT/state, keeping user sessions and the desktop GUI untouched.
 # Paths are absolute because this file is read from the profile, not the repo.
+- id: ui-settings-general
+  name: "@deepseek-ai/dsh-client-ui-settings-general"
+  config:
+    welcomeNoticeVersion: 2026-09-28.1
 - id: session-persistence-jsonl
   name: "@deepseek-ai/dsh-session-persistence-jsonl"
   config:
