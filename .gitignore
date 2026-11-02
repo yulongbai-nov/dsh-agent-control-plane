@@ -2,3 +2,6 @@ node_modules/
 coverage/
 .DS_Store
 *.log
+
+# Locally downloaded VM installers and disk images are not project source.
+vm-setup/
