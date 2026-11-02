@@ -67,14 +67,16 @@ index 0f630500..5fd082d0 100644
 +
 diff --git a/packages/experimental/agent-team/tests/archive-bypass-wip.spec.ts b/packages/experimental/agent-team/tests/archive-bypass-wip.spec.ts
 new file mode 100644
-index 00000000..d28e466b
+index 00000000..85d6d134
 --- /dev/null
 +++ b/packages/experimental/agent-team/tests/archive-bypass-wip.spec.ts
-@@ -0,0 +1,106 @@
+@@ -0,0 +1,138 @@
 +import { afterEach, expect, it } from 'vitest'
 +import { mkdtempSync, rmSync } from 'node:fs'
 +import { tmpdir } from 'node:os'
 +import { join } from 'node:path'
++import { fileURLToPath } from 'node:url'
++import { spawnSync } from 'node:child_process'
 +import { Context } from '@deepseek-ai/cordis'
 +import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 +import { createUserMessage } from '@deepseek-ai/dsh-llm'
@@ -163,6 +165,16 @@ index 00000000..d28e466b
 +  release.resolve();await hold;await archive;await rejected
 +})
 +
++it('lets an earlier actual Team send finish before a later archive',async()=>{
++  const {ctx,lead}=await setup();const signal=new AbortController().signal
++  const worker=await ctx.agentTeams.spawnTeammate(lead,{name:'worker',description:'synthetic',prompt:prompt('first'),context:'fresh',provider:'spawn',signal})
++  const send=ctx.agentTeams.sendMessage(lead,{target:'worker',content:prompt('earlier'),signal})
++  const archive=ctx.workspaceRegistry.archiveSession(worker.member.id,{stopActivity:true})
++  expect((await send).messageId).toBeDefined()
++  await archive
++  expect(ctx.workspaceRegistry.archivedSessionIds).toContain(worker.member.id)
++})
++
 +it('fails closed when the target ancestry is missing or cyclic',async()=>{
 +  const {ctx}=await setup()
 +  const orphan=ctx.sessions.create(SessionId('synthetic-orphan'),{meta:{origin:'subagent',parentSession:SessionId('absent-parent')}})
@@ -177,3 +189,51 @@ index 00000000..d28e466b
 +  await ctx.workspaceRegistry.archiveSession(lead.id,{stopActivity:true})
 +  expect(()=>lead.steer(createUserMessage({content:prompt('should be rejected'),source:{kind:'user'}}))).toThrow()
 +})
++
++for (const method of ['followup','inject'] as const) {
++  it.fails(`unwired raw Agent.${method} should reject an archived Lead before accepting input`,async()=>{
++    const {ctx,lead}=await setup()
++    await ctx.workspaceRegistry.archiveSession(lead.id,{stopActivity:true})
++    expect(()=>lead[method](createUserMessage({content:prompt('should be rejected'),source:{kind:'user'}}))).toThrow()
++  })
++}
++
++it('restores the synthetic Workspace archive flag in a separate process',()=>{
++  const root=mkdtempSync(join(tmpdir(),'archive-process-wip-'));roots.push(root)
++  const fixture=fileURLToPath(new URL('./archive-process-fixture.ts',import.meta.url))
++  for(const mode of ['write','read']) {
++    const result=spawnSync(process.execPath,['--import','tsx',fixture,root,mode],{
++      cwd:process.cwd(),env:{PATH:'/opt/homebrew/bin:/usr/bin:/bin',HOME:root,TMPDIR:root},encoding:'utf8',timeout:8000,
++    })
++    expect(result.error).toBeUndefined()
++    expect(result.status, result.stderr).toBe(0)
++  }
++})
+diff --git a/packages/experimental/agent-team/tests/archive-process-fixture.ts b/packages/experimental/agent-team/tests/archive-process-fixture.ts
+new file mode 100644
+index 00000000..650b61db
+--- /dev/null
++++ b/packages/experimental/agent-team/tests/archive-process-fixture.ts
+@@ -0,0 +1,22 @@
++/** Synthetic subprocess: only reads/writes the caller-supplied temporary root. */
++import { Context } from '@deepseek-ai/cordis'
++import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
++import Storage from '../../../storage/storage/src/index.ts'
++import { DomainFacility } from '../../../storage/storage-domain/src/index.ts'
++import { JsonStorageBackend } from '../../../storage/storage-json/src/index.ts'
++import WorkspaceRegistry from '../../../workspace/workspace/src/index.ts'
++
++const [root,mode]=process.argv.slice(2)
++if (!root || !['write','read'].includes(mode ?? '')) throw new Error('invalid synthetic fixture arguments')
++const ctx=new Context()
++try {
++  await ctx.plugin(SessionStore)
++  const target=ctx.sessions.create(SessionId('synthetic-process-target'))
++  ctx.provide('sessionPersistence',{list:async()=>[]} as never)
++  await ctx.plugin(Storage)
++  const backend=new JsonStorageBackend(root);ctx.storage.backend.register('json',backend)
++  const domain=new DomainFacility(ctx,{backend:'json',routes:{}});ctx.storage.mount('domain',domain);ctx.provide('storageDomain',domain)
++  await ctx.plugin(WorkspaceRegistry)
++  if(mode==='write') await ctx.workspaceRegistry.archiveSession(target.id)
++  else if(!ctx.workspaceRegistry.archivedSessionIds.includes(target.id)) throw new Error('archive not restored')
++} finally {await ctx.fiber.dispose()}
