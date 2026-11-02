@@ -127,11 +127,6 @@ jobs:
           node-version: 24
       - name: Build dist artifacts
         run: node delivery/pack.mjs
-      - name: Validate the tarball contents (runtime files only)
-        run: |
-          cd third_party/dsh-session-tree
-          npm pack --dry-run 2>&1 | tee /tmp/pack.txt
-          ! grep -qE 'client\.template\.js|avatars/|scripts/' /tmp/pack.txt
       - uses: actions/upload-artifact@v4
         with:
           name: control-plane-dist

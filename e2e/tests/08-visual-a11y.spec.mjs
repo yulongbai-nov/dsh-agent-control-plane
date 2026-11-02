@@ -1,6 +1,6 @@
 import { test, expect } from 'playwright/test'
 import { join } from 'node:path'
-import { ART, boot, captureConsole, unexpectedErrors } from './helpers.mjs'
+import { ART, boot, captureConsole, unexpectedErrors, openSettingsGeneral, closeSettings, selectTheme, selectLanguage } from './helpers.mjs'
 
 /**
  * R17 视觉 / 无障碍（真机 GUI，无模型调用）：
@@ -18,59 +18,7 @@ import { ART, boot, captureConsole, unexpectedErrors } from './helpers.mjs'
 
 test.describe.configure({ mode: 'serial' })
 
-const DEFAULTS = { theme: /^(Light|浅色)$/, language: /^(English|英文)$/ }
-
-async function openSettingsGeneral(page) {
-  // Shortcut differs by host platform; fall back to the account menu when it does
-  // not fire (Linux CI, or a remapped shortcut).
-  const shortcut = process.platform === 'darwin' ? 'Meta+Alt+Comma' : 'Control+Alt+Comma'
-  await page.keyboard.press(shortcut)
-  await page.waitForTimeout(1200)
-  const dialog = page.getByRole('dialog')
-  if ((await dialog.count()) === 0 || !(await dialog.first().isVisible().catch(() => false))) {
-    await page.getByRole('button', { name: /Account menu/i }).first().click()
-    const settingsItem = page.getByRole('menuitem', { name: /^(Settings|设置|Preferences|偏好)$/ }).first()
-    if (await settingsItem.count()) {
-      await settingsItem.click()
-    } else {
-      await page.keyboard.press('Escape')
-      throw new Error('settings dialog did not open via shortcut or account menu')
-    }
-  }
-  await expect(dialog).toBeVisible({ timeout: 20_000 })
-  const general = dialog.getByRole('button', { name: /^(General|通用设置|通用|常规)$/ })
-  if (await general.count()) await general.first().click()
-  await expect(dialog.locator('button', { hasText: /^(Light|浅色|Dark|深色|System|跟随系统)$/ }).first()).toBeVisible()
-  return dialog
-}
-
-async function closeSettings(page) {
-  const dialog = page.locator('[role=dialog]')
-  if (await dialog.count()) {
-    await page.keyboard.press('Escape')
-    await expect(dialog).toHaveCount(0, { timeout: 10_000 })
-  }
-}
-
-async function selectTheme(page, name) {
-  const dialog = await openSettingsGeneral(page)
-  await dialog.locator('button', { hasText: name }).first().click()
-  await page.waitForTimeout(500)
-  await closeSettings(page)
-}
-
-async function selectLanguage(page, optionText) {
-  const dialog = await openSettingsGeneral(page)
-  const languageButton = dialog.locator('button', { hasText: /^(English|英文|中文|简体中文)$/ }).first()
-  await languageButton.click()
-  const menu = page.getByRole('menu')
-  await expect(menu).toBeVisible()
-  const item = menu.getByRole('menuitem', { name: optionText })
-  await expect(item, `Language 菜单项 ${optionText} 应可见`).toBeVisible()
-  await item.click()
-  await page.waitForTimeout(800)
-  await closeSettings(page)
-}
+const DEFAULTS = { theme: 'light', language: 'English' }
 
 // 让每个用例从确定的状态开始：浅色 + English（防止上一个用例失败留下深色/中文）。
 test.afterEach(async ({ page }) => {
@@ -85,7 +33,7 @@ test.afterEach(async ({ page }) => {
     }
     const lang = await page.evaluate(() => document.documentElement.lang)
     if (!/^en/i.test(lang)) await selectLanguage(page, 'English')
-    await selectTheme(page, /^(Light|浅色)$/)
+    await selectTheme(page, false)
   } catch (error) {
     console.log('[R17] afterEach reset skipped:', String(error).slice(0, 300))
   }
@@ -117,7 +65,7 @@ test.describe('控制面 E2E · R17 视觉与无障碍', () => {
     await page.screenshot({ path: join(ART, '14-r17-theme-dark.png') })
 
     // 切回浅色并复核
-    await selectTheme(page, /^(Light|浅色)$/)
+    await selectTheme(page, false)
     await expect.poll(() => page.evaluate(() => document.documentElement.getAttribute('data-ds-theme-source'))).toBe('light')
     await expect.poll(() => page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme'))).toBe(false)
     await expect(tree).toBeVisible()

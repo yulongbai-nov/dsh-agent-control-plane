@@ -28,7 +28,18 @@ const packed = execFileSync('npm', ['pack', '--pack-destination', DIST], { cwd: 
   .pop()
 const tarball = join(DIST, packed)
 if (!existsSync(tarball)) throw new Error(`npm pack did not produce ${packed}`)
-console.log(`[pack] vendored bundle: ${tarball}`)
+
+// Runtime-only whitelist: build assets stay in the repo, never in the tarball.
+const listed = execFileSync('tar', ['-tzf', tarball], { encoding: 'utf8' })
+  .split('\n')
+  .map((line) => line.replace(/^package\//, ''))
+  .filter(Boolean)
+const forbidden = listed.filter((file) => /^(client\.template\.js|avatars\/|scripts\/|tests\/)/.test(file))
+if (forbidden.length) throw new Error(`tarball contains build-only files: ${forbidden.join(', ')}`)
+for (const required of ['client.js', 'index.js', 'cordis.patch.yml', 'package.json']) {
+  if (!listed.includes(required)) throw new Error(`tarball is missing ${required}`)
+}
+console.log(`[pack] vendored bundle: ${tarball} (${listed.length} runtime files, verified)`)
 
 const SPECS = [
   `file:${tarball.replace(DIST + '/', '')}`,

@@ -14,6 +14,7 @@ export default defineConfig({
   outputDir: process.env.DSH_E2E_RUN_DIR ? `${process.env.DSH_E2E_RUN_DIR}/playwright-output` : `${root}/runs/playwright-output`,
   use: {
     headless: true,
+    locale: 'en-US',
     viewport: { width: 1440, height: 900 },
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
