@@ -175,3 +175,37 @@ test('two workers can concurrently open and migrate the same v1 database', async
   const db=openSyntheticLedger(dir); db.close();
  } finally { await Promise.all(workers.map(worker=>worker.terminate())); }
 });
+
+test('reopen rejects malformed persisted rows even when schema and cursor match', () => {
+ const cases=[
+  ["session_key=NULL", "session_key=NULL"],
+  ["session_key='short'", "session_key='short'"],
+  ["session_key='"+'a'.repeat(64)+"'||char(0)||'x'", "session_key='"+'a'.repeat(64)+"'||char(0)||'x'"],
+  ["session_key=X'616263'", "session_key=X'616263'"],
+  ["session_key='"+'A'.repeat(64)+"'", "session_key='"+'A'.repeat(64)+"'"],
+  ["source_epoch='bad'", "source_epoch='bad'"],
+  ['seq=-1', 'seq=-1'], ['seq=1.5', 'seq=1.5'],
+  ['seq=9007199254740992', 'seq=9007199254740992'],
+  ['output_tokens=-1', null], ['output_tokens=1.5', null],
+  ['output_tokens=9007199254740992', null], ["output_tokens='bad'", null],
+ ];
+ for (const [snapshotChange,cursorChange] of cases) {
+  const dir=createDir(), path=join(dir,'ledger.sqlite'); let db=openSyntheticLedger(dir); db.ingest(row()); db.close();
+  const raw=new DatabaseSync(path); raw.exec('UPDATE snapshots SET '+snapshotChange); if(cursorChange) raw.exec('UPDATE source_cursors SET '+cursorChange); raw.close();
+  assert.throws(()=>openSyntheticLedger(dir),errorCode('INVALID_STORED_DATA'),snapshotChange);
+ }
+});
+
+test('malformed tombstone and cursor rows fail closed', () => {
+ for(const [table,sql] of [['tombstones',"UPDATE tombstones SET source_epoch='bad'"],['source_cursors','UPDATE source_cursors SET seq=9007199254740992']]) {
+  const dir=createDir(), path=join(dir,'ledger.sqlite'); let db=openSyntheticLedger(dir); db.ingest(row()); if(table==='tombstones') db.clear(id()); db.close();
+  const raw=new DatabaseSync(path); raw.exec(sql); raw.close(); assert.throws(()=>openSyntheticLedger(dir),errorCode('INVALID_STORED_DATA'),table);
+ }
+});
+
+test('v1 malformed snapshot is rejected before migration', () => {
+ const dir=createDir(), path=join(dir,'ledger.sqlite'); const raw=new DatabaseSync(path);
+ raw.exec("CREATE TABLE snapshots (session_key TEXT PRIMARY KEY, source_epoch TEXT NOT NULL, seq INTEGER NOT NULL, output_tokens INTEGER); CREATE TABLE tombstones (session_key TEXT PRIMARY KEY, source_epoch TEXT NOT NULL, seq INTEGER NOT NULL); PRAGMA user_version=1; INSERT INTO snapshots VALUES ('bad','bad',-1,0)"); raw.close(); chmodSync(path,0o600);
+ assert.throws(()=>openSyntheticLedger(dir),errorCode('INVALID_STORED_DATA'));
+ const check=new DatabaseSync(path);try {assert.equal(check.prepare('PRAGMA user_version').get().user_version,1);assert.equal(check.prepare("SELECT 1 FROM sqlite_master WHERE name='source_cursors'").get(),undefined);} finally {check.close();}
+});

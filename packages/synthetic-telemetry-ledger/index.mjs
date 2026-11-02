@@ -42,6 +42,17 @@ function checkSchema(db, version) {
     if (JSON.stringify(columns) !== JSON.stringify(expected)) fail('UNSUPPORTED_SCHEMA');
   }
 }
+function checkStoredRows(db, version) {
+  const tables = version === 1 ? ['snapshots','tombstones'] : ['snapshots','source_cursors','tombstones'];
+  for (const table of tables) {
+    const invalid = `typeof(session_key) <> 'text' OR length(session_key) <> 64 OR length(CAST(session_key AS BLOB)) <> 64 OR session_key GLOB '*[^0-9a-f]*'
+      OR typeof(source_epoch) <> 'text' OR length(source_epoch) <> 64 OR length(CAST(source_epoch AS BLOB)) <> 64 OR source_epoch GLOB '*[^0-9a-f]*'
+      OR typeof(seq) <> 'integer' OR seq < 0 OR seq > 9007199254740991`;
+    const output = table === 'snapshots' ? ` OR (output_tokens IS NOT NULL AND
+      (typeof(output_tokens) <> 'integer' OR output_tokens < 0 OR output_tokens > 9007199254740991))` : '';
+    if (db.prepare(`SELECT 1 FROM ${table} WHERE ${invalid}${output} LIMIT 1`).get()) fail('INVALID_STORED_DATA');
+  }
+}
 function verifyDir(directory) {
   if (typeof directory !== 'string' || resolve(directory) !== directory || realpathSync(directory) !== directory) fail('UNSAFE_DIRECTORY');
   const d = lstatSync(directory);
@@ -83,6 +94,7 @@ export function openSyntheticLedger(directory) {
         version = db.prepare('PRAGMA user_version').get().user_version;
         if (version === 1) {
           checkSchema(db, version);
+          checkStoredRows(db, version);
           if (db.prepare('SELECT 1 FROM snapshots s JOIN tombstones t ON s.session_key=t.session_key LIMIT 1').get()) fail('CURSOR_INCONSISTENT');
           db.exec(`CREATE TABLE source_cursors (session_key TEXT PRIMARY KEY, source_epoch TEXT NOT NULL, seq INTEGER NOT NULL);
             INSERT INTO source_cursors SELECT session_key,source_epoch,seq FROM snapshots;
@@ -94,6 +106,7 @@ export function openSyntheticLedger(directory) {
     }
     if (version !== 2) fail('UNSUPPORTED_SCHEMA');
     checkSchema(db, version);
+    checkStoredRows(db, version);
     if (db.prepare(`SELECT 1 FROM snapshots s LEFT JOIN source_cursors c ON s.session_key=c.session_key
       WHERE c.session_key IS NULL OR s.source_epoch<>c.source_epoch OR s.seq<>c.seq
       UNION ALL SELECT 1 FROM source_cursors c LEFT JOIN snapshots s ON s.session_key=c.session_key
