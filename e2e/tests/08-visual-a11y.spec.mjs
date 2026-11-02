@@ -24,6 +24,9 @@ const DEFAULTS = { theme: 'light', language: 'English' }
 test.afterEach(async ({ page }) => {
   try {
     if (page.isClosed()) return
+    // CI runs each test in a fresh browser context and the only stateful reset is the
+    // locale test (skipped there); never let a reset attempt hang the lane.
+    if (process.env.CI === 'true' || process.env.CI === '1') return
     // 关闭可能残留的菜单/弹窗，避免下一步被遮挡
     for (let i = 0; i < 3; i++) {
       const dialogs = await page.locator('[role=dialog]').count().catch(() => 0)
