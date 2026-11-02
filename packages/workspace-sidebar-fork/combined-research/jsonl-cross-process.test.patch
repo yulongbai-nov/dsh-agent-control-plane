@@ -1,9 +1,9 @@
 diff --git a/packages/session/session-persistence-jsonl/tests/r7-corpus-visibility.spec.ts b/packages/session/session-persistence-jsonl/tests/r7-corpus-visibility.spec.ts
 new file mode 100644
-index 00000000..c349d08d
+index 00000000..7dcead9d
 --- /dev/null
 +++ b/packages/session/session-persistence-jsonl/tests/r7-corpus-visibility.spec.ts
-@@ -0,0 +1,70 @@
+@@ -0,0 +1,99 @@
 +/** Synthetic shared-root JSONL contract probe; no user profile or service. */
 +import { mkdtemp, rm } from 'node:fs/promises'
 +import { tmpdir } from 'node:os'
@@ -45,7 +45,7 @@ index 00000000..c349d08d
 +  const root = await mkdtemp(join(tmpdir(), 'r7-jsonl-process-'))
 +  const ctx = new Context()
 +  const child = spawn(process.execPath, [join(process.cwd(), 'node_modules/vitest/vitest.mjs'), 'run', 'packages/session/session-persistence-jsonl/tests/r7-corpus-child.spec.ts', '--maxWorkers=1', '--no-file-parallelism', '--reporter=dot'], {
-+    cwd: process.cwd(), env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME!, TMPDIR: process.env.TMPDIR!, CI: 'true', R7_SYNTHETIC_ROOT: root }, stdio: ['ignore', 'pipe', 'pipe'],
++    cwd: process.cwd(), env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME!, TMPDIR: process.env.TMPDIR!, CI: 'true', R7_SYNTHETIC_ROOT: root }, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
 +  })
 +  let output = ''; child.stdout.on('data', data => { output += String(data) }); child.stderr.on('data', data => { output += String(data) })
 +  const exit = new Promise<{code: number | null, signal: NodeJS.Signals | null}>(resolve => child.once('exit', (code, signal) => resolve({code, signal})))
@@ -69,7 +69,36 @@ index 00000000..c349d08d
 +    } finally { await contender.close(); await corpusLock.close() }
 +    await own.close()
 +  } finally {
-+    if (child.exitCode === null && child.signalCode === null) { child.kill('SIGKILL'); await exit }
++    if (child.exitCode === null && child.signalCode === null) { if (child.pid !== undefined) process.kill(-child.pid, 'SIGKILL'); await exit }
++    if (child.pid !== undefined) { try { process.kill(-child.pid, 'SIGKILL') } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error } }
++    await ctx.fiber.dispose()
++    await rm(root, { recursive: true, force: true })
++  }
++}, 30000)
++
++it('loses a separate process unmaterialized create on crash', async () => {
++  const { spawn } = await import('node:child_process')
++  const { access } = await import('node:fs/promises')
++  const { setTimeout: delay } = await import('node:timers/promises')
++  const root = await mkdtemp(join(tmpdir(), 'r7-jsonl-crash-'))
++  const ctx = new Context()
++  const child = spawn(process.execPath, [join(process.cwd(), 'node_modules/vitest/vitest.mjs'), 'run', 'packages/session/session-persistence-jsonl/tests/r7-corpus-child.spec.ts', '--maxWorkers=1', '--no-file-parallelism', '--reporter=dot'], {
++    cwd: process.cwd(), env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME!, TMPDIR: process.env.TMPDIR!, CI: 'true', R7_SYNTHETIC_ROOT: root }, detached: true, stdio: ['ignore', 'ignore', 'ignore'],
++  })
++  const exit = new Promise<{code: number | null, signal: NodeJS.Signals | null}>(resolve => child.once('exit', (code, signal) => resolve({code, signal})))
++  try {
++    await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'store'), compression: 'none' })
++    let ready = false
++    for (let i=0; i<500; i++) { try { await access(join(root,'pending')); ready = true; break } catch { if (child.exitCode !== null) throw Error('child exited before pending'); await delay(20) } }
++    expect(ready).toBe(true)
++    expect((await ctx.sessionPersistence.list()).map(item => item.header.id)).not.toContain(SessionId('synthetic-child'))
++    if (child.pid === undefined) throw Error('child has no pid')
++    process.kill(-child.pid, 'SIGKILL')
++    expect(await exit).toEqual({code: null, signal: 'SIGKILL'})
++    expect((await ctx.sessionPersistence.list()).map(item => item.header.id)).not.toContain(SessionId('synthetic-child'))
++  } finally {
++    if (child.exitCode === null && child.signalCode === null) { if (child.pid !== undefined) process.kill(-child.pid, 'SIGKILL'); await exit }
++    if (child.pid !== undefined) { try { process.kill(-child.pid, 'SIGKILL') } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error } }
 +    await ctx.fiber.dispose()
 +    await rm(root, { recursive: true, force: true })
 +  }
