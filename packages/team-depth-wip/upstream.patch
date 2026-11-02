@@ -1,0 +1,244 @@
+diff --git a/packages/experimental/agent-team/src/roster.ts b/packages/experimental/agent-team/src/roster.ts
+index 7b1047a0..0104ec63 100644
+--- a/packages/experimental/agent-team/src/roster.ts
++++ b/packages/experimental/agent-team/src/roster.ts
+@@ -3,0 +4 @@ import { randomUUID } from 'node:crypto'
++import { types as nodeTypes } from 'node:util'
+@@ -231 +232 @@ export class TeamRoster {
+-    request: SpawnTeammateRequest,
++    input: SpawnTeammateRequest,
+@@ -232,0 +234 @@ export class TeamRoster {
++    const request = snapshotSpawnRequest(input)
+@@ -241,0 +244 @@ export class TeamRoster {
++    const selection = memberSelection(request.agentOptions, request.agentPreset)
+@@ -263,0 +267,4 @@ export class TeamRoster {
++      // Team used to omit this cap, bypassing the host's current global limit.
++      // This is an absolute host cap, not the requested per-Team relative budget.
++      const maxDepth = this.ctx.subagents.resolveMaxDepth()
++      if (maxDepth === undefined) throw new TeamError('global depth limit unavailable', 'TEAM_DEPTH_POLICY_UNKNOWN')
+@@ -271,0 +279,2 @@ export class TeamRoster {
++          maxDepth,
++          ...selection,
+@@ -473,0 +483,41 @@ export class TeamRoster {
++/** Snapshot a deliberately closed subset before asynchronous admission. */
++function memberSelection(options: SpawnTeammateRequest['agentOptions'], preset: unknown): Pick<SpawnTeammateRequest, 'agentOptions' | 'agentPreset'> {
++  if (preset !== undefined && (typeof preset !== 'string' || !preset.trim() || preset.length > 200)) {
++    throw new TeamError('invalid independent preset', 'TEAM_INVALID_REQUEST')
++  }
++  if (options === undefined) return preset === undefined ? {} : { agentPreset: preset as string }
++  if (options === null || typeof options !== 'object' || nodeTypes.isProxy(options) || ![Object.prototype, null].includes(Object.getPrototypeOf(options)) || Object.getOwnPropertySymbols(options).length) {
++    throw new TeamError('invalid agent options', 'TEAM_INVALID_REQUEST')
++  }
++  const fields = Object.getOwnPropertyDescriptors(options)
++  const output: Record<string, string | number> = {}
++  for (const [key, descriptor] of Object.entries(fields)) {
++    if (!['provider', 'model', 'reasoningEffort', 'maxTokens'].includes(key) || !('value' in descriptor)) {
++      throw new TeamError('unsupported agent option', 'TEAM_INVALID_REQUEST')
++    }
++    const value: unknown = descriptor.value
++    if (key === 'maxTokens' ? !Number.isSafeInteger(value) || (value as number) <= 0 : typeof value !== 'string' || !value.trim() || value.length > 200) {
++      throw new TeamError('invalid agent option value', 'TEAM_INVALID_REQUEST')
++    }
++    output[key] = value as string | number
++  }
++  return { agentOptions: output as NonNullable<SpawnTeammateRequest['agentOptions']>, ...(preset === undefined ? {} : { agentPreset: preset as string }) }
++}
++
++/** Reject proxy/accessor request envelopes before reading any field. */
++function snapshotSpawnRequest(input: SpawnTeammateRequest): SpawnTeammateRequest {
++  if (input === null || typeof input !== 'object' || nodeTypes.isProxy(input) || ![Object.prototype, null].includes(Object.getPrototypeOf(input)) || Object.getOwnPropertySymbols(input).length) {
++    throw new TeamError('invalid spawn request', 'TEAM_INVALID_REQUEST')
++  }
++  const required = ['name', 'description', 'prompt', 'context', 'provider', 'signal']
++  const allowed = new Set([...required, 'agentOptions', 'agentPreset'])
++  const fields = Object.getOwnPropertyDescriptors(input)
++  const snapshot: Record<string, unknown> = Object.create(null)
++  for (const [key, descriptor] of Object.entries(fields)) {
++    if (!allowed.has(key) || !('value' in descriptor)) throw new TeamError('invalid spawn request field', 'TEAM_INVALID_REQUEST')
++    snapshot[key] = descriptor.value
++  }
++  if (required.some(key => !Object.hasOwn(snapshot, key))) throw new TeamError('missing spawn request field', 'TEAM_INVALID_REQUEST')
++  return snapshot as unknown as SpawnTeammateRequest
++}
++
+diff --git a/packages/experimental/agent-team/src/types.ts b/packages/experimental/agent-team/src/types.ts
+index 465f6bbf..7287bb46 100644
+--- a/packages/experimental/agent-team/src/types.ts
++++ b/packages/experimental/agent-team/src/types.ts
+@@ -6,0 +7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
++import type { AgentOptions } from '@deepseek-ai/dsh-agent'
+@@ -170,0 +172,4 @@ export interface SpawnTeammateRequest {
++  /** Optional independent member route overrides. Unsupported backends must reject. */
++  readonly agentOptions?: AgentOptions
++  /** Optional independent preset, only for providers advertising support. */
++  readonly agentPreset?: string
+diff --git a/packages/experimental/agent-team/tests/team.spec.ts b/packages/experimental/agent-team/tests/team.spec.ts
+index 34a9a25a..ba81ce26 100644
+--- a/packages/experimental/agent-team/tests/team.spec.ts
++++ b/packages/experimental/agent-team/tests/team.spec.ts
+@@ -22,0 +23,4 @@ import { TestSessionQuery } from './test-session-query.ts'
++import Loader from '../../../../vendor/loader/src/index.ts'
++import Include from '../../../../vendor/include/src/index.ts'
++import AgentPresets from '../../../preset/agent-preset-registry/src/index.ts'
++import { liveConfig } from '../../../settings/settings/tests/live-config.ts'
+@@ -34,0 +39,151 @@ afterEach(async () => {
++it('uses the current host depth limit for each Team spawn and fails closed at zero', async () => {
++  const { ctx, lead, depthConfig } = await setup(['hang'], {}, true)
++  expect(depthConfig).toBeDefined()
++  await depthConfig!.update({ maxDepth: 0 })
++  expect(ctx.subagents.resolveMaxDepth()).toBe(0)
++  await expect(ctx.agentTeams.spawnTeammate(lead, {
++    name: 'blocked-worker', description: 'synthetic', prompt: content('synthetic'),
++    context: 'fresh', provider: 'spawn', signal: SIGNAL,
++  })).rejects.toMatchObject({ name: 'SubagentDepthError' })
++  expect(durable(lead).members.find(member => member.name === 'blocked-worker')?.phase).toBe('failed')
++  await depthConfig!.update({ maxDepth: 1 })
++  const started = await ctx.agentTeams.spawnTeammate(lead, {
++    name: 'allowed-worker', description: 'synthetic', prompt: content('synthetic'),
++    context: 'fresh', provider: 'spawn', signal: SIGNAL,
++  })
++  expect(started.member.status).not.toBe('failed')
++  expect(ctx.agents.get(started.member.id)?.session.header.delegationDepth).toBe(1)
++})
++
++it('fails closed for a Team backend lacking depth enforcement', async () => {
++  const { ctx, lead } = await setup([textResponse('synthetic')])
++  const prepare = vi.fn(async () => ({}))
++  ctx.subagents.registerProvider({ name: 'no-depth', inheritsParentContext: false,
++    capabilities: { agentOptions: true, agentPreset: false, outputSchema: false, depthLimit: false },
++    prepareContinuable: prepare,
++  })
++  await expect(ctx.agentTeams.spawnTeammate(lead, {
++    name: 'unsupported-depth', description: 'synthetic', prompt: content('synthetic'),
++    context: 'fresh', provider: 'no-depth', signal: SIGNAL,
++  })).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
++  expect(prepare).not.toHaveBeenCalled()
++})
++
++it('documents that direct activation without a cap bypasses this Team-only guard', async () => {
++  const { ctx, lead, depthConfig } = await setup(['hang'], {}, true)
++  await depthConfig!.update({ maxDepth: 0 })
++  const started = await ctx.subagents.startActivation({
++    delivery: 'parent', provider: 'spawn', label: 'synthetic bypass canary',
++    request: { parent: lead, prompt: content('synthetic') }, signal: SIGNAL,
++  })
++  expect(started).toBeDefined()
++})
++
++it('documents that an in-flight Team spawn can complete after the host cap is lowered', async () => {
++  const { ctx, lead, depthConfig } = await setup(['hang'], {}, true)
++  const entered = Promise.withResolvers<void>()
++  const release = Promise.withResolvers<void>()
++  ctx.subagents.registerProvider({ name: 'delayed-depth', inheritsParentContext: false,
++    capabilities: { agentOptions: true, agentPreset: true, outputSchema: false, depthLimit: true },
++    prepareContinuable: async () => { entered.resolve(); await release.promise; return {} },
++  })
++  const pending = ctx.agentTeams.spawnTeammate(lead, {
++    name: 'racing-worker', description: 'synthetic', prompt: content('synthetic'),
++    context: 'fresh', provider: 'delayed-depth', signal: SIGNAL,
++  })
++  try {
++    await entered.promise
++    await depthConfig!.update({ maxDepth: 0 })
++  } finally { release.resolve() }
++  const started = await pending
++  expect(started.member.status).not.toBe('failed')
++  expect(ctx.subagents.resolveMaxDepth()).toBe(0)
++})
++
++it('passes a member route through the real Team Host into the native activation seam', async () => {
++  const { ctx, lead } = await setup(['hang'])
++  const activation = vi.spyOn(ctx.subagents, 'startActivation')
++  const route = { provider: 'mock', model: 'member-model', maxTokens: 128 }
++  const result = await ctx.agentTeams.spawnTeammate(lead, {
++    name: 'route-worker', description: 'synthetic worker', prompt: content('synthetic'),
++    context: 'fresh', provider: 'spawn', signal: SIGNAL, agentOptions: route,
++  })
++  expect(result.member.status).not.toBe('failed')
++  expect(ctx.agents.get(result.member.id)?.options).toMatchObject(route)
++  expect(activation).toHaveBeenCalledWith(expect.objectContaining({
++    provider: 'spawn', request: expect.objectContaining({ agentOptions: route, parent: lead }),
++  }))
++})
++
++it('forwards independent preset and fails closed on a fork provider without preset support', async () => {
++  const { ctx, lead } = await setup([textResponse('synthetic')])
++  const activation = vi.spyOn(ctx.subagents, 'startActivation')
++  await expect(ctx.agentTeams.spawnTeammate(lead, {
++    name: 'fork-worker', description: 'synthetic worker', prompt: content('synthetic'),
++    context: 'fork', provider: 'fork', signal: SIGNAL, agentPreset: 'reviewer',
++  })).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
++  expect(activation).toHaveBeenCalledWith(expect.objectContaining({
++    provider: 'fork', request: expect.objectContaining({ agentPreset: 'reviewer', parent: lead }),
++  }))
++})
++
++it('mounts an independently selected preset in a synthetic fresh Team child', async () => {
++  const { ctx, lead } = await setup(['hang'])
++  await ctx.plugin(Loader)
++  ctx.loader.builtins.include = Include
++  await ctx.plugin(AgentPresets, { default: 'reviewer' })
++  await ctx.agentPresets.register({ id: 'reviewer', plugins: [] })
++  const result = await ctx.agentTeams.spawnTeammate(lead, {
++    name: 'preset-worker', description: 'synthetic worker', prompt: content('synthetic'),
++    context: 'fresh', provider: 'spawn', signal: SIGNAL, agentPreset: 'reviewer',
++  })
++  const child = ctx.agents.get(result.member.id)
++  expect(child).toBeDefined()
++  expect(child?.session.snapshotEvents().some(event => event.type === 'agent-preset/selected' && event.data.agentPreset === 'reviewer')).toBe(true)
++})
++
++it('rejects unsupported member option fields before Team provisioning', async () => {
++  const { ctx, lead } = await setup([textResponse('synthetic')])
++  await expect(ctx.agentTeams.spawnTeammate(lead, {
++    name: 'invalid-worker', description: 'synthetic worker', prompt: content('synthetic'),
++    context: 'fresh', provider: 'spawn', signal: SIGNAL,
++    agentOptions: { model: 'mock', dangerous: true } as never,
++  })).rejects.toMatchObject({ code: 'TEAM_INVALID_REQUEST' })
++  expect(ctx.agentTeams.listMembers(lead)).toHaveLength(1)
++})
++
++it('rejects member route overrides when the backend does not support them', async () => {
++  const { ctx, lead } = await setup([textResponse('synthetic')])
++  const prepare = vi.fn(async () => ({}))
++  ctx.subagents.registerProvider({
++    name: 'no-route', inheritsParentContext: false,
++    capabilities: { agentOptions: false, agentPreset: false, outputSchema: false, depthLimit: false },
++    prepareContinuable: prepare,
++  })
++  await expect(ctx.agentTeams.spawnTeammate(lead, {
++    name: 'unsupported-worker', description: 'synthetic worker', prompt: content('synthetic'),
++    context: 'fresh', provider: 'no-route', signal: SIGNAL, agentOptions: { model: 'member-model' },
++  })).rejects.toMatchObject({ code: 'UNSUPPORTED_CAPABILITY' })
++  expect(prepare).not.toHaveBeenCalled()
++})
++
++it('rejects proxy and accessor envelopes and selections without invoking traps or provisioning', async () => {
++  const { ctx, lead } = await setup([textResponse('synthetic')])
++  const base = () => ({ name: 'unsafe-worker', description: 'synthetic worker', prompt: content('synthetic'),
++    context: 'fresh' as const, provider: 'spawn', signal: SIGNAL })
++  let calls = 0
++  const wrapped = new Proxy(base(), { get() { calls++; throw Error('getter trap') }, getPrototypeOf() { calls++; throw Error('prototype trap') } })
++  const revokedRequest = Proxy.revocable(base(), {}); revokedRequest.revoke()
++  const revokedOptions = Proxy.revocable({}, {}); revokedOptions.revoke()
++  const getter = Object.defineProperty(base(), 'agentOptions', { enumerable: true, get() { calls++; throw Error('request getter') } })
++  const getterName = Object.defineProperty(base(), 'name', { enumerable: true, get() { calls++; throw Error('name getter') } })
++  const optionGetter = Object.defineProperty({}, 'model', { enumerable: true, get() { calls++; throw Error('option getter') } })
++  const proxyOptions = new Proxy({}, { ownKeys() { calls++; throw Error('ownKeys trap') } })
++  for (const request of [wrapped, revokedRequest.proxy, getter, getterName,
++    { ...base(), agentOptions: revokedOptions.proxy }, { ...base(), agentOptions: optionGetter }, { ...base(), agentOptions: proxyOptions }]) {
++    await expect(ctx.agentTeams.spawnTeammate(lead, request)).rejects.toMatchObject({ code: 'TEAM_INVALID_REQUEST' })
++  }
++  expect(calls).toBe(0)
++  expect(ctx.agentTeams.listMembers(lead)).toHaveLength(1)
++})
++
+@@ -64,0 +220 @@ async function setup(
++  liveDepth = false,
+@@ -75 +231,2 @@ async function setup(
+-  await ctx.plugin(SubagentService)
++  const depthConfig = liveDepth ? await liveConfig(ctx, SubagentService, { maxDepth: 1 }) : undefined
++  if (!liveDepth) await ctx.plugin(SubagentService)
+@@ -82 +239 @@ async function setup(
+-  return { ctx, lead, adapter, storageRoot, teamFiber }
++  return { ctx, lead, adapter, storageRoot, teamFiber, depthConfig }
