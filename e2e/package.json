@@ -1,0 +1,15 @@
+{
+  "name": "dsh-agent-control-plane-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Real-machine behavior E2E for the DSH agent control plane (real DSH host + real Chromium, isolated state, real login)",
+  "scripts": {
+    "e2e": "node run-e2e.mjs",
+    "e2e:real": "node run-e2e.mjs --real-model",
+    "e2e:install": "node install.e2e.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.64.1"
+  }
+}

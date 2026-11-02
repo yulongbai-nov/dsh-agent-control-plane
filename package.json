@@ -10,7 +10,11 @@
   "scripts": {
     "test": "node --test test/*.test.mjs packages/session-tree/test/*.test.mjs packages/workspace-sidebar-spike/test/*.test.mjs packages/workspace-sidebar-fork/test/*.integration.mjs packages/task-title/test/*.test.js packages/task-title-service-spike/test/*.test.mjs packages/team-control-spike/test/*.test.cjs packages/agent-spec/test/*.test.mjs packages/workflow-topology/test/*.test.cjs packages/workflow-topology/test/*.test.mjs packages/workflow-literal-editor/test/*.test.cjs packages/workflow-literal-editor/test/*.test.mjs packages/workflow-board-projection/test/*.test.cjs packages/workflow-board-client/test/*.test.mjs packages/workflow-source-observer/test/*.test.cjs packages/workflow-tool-spike/test/*.test.mjs packages/workflow-engine-spike/test/*.test.cjs packages/workflow-accepted-init-spike/test/*.test.cjs packages/workflow-provenance-model/test/*.test.cjs packages/workflow-records-memory/test/*.test.cjs packages/workflow-recommendation/test/*.test.mjs packages/workflow-synthetic-accumulator/test/*.test.mjs packages/personal-telemetry/test/*.test.mjs packages/synthetic-telemetry-ledger/test/*.test.mjs packages/sandbox-smoke/test/*.test.mjs packages/sandbox-e2e/test/*.test.mjs",
     "test:workflow": "node --test packages/workflow-topology/test/*.test.cjs packages/workflow-topology/test/*.test.mjs packages/workflow-literal-editor/test/*.test.cjs packages/workflow-literal-editor/test/*.test.mjs",
-    "compat": "node scripts/runtime-compat.mjs"
+    "compat": "node scripts/runtime-compat.mjs",
+    "e2e": "node e2e/run-e2e.mjs",
+    "e2e:real": "node e2e/run-e2e.mjs --real-model",
+    "pack:delivery": "node delivery/pack.mjs",
+    "install:control-plane": "node delivery/install.mjs"
   },
   "devDependencies": {
     "acorn": "8.19.0"

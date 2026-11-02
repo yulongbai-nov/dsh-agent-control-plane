@@ -1,0 +1,22 @@
+{
+  "runId": "2026-11-02T17-50-31-799Z",
+  "bootMs": 542,
+  "port": 51879,
+  "profile": "e2e",
+  "workspace": "/tmp/dsh-e2e/state/documents/deepseek-harness/default-workspace",
+  "state": "/tmp/dsh-e2e/state",
+  "playwrightOutput": "\nRunning 14 tests using 1 worker\n\n(node:14139) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.\n(Use `node --trace-warnings ...` to show where the warning was created)\n  ✓   1 tests/01-shell.spec.mjs:9:3 › 控制面 E2E · 应用外壳 › 打开应用后侧栏显示会话树（R7 常驻侧栏） (482ms)\n  ✓   2 tests/01-shell.spec.mjs:19:3 › 控制面 E2E · 应用外壳 › 点击新建会话，主面板出现新会话界面 (464ms)\n  ✓   3 tests/01-shell.spec.mjs:27:3 › 控制面 E2E · 应用外壳 › 页面没有未捕获的 JS 错误 (1.9s)\n  ✓   4 tests/02-session-tree.spec.mjs:8:3 › 控制面 E2E · 侧栏会话树 › 工作区分组可展开/折叠，会话行来自真实 Host 数据 (479ms)\n  ✓   5 tests/02-session-tree.spec.mjs:24:3 › 控制面 E2E · 侧栏会话树 › 筛选框按标题过滤会话 (862ms)\n  ✓   6 tests/02-session-tree.spec.mjs:34:3 › 控制面 E2E · 侧栏会话树 › 会话行「⋯」菜单提供置顶/重命名/Fork/归档与头像入口（R8） (448ms)\n  ✓   7 tests/03-avatars.spec.mjs:8:3 › 控制面 E2E · 六类任务头像（R8） › 每个会话行渲染头像，默认按标题推断或回退组长 (413ms)\n  ✓   8 tests/03-avatars.spec.mjs:18:3 › 控制面 E2E · 六类任务头像（R8） › 手动指定头像后刷新仍保留，并可恢复自动识别 (720ms)\n  ✓   9 tests/04-plugins.spec.mjs:16:3 › 控制面 E2E · 插件装载与市场（R13） › Plugins 页面列出控制面全部已装插件 (620ms)\n  ✓  10 tests/04-plugins.spec.mjs:26:3 › 控制面 E2E · 插件装载与市场（R13） › 插件市场（dshmarket）在 Plugins 页提供 Plugin Market 入口 (1.7s)\n  ✓  11 tests/05-workflow-map.spec.mjs:8:3 › 控制面 E2E · 工作流地图（R10/R11） › 侧栏出现「工作流地图」入口，打开后应用不崩溃且可返回会话 (2.8s)\n  ✓  12 tests/06-real-model.spec.mjs:11:3 › 控制面 E2E · 真实模型层 › 一条短消息收到真实回复并产生 token 统计（真实登录） (2.4s)\n  ✓  13 tests/06-real-model.spec.mjs:22:3 › 控制面 E2E · 真实模型层 › 团队插件把 spawn_teammate_with_model 暴露给 agent（R1/R6 面） (565ms)\n(node:14181) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.\n(Use `node --trace-warnings ...` to show where the warning was created)\n  ✓  14 tests/06-real-model.spec.mjs:37:3 › 控制面 E2E · 真实模型层 › 遥测插件把真实会话事件写进隔离目录（R18 面） (41ms)\n\n  14 passed (14.3s)\n",
+  "portReleased": true,
+  "leftoverProcesses": [],
+  "isolation": {
+    "userWorkspaceJsonUnchanged": true,
+    "userCredentialsUnchanged": true,
+    "userSessionsDirUnchanged": true,
+    "newUserSessionDirs": [],
+    "desktopProfileTouched": false,
+    "stateRoot": "/tmp/dsh-e2e/state",
+    "sessionRootsUnderState": [
+      "--private-tmp-dsh-e2e-state-documents-deepseek-harness-default-workspace--"
+    ]
+  }
+}

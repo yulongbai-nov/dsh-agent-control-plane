@@ -1,0 +1,12 @@
+# Patch layer contributed by this bundle.
+#
+# Vendored from @orphiczhou/dsh-session-tree (MIT, commit a534822) by
+# dsh-agent-control-plane. Local changes: six task-type avatars with manual
+# override, and the `remote.session` namespace probe no longer logs a console
+# error in compositions that do not grant it.
+#
+# To turn the plugin off without uninstalling it, disable the `session-tree`
+# row in the profile; the shipped WorkspaceBrowser takes the sidebar seat back.
+- insert:
+    - id: session-tree
+      name: 'dsh-control-plane-session-tree'

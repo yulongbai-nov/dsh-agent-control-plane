@@ -1,0 +1,109 @@
+# DSH Agent 控制面 · 最终交付（2026-11-02）
+
+> **状态：可安装、可回滚、可打包；真机 E2E 14/14 通过（含 2 次真实模型调用）。**
+> 目标宿主：DeepSeek Harness 桌面版 `0.2.1-rc.5`。未修改签名应用、未改动 `desktop` profile、
+> 未触碰用户会话与 GUI。
+
+## 1. 交付了什么
+
+| 交付物 | 位置 | 说明 |
+|---|---|---|
+| 控制面插件集（5 个组件） | `third_party/dsh-session-tree/` + npm/git pinned | 见 §2 |
+| 安装器 / 回滚器 | `delivery/install.mjs`、`delivery/uninstall.mjs` | 快照 → 安装 → 回执；回滚恢复快照 |
+| 打包产物 | `dist/` | `dsh-control-plane-session-tree-1.0.4-cp.1.tgz`、`INSTALL.md`、`manifest.json` |
+| 真机 E2E 套件 | `e2e/` | 14 条中文行为用例，一条命令跑完 |
+| E2E 证据 | `docs/evidence/2026-11-02/` | 12 张真实 GUI 截图 + 隔离审计 `last-run.json` |
+
+## 2. 组件与来源（全部 MIT，版本/commit 固定）
+
+| 组件 | 来源 | 我们做的改动 | 覆盖 |
+|---|---|---|---|
+| `dsh-control-plane-session-tree` | vendor `@orphiczhou/dsh-session-tree@1.0.4`（commit `a534822`） | 六类任务头像 + 手动覆盖/持久化；修掉 `remote.session` 控制台报错；单文件 bundle 构建 | **R7、R8** |
+| `dsh-agent-teams-model-override` | `github:funk80rus/...#1bbe089` | 无（pinned） | **R1 嵌套、R3、R5、R6 每成员模型** |
+| `dsh-workflow-map` | npm `1.0.0` | 无 | **R10、R11（部分）** |
+| `dsh-local-telemetry` | npm `0.2.1` | 无（E2E 中路径重定向） | **R18、R15（部分）** |
+| `dshmarket` | npm `1.73.8` | 无 | **R13** |
+
+## 3. 真机 E2E 结果
+
+```
+node e2e/run-e2e.mjs            -> 11 passed, 3 skipped   (零模型调用)
+node e2e/run-e2e.mjs --real-model -> 14 passed            (2 次真实模型调用)
+```
+
+| 验证点 | 结果 |
+|---|---|
+| 侧栏会话树在真实 GUI 渲染（工作区分组、筛选、折叠、行菜单） | ✅ 截图 `01/04/05` |
+| 六类头像：推断、手动指定、刷新持久、恢复自动 | ✅ 截图 `06/07` |
+| 5 个插件全部在 Plugins 页加载 + Plugin Market 入口 | ✅ 截图 `08/09` |
+| 工作流地图入口可用、不崩溃、可回会话 | ✅ 截图 `10` |
+| 真实登录真实模型回复 + token 用量 | ✅ 截图 `11`（回复 `2`，`Usage 12.6K tok`，Cache hit 91%） |
+| `spawn_teammate_with_model` 对 agent 可见 | ✅ 截图 `12`（模型回答 `TOOL_YES`） |
+| 遥测 SQLite 收到真实会话事件 | ✅ 隔离目录 rows>0 |
+| 用户数据零污染 | ✅ `workspace.json`/凭据/`sessions/` 前后哈希一致 |
+| 安装→回滚闭环 | ✅ 一次性 profile：5 依赖/5 bundle → 回滚后恢复原 7 bundle、0 依赖 |
+
+## 4. R1–R18 覆盖矩阵（诚实版）
+
+| 需求 | 状态 | 说明 |
+|---|---|---|
+| R1 递归团队 | 🟡 部分 | 团队插件提供 manager→worker 嵌套；工具已验证对 agent 可见；未跑 L0→L3 全链 + 第 4 级类型化拒绝 |
+| R2 团队级深度 | 🔴 未交付 | 仅有原生全局 `maxDepth`，没有团队范围原子门禁 |
+| R3 手动建队 | 🟡 部分 | 官方 Team 面板 + 每成员模型创建工具；无定制 roster UI |
+| R4 自动建队 | 🔴 未交付 | 无候选建议/一键创建 |
+| R5 归档与唤醒 | 🟡 部分 | 官方归档 + 插件冷恢复路径；归档期显式拒绝语义未测 |
+| R6 Agent Spec | 🟢 基本 | 每成员 provider/model/effort 由插件承载，工具可见性已实测；真实 spawn 未在 E2E 发起 |
+| R7 常驻侧栏树 | 🟢 已交付 | 真实侧栏单槽替换 + 懒展开 + 工作区分组 + 搜索/排序/归档/置顶/重命名/Fork |
+| R8 六类头像 | 🟢 已交付 | 推断 + 手动覆盖 + localStorage 持久 + 自动恢复 |
+| R9 任务驱动标题 | 🔴 未交付 | 与 CR-004 一致：公开 seam 无法满足「任务变化 ≤1 回合且保 pin」；需标题服务扩展 |
+| R10 workflow 图 | 🟡 部分 | 工作流地图插件已装、入口可用；静态拓扑/编辑/重跑未验 |
+| R11 节点看板 | 🟡 部分 | 地图内节点/进度视图可用；与 workflow 事件双向联动未验 |
+| R12 缓存友好 | 🔴 未交付 | 仅遥测可见 cache 指标，无复用策略 |
+| R13 安装/升级/回滚 | 🟢 已交付 | 安装器/回滚器/pack + dshmarket；回滚闭环已实测 |
+| R14 权限默认 | ⚪ 未变更 | 未改权限配置；`experimental-auto-review` 仍随原 bundle 存在 |
+| R15 workflow 统计 | 🟡 部分 | 遥测已落库；workflow run/source 归因未接 |
+| R16 utility 库 | 🔴 未交付 | 无 registry/晋升/run_utility |
+| R17 视觉与无障碍 | 🟡 部分 | 浅色主题 + 真实截图；深色/locale/键盘/读屏未全量验收 |
+| R18 个人遥测 | 🟡 部分 | 本地 SQLite 存储、默认不采正文、隔离路径已验证；导出/清除/tombstone 未验 |
+
+## 5. 安装 / 回滚 / 打包
+
+```sh
+# 测试或普通 profile
+node delivery/install.mjs --profile e2e
+
+# 正式 desktop：先完全退出 DSH 应用
+node delivery/install.mjs --profile desktop --yes
+# 重新打开 DSH 即生效
+
+# 回滚
+node delivery/uninstall.mjs --profile desktop --yes
+
+# 打包（重）生成
+node delivery/pack.mjs   # -> dist/*.tgz + INSTALL.md + manifest.json
+```
+
+安装器先快照 profile 的 `package.json` / `cordis.patch.yml` / `pnpm-lock.yaml` 到
+`.control-plane-backup/<时间戳>/`，写回执 `.control-plane-install.json`；回滚恢复快照并
+`pnpm install` 清理依赖。**desktop profile 由 Electron 独占管理**：CLI 写它前必须退出应用，
+或者改用应用内 **Settings → Plugins → Add plugin**（用 `dist/` 里的 tarball 绝对路径或 npm/git spec）。
+
+## 6. 预算
+
+- 真实模型调用：本次交付全程约 **6 次**（含早期探测），单价为 `DeepSeek-V4.1-Flash`，
+  总成本远低于 12 元预算（每次约 1.2 万 token）。
+- 回归 E2E 默认零模型调用；`--real-model` 固定 2 次，不循环跑。
+
+## 7. 已知缺口与建议下一步
+
+1. **R9 标题**：需扩展标题服务（fork/上游 seam），否则只能做「会话备注/标签」降级。
+2. **R4 自动建队 + R16 utility 库**：各约 3–5 人日，建议基于现有团队插件的事件/任务板扩展。
+3. **R2 团队级深度门禁**：需要把深度检查下沉到 subagent manager（核心改动或 fork）。
+4. **R10/R11 深度**：把 `workflow-map` 的输出接到我们仓库的拓扑/看板模型，验证事件↔节点绑定。
+5. **R17 全量验收**：深色、locale、键盘/读屏、窄屏需要一轮视觉/无障碍清单。
+
+## 8. 变更边界
+
+- 新增：`third_party/`、`e2e/`、`delivery/`、`dist/`、`docs/evidence/`。
+- 未改：`/Applications/DeepSeek Harness.app`、`~/.dsh/profiles/desktop`、用户会话/凭据/工作区。
+- 旧的研究包与历史文档保留原样；`docs/status.md` 是本次交付之前的状态记录。

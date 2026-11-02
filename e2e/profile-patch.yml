@@ -1,0 +1,27 @@
+# --- dsh-agent-control-plane e2e isolation ---
+# Appended to the test profile by e2e/run-e2e.mjs. The profile shares $DSH_HOME
+# (so the run uses the real login/credentials) but every mutable root is moved
+# under $DSH_E2E_ROOT/state, keeping user sessions and the desktop GUI untouched.
+# Paths are absolute because this file is read from the profile, not the repo.
+- id: session-persistence-jsonl
+  name: "@deepseek-ai/dsh-session-persistence-jsonl"
+  config:
+    root: /tmp/dsh-e2e/state/sessions
+- id: storage-json
+  name: "@deepseek-ai/dsh-storage-json"
+  config:
+    root: /tmp/dsh-e2e/state/storages
+- id: workspace-controller
+  name: "@deepseek-ai/dsh-api-workspace-controller"
+  config:
+    documentsDirectory: /tmp/dsh-e2e/state/documents
+# One less model call per prompt: titles fall back to first-prompt truncation.
+- id: session-title-llm
+  disabled: true
+# Telemetry keeps its data inside the test state root (default is ~/.dsh/telemetry).
+- id: dsh-local-telemetry
+  name: dsh-local-telemetry
+  config:
+    telemetry:
+      path: /tmp/dsh-e2e/state/telemetry
+      store: sqlite

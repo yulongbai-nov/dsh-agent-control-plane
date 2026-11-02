@@ -1,0 +1,11 @@
+{
+  "pageErrors": [],
+  "consoleErrors": [
+    "[deepseek-account] account read failed {field: balance}",
+    "[deepseek-account] account read failed {field: profile}"
+  ],
+  "knownBenign": [
+    "[deepseek-account] account read failed {field: balance}",
+    "[deepseek-account] account read failed {field: profile}"
+  ]
+}

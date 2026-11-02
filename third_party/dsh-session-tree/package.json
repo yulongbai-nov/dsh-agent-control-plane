@@ -1,0 +1,48 @@
+{
+  "name": "dsh-control-plane-session-tree",
+  "version": "1.0.4-cp.1",
+  "type": "module",
+  "description": "Left-sidebar session tree with six task-type avatars for DeepSeek Harness (vendor of @orphiczhou/dsh-session-tree, MIT)",
+  "license": "MIT",
+  "author": "orphiczhou (upstream); dsh-agent-control-plane (avatar layer, rc.5 fixes)",
+  "keywords": ["dsh-plugin", "dsh", "deepseek-harness", "session-tree", "sidebar", "subagent", "cordis", "avatar"],
+  "main": "./index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "client.template.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale",
+    "avatars",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node scripts/build.mjs --check && node --check client.js"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ]
+    }
+  },
+  "icon": "./icon.svg"
+}
