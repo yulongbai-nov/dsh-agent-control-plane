@@ -13,7 +13,7 @@ const lineage=fs.readFileSync(lineagePath,'utf8').replace('export { catalogOf, b
 const planner=fs.readFileSync(plannerPath,'utf8').replace(/import \{ buildRows, navigationTarget \} from '(?:\.\.\/\.\.\/\.\.\/\.\.\/session-tree\/lineage|\.\/shared-lineage)\.mjs';/,'const {buildRows,navigationTarget}=window.lineage;').replace('export function planLineage','window.planLineage=function planLineage');
 const compiled=fs.readFileSync(process.env.GRAFT_COMPILED_PATH,'utf8')
  .replace('import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";','const {jsx:_jsx,jsxs:_jsxs}=window.ReactJSX;')
- .replace("import { Fragment, useEffect, useRef, useState } from 'react';",'const {Fragment,useEffect,useRef,useState}=window.React;')
+ .replace("import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';",'const {Fragment,useEffect,useLayoutEffect,useRef,useState}=window.React;')
  .replace("import { planLineage } from './lineage-plan.mjs';",'const planLineage=window.planLineage;')
  .replace('export function LineageGraft','window.LineageGraft=function LineageGraft');
 (async()=>{
@@ -21,7 +21,7 @@ const compiled=fs.readFileSync(process.env.GRAFT_COMPILED_PATH,'utf8')
  try {
   const requests=[],errors=[],context=await browser.newContext();await context.route('**/*',r=>{requests.push(r.request().url());return r.abort()});
   const page=await context.newPage();page.on('pageerror',e=>errors.push(String(e)));
-  await page.setContent('<!doctype html><main id="mount"></main>');
+  await page.setContent('<!doctype html><button id="outside">outside</button><main id="mount"></main>');
   for(const content of [react,lineage,planner,compiled])await page.addScriptTag({content:`(()=>{${content}\n})();`});
   assert.deepEqual(errors,[],'setup browser errors');
   const result=await page.evaluate(async()=>{
@@ -37,16 +37,27 @@ const compiled=fs.readFileSync(process.env.GRAFT_COMPILED_PATH,'utf8')
    const childToggle=document.querySelector('[aria-label="lineage.expand:child"]');ReactDOM.flushSync(()=>childToggle.click());await Promise.resolve();await Promise.resolve();
    const deep=[...document.querySelectorAll('[data-lineage-key] button')].find(node=>node.textContent==='deep');deep.click();
    const afterOpen=calls.slice();
+   deep.focus();ReactDOM.flushSync(()=>root.render(React.createElement(LineageGraft,props)));const stableFocus=document.activeElement===deep;
+   deep.focus();list.projectionsBySession.child=ready([]);ReactDOM.flushSync(()=>root.render(React.createElement(LineageGraft,props)));const afterRemoval=document.activeElement?.textContent;
+   list.projectionsBySession.child=ready([child('deep')]);ReactDOM.flushSync(()=>root.render(React.createElement(LineageGraft,props)));
+   document.querySelector('#outside').focus();list.projectionsBySession.child=ready([]);ReactDOM.flushSync(()=>root.render(React.createElement(LineageGraft,props)));const outsideRetained=document.activeElement?.id;
+   list.projectionsBySession.child=ready([child('deep')]);ReactDOM.flushSync(()=>root.render(React.createElement(LineageGraft,props)));
+   document.querySelector('[data-lineage-open]:last-child')?.focus();document.body.tabIndex=-1;document.body.focus();list.projectionsBySession.child=ready([]);ReactDOM.flushSync(()=>root.render(React.createElement(LineageGraft,props)));const deliberateBody=document.activeElement===document.body;
+   list.projectionsBySession.child=ready([child('deep')]);ReactDOM.flushSync(()=>root.render(React.createElement(LineageGraft,props)));
    const rootClose=document.querySelector('[aria-label="lineage.collapse:root"]');ReactDOM.flushSync(()=>rootClose.click());
    const afterClose=document.querySelectorAll('[data-lineage-key]').length;
    const reopen=document.querySelector('[aria-label="lineage.expand:root"]');ReactDOM.flushSync(()=>reopen.click());await Promise.resolve();await Promise.resolve();
    const afterReopen=[...document.querySelectorAll('[data-lineage-key]')].map(node=>node.textContent);
+   props.rowState={archivedSessionIds:['child'],archivedFilter:'show'};ReactDOM.flushSync(()=>root.render(React.createElement(LineageGraft,props)));
+   const archivedChild=document.querySelector('[data-lineage-key]');const archivedSemantics={rowDisabled:archivedChild?.getAttribute('aria-disabled'),toggleDisabled:archivedChild?.querySelector('[aria-label]')?.disabled,openDisabled:archivedChild?.querySelector('[data-lineage-open]')?.disabled};
    const nativeKey=document.querySelector('[data-row-key]').dataset.rowKey;root.unmount();
-   return {countBefore,countAfterRoot,nativeAfterToggle,afterOpen,afterClose,afterReopen,nativeKey};
+   return {countBefore,countAfterRoot,nativeAfterToggle,afterOpen,stableFocus,afterRemoval,outsideRetained,deliberateBody,afterClose,afterReopen,archivedSemantics,nativeKey};
   });
   assert.equal(result.countBefore,0);assert.deepEqual(result.countAfterRoot,['root']);assert.deepEqual(result.nativeAfterToggle,[]);
   assert.deepEqual(result.afterOpen,['root','child',{parentSessionId:'child',childSessionId:'deep',mode:'continuable'}]);
+  assert.equal(result.stableFocus,true);assert.equal(result.afterRemoval,'child');assert.equal(result.outsideRetained,'outside');assert.equal(result.deliberateBody,true);
   assert.equal(result.afterClose,0);assert.equal(result.afterReopen.length,1);assert.equal(result.nativeKey,'session:root');
+  assert.deepEqual(result.archivedSemantics,{rowDisabled:null,toggleDisabled:false,openDisabled:true});
   assert.deepEqual(errors,[]);assert.deepEqual(requests,[]);console.log(JSON.stringify(result,null,2));
  }finally{await browser.close()}
 })().catch(error=>{console.error(error);process.exitCode=1});

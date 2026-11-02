@@ -19,6 +19,7 @@ test('pinned build manifests and lockfile match upstream Git blobs',async()=>{
   'pnpm-lock.yaml':'d6df9aae42ba1c3a25e7a2b48f0eeb441d4d7411',
   'tsconfig.base.client.json':'6af2056c90b86afdf8cd229385e175d3f42b7eff',
   'tsconfig.base.json':'f083f9b35e49b446d0f53eca1443cd8a3bd7de61',
+  'native/system/tsconfig.base.json':'a95ca64f6d4fb92deded2f335bac551d04d031bc',
   'packages/client/tsdown.client.ts':'90b26c196e6fc69acef39ccc4fad16fcaf1a0b5f',
   'packages/client/modules/src/client/manifest.ts':'1926d812a19f26f122d604559f7412222672766f',
   'packages/client/web/src/platform.ts':'31035552150a39ab8daa8218c7ac6f0478ed4152',

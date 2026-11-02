@@ -11,7 +11,7 @@ const graftPath=process.env.R7_GRAFT_SOURCE||path.join(src,'LineageGraft.tsx');
 const plannerPath=process.env.R7_PLANNER_SOURCE||path.join(src,'lineage-plan.mjs');
 const lineagePath=process.env.R7_SHARED_SOURCE||path.join(root,'../session-tree/lineage.mjs');
 const readPinned=(name,file,sha)=>{const value=fs.readFileSync(file);if(digest(value)!==sha)throw Error(`${name} source drift`);return value.toString('utf8')};
-const graft=readPinned('graft',graftPath,'66a99090e329d67337a111f48f8be96aa20ff19e9c4bbd9dbcbd946fcd6ef75f');
+const graft=readPinned('graft',graftPath,'e0b7813433dddc50f8bde1c903354ae741b584e7783ceef39a414adfe89dd787');
 const planner=readPinned('planner',plannerPath,'5f692d6ef7cb2d9e3c760062785dc6d896aa947088242c550194a1f0a290a08f');
 const lineage=readPinned('shared lineage',lineagePath,'1ab69beaf3616ff4065dcea165790457e3e3e50d2de10cb6d4b0cb10555edb33');
 const {packageRoot}=verifyTs6(TSC_ENTRY),ts=require(path.join(packageRoot,'lib/typescript.js'));

@@ -4,6 +4,7 @@ declare module 'react' {
  export type MouseEvent<T>={stopPropagation():void,currentTarget:T};
  export const Fragment:any;
  export function useEffect(f:()=>void|(()=>void), deps:unknown[]):void;
+ export function useLayoutEffect(f:()=>void|(()=>void)):void;
  export function useRef<T>(value:T):{current:T};
  export function useState<T>(v:T|(()=>T)):[T,(value:T|((p:T)=>T))=>void];
 }
