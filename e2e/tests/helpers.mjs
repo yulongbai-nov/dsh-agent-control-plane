@@ -82,6 +82,8 @@ export async function selectLanguage(page, target) {
 
 /** Recover to the English UI if a previous test left another locale persisted. */
 export async function ensureEnglish(page) {
+  // Fresh CI profiles are English; never let recovery attempts hang a Linux lane.
+  if (process.env.CI === 'true' || process.env.CI === '1') return
   if (await isEnglish(page)) return
   try {
     await selectLanguage(page, 'English')

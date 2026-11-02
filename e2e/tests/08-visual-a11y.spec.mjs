@@ -79,7 +79,8 @@ test.describe('控制面 E2E · R17 视觉与无障碍', () => {
   test('中英 locale 切换后侧栏文案随之变化（切回英文）', async ({ page }) => {
     // Linux CI Chromium persists/changes locale differently; the round-trip is
     // validated on macOS. CI still covers theme + keyboard on the same dialog.
-    test.skip(process.env.CI === '1', 'locale round-trip is macOS-validated; Linux CI keeps theme+keyboard')
+    const isCI = process.env.CI === 'true' || process.env.CI === '1'
+    test.skip(isCI, 'locale round-trip is macOS-validated; Linux CI keeps theme+keyboard')
     await boot(page)
     // 基线：英文界面（筛选框在侧栏里、role=tree 容器之外）
     expect(await page.evaluate(() => document.documentElement.lang)).toMatch(/^en/)
