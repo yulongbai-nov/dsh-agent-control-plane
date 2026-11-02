@@ -1,0 +1,160 @@
+diff --git a/packages/experimental/agent-team/src/suggestion-wip.ts b/packages/experimental/agent-team/src/suggestion-wip.ts
+new file mode 100644
+index 00000000..45a7d8c2
+--- /dev/null
++++ b/packages/experimental/agent-team/src/suggestion-wip.ts
+@@ -0,0 +1,66 @@
++/** Non-executable role-preview research. No human-authorization seam exists here. */
++import { types as nodeTypes } from 'node:util'
++import { createHash, randomBytes } from 'node:crypto'
++import type { Context } from '@deepseek-ai/cordis'
++import type { Agent } from '@deepseek-ai/dsh-agent'
++
++type Role = Readonly<{ name: string; description: string }>
++/** A preview identity, not an approval or transport credential. */
++export type TeamSuggestion = Readonly<{ version: 1; previewId: string; digest: string; roles: readonly Role[] }>
++type RecordState = { readonly owner: Agent; cancelled: boolean }
++
++/** Candidate-only Host helper; it does not register a Remote endpoint or create a Team. */
++export class TeamSuggestionWip {
++  private readonly drafts = new WeakMap<TeamSuggestion, RecordState>()
++  constructor(private readonly ctx: Context) {}
++  private lead(caller: Agent): void {
++    if (this.ctx.agents.get(caller.id) !== caller || this.ctx.sessions.get(caller.id) !== caller.session ||
++      this.ctx.agentTeams.membership(caller).role !== 'lead') throw new Error('Team suggestion scope unavailable')
++  }
++  preview(caller: Agent, input: unknown): TeamSuggestion {
++    this.lead(caller)
++    const provider = this.ctx.subagents.getProvider('spawn')
++    if (!provider || !provider.prepareContinuable || !provider.capabilities.depthLimit || provider.inheritsParentContext) {
++      throw new Error('Team suggestion backend capability unavailable')
++    }
++    if (nodeTypes.isProxy(input) || !Array.isArray(input) || input.length < 2 || input.length > 5 || Object.getOwnPropertySymbols(input).length) throw new Error('invalid role list')
++    const entries = Object.getOwnPropertyDescriptors(input)
++    if (Object.keys(entries).length !== input.length + 1) throw new Error('invalid role list')
++    const roles: Role[] = [], names = new Set<string>()
++    for (let i=0;i<input.length;i++) {
++      const entry=entries[String(i)]
++      if (!entry || !('value' in entry)) throw new Error('invalid role list')
++      const item: unknown = entry.value
++      if (item === null || typeof item !== 'object' || nodeTypes.isProxy(item) || ![Object.prototype,null].includes(Object.getPrototypeOf(item)) || Object.getOwnPropertySymbols(item).length) throw new Error('invalid role')
++      const fields=Object.getOwnPropertyDescriptors(item)
++      if (Object.keys(fields).length!==2 || !fields.name || !fields.description || !('value' in fields.name) || !('value' in fields.description)) throw new Error('invalid role fields')
++      const {value:name}=fields.name, {value:description}=fields.description
++      if (typeof name!=='string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name) || Buffer.byteLength(name,'utf8')>64 ||
++        typeof description!=='string' || !description.trim() || Buffer.byteLength(description,'utf8')>512 || /[\u0000-\u001f\u007f-\u009f]/u.test(description) || names.has(name)) throw new Error('invalid role values')
++      names.add(name);roles.push(Object.freeze({name,description}))
++    }
++    const stableRoles=Object.freeze(roles)
++    // This commits only the preview fields; no task revision, Team epoch or
++    // provider/model grants exist in the WIP, so it cannot authorize creation.
++    const digest=createHash('sha256').update(JSON.stringify([1,caller.id,'spawn',stableRoles.map(role=>[role.name,role.description])])).digest('hex')
++    const draft=Object.freeze({version:1 as const,previewId:randomBytes(32).toString('hex'),digest,roles:stableRoles})
++    this.drafts.set(draft,{owner:caller,cancelled:false})
++    return draft
++  }
++  cancel(caller: Agent, draft: TeamSuggestion): 'CANCELLED' {
++    this.lead(caller)
++    const state=this.drafts.get(draft)
++    if (!state || state.owner!==caller) throw new Error('unknown Team suggestion')
++    state.cancelled=true
++    return 'CANCELLED'
++  }
++  confirm(caller: Agent, draft: TeamSuggestion): 'BLOCKED' | 'CANCELLED' {
++    this.lead(caller)
++    const state=this.drafts.get(draft)
++    if (!state || state.owner!==caller) throw new Error('unknown Team suggestion')
++    if (state.cancelled) return 'CANCELLED'
++    // An arbitrary caller, boolean, model response or owner Peer is not proof
++    // of informed human confirmation for the exact plan and scope.
++    return 'BLOCKED'
++  }
++}
+diff --git a/packages/experimental/agent-team/tests/suggestion-wip.spec.ts b/packages/experimental/agent-team/tests/suggestion-wip.spec.ts
+new file mode 100644
+index 00000000..5cb8187d
+--- /dev/null
++++ b/packages/experimental/agent-team/tests/suggestion-wip.spec.ts
+@@ -0,0 +1,82 @@
++import { Context } from '@deepseek-ai/cordis'
++import AgentLoop from '@deepseek-ai/dsh-agent-loop'
++import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
++import { SessionId } from '@deepseek-ai/dsh-session'
++import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
++import SubagentService from '@deepseek-ai/dsh-subagent'
++import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
++import { mkdtempSync, rmSync } from 'node:fs'
++import { join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { expect, it, vi } from 'vitest'
++import { MockAdapter } from '../../../core/agent-loop/tests/mock-adapter.ts'
++import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
++import TeamService from '../src/index.ts'
++import { TeamSuggestionWip } from '../src/suggestion-wip.ts'
++import { TestSessionQuery } from './test-session-query.ts'
++
++async function fixture(provider=true) {
++  const root=mkdtempSync(join(tmpdir(),'synthetic-team-suggestion-')),ctx=new Context()
++  await mountAgentLoopTestDependencies(ctx);await mountWorkingDirectoryFixture(ctx)
++  await ctx.plugin(JsonlSessionPersistence,{root});await ctx.plugin(TestSessionQuery)
++  await ctx.plugin(AgentLoop,{agents:[]});await ctx.plugin(SubagentService)
++  if(provider) await ctx.plugin(SubagentSpawn,{providerName:'spawn'})
++  await ctx.plugin(TeamService);ctx.llm.registerAdapter(['mock'],new MockAdapter(['hang']))
++  const lead=await ctx.agentLoop.create(SessionId('suggestion-lead'),{provider:'mock',model:'mock'})
++  return {ctx,lead,close:async()=>{await ctx.fiber.dispose();rmSync(root,{recursive:true,force:true})}}
++}
++const candidates=()=>[{name:'researcher',description:'Review the synthetic task'},{name:'tester',description:'Check the synthetic result'}]
++
++it('previews two roles without Team writes or activation; confirmation is blocked and cancel is final',async()=>{
++  const {ctx,lead,close}=await fixture()
++  try {
++    const before=lead.session.snapshotEvents(),spawn=vi.spyOn(ctx.agentTeams,'spawnTeammate'),start=vi.spyOn(ctx.subagents,'startActivation')
++    const helper=new TeamSuggestionWip(ctx),input=candidates(),draft=helper.preview(lead,input)
++    const duplicate=helper.preview(lead,candidates())
++    const changed=helper.preview(lead,[{name:'researcher',description:'Different work'},candidates()[1]!])
++    expect(draft.version).toBe(1);expect(draft.digest).toMatch(/^[0-9a-f]{64}$/);expect(draft.previewId).toMatch(/^[0-9a-f]{64}$/)
++    expect(duplicate.digest).toBe(draft.digest);expect(duplicate.previewId).not.toBe(draft.previewId)
++    expect(changed.digest).not.toBe(draft.digest)
++    expect(helper.preview(lead,[...candidates(),{name:'third',description:'One'},{name:'fourth',description:'Two'},{name:'fifth',description:'Three'}]).roles).toHaveLength(5)
++    input[0]!.description='changed by caller'
++    expect(draft.roles[0]?.description).toBe('Review the synthetic task')
++    expect(helper.confirm(lead,draft)).toBe('BLOCKED')
++    expect((helper.confirm as (...args: unknown[])=>unknown).call(helper,lead,draft,{human:true})).toBe('BLOCKED')
++    expect(helper.cancel(lead,draft)).toBe('CANCELLED')
++    expect(helper.confirm(lead,draft)).toBe('CANCELLED')
++    expect(()=>helper.confirm(lead,{...draft})).toThrow(/unknown/)
++    expect(spawn).not.toHaveBeenCalled();expect(start).not.toHaveBeenCalled()
++    expect(lead.session.snapshotEvents()).toEqual(before)
++    expect(ctx.agentTeams.listMembers(lead)).toHaveLength(1)
++  } finally {await close()}
++})
++
++it('rejects malformed, over-budget, model-selection and hostile role inputs without traps',async()=>{
++  const {ctx,lead,close}=await fixture()
++  try {
++    const helper=new TeamSuggestionWip(ctx), before=lead.session.snapshotEvents();let calls=0
++    const getter=Object.defineProperty({name:'test'},'description',{get(){calls++;throw Error('getter')}})
++    const proxy=new Proxy(candidates()[0]!,{ownKeys(){calls++;throw Error('proxy')}})
++    const revoked=Proxy.revocable(candidates()[0]!,{});revoked.revoke()
++    const one=candidates()[0]!, same=[one,one]
++    for(const value of [[],[one],[...candidates(),...candidates(),...candidates()],same,[one,{name:'bad',description:'\u001b[2J'}],
++      [one,{name:'other',description:'a',model:'model'}],[one,getter],[one,proxy],[one,revoked.proxy]]) {
++      expect(()=>helper.preview(lead,value)).toThrow()
++    }
++    expect(calls).toBe(0);expect(lead.session.snapshotEvents()).toEqual(before)
++  } finally {await close()}
++})
++
++it('requires the pinned fresh backend and exact Lead scope',async()=>{
++  const absent=await fixture(false)
++  try {expect(()=>new TeamSuggestionWip(absent.ctx).preview(absent.lead,candidates())).toThrow(/capability/)} finally {await absent.close()}
++  const {ctx,lead,close}=await fixture()
++  try {
++    const helper=new TeamSuggestionWip(ctx),draft=helper.preview(lead,candidates())
++    const other=await ctx.agentLoop.create(SessionId('other-synthetic-lead'),{provider:'mock',model:'mock'})
++    expect(()=>helper.confirm(other,draft)).toThrow(/unknown/)
++    const worker=await ctx.agentTeams.spawnTeammate(lead,{name:'worker',description:'fixture',prompt:[{type:'text',text:'synthetic'}],context:'fresh',provider:'spawn',signal:new AbortController().signal})
++    const child=ctx.agents.get(worker.member.id)!
++    expect(()=>helper.preview(child,candidates())).toThrow(/scope/)
++  } finally {await close()}
++})
