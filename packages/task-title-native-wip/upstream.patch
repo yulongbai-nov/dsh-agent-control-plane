@@ -1,0 +1,228 @@
+diff --git a/packages/session/session-title/src/index.ts b/packages/session/session-title/src/index.ts
+index 6a7e9acd..96c3b3b5 100644
+--- a/packages/session/session-title/src/index.ts
++++ b/packages/session/session-title/src/index.ts
+@@ -6,0 +7 @@ import { Context, FiberState, Service, type Fiber } from '@deepseek-ai/cordis'
++import { types as nodeTypes } from 'node:util'
+@@ -67,0 +69,2 @@ declare module '@deepseek-ai/cordis' {
++    /** Experimental trusted host verifier; absence disables task title updates. */
++    taskTitleAuthority: TaskTitleAuthority
+@@ -70,0 +74,27 @@ declare module '@deepseek-ai/cordis' {
++/** Experimental live-source facts. This is not an authorization token. */
++export interface TaskTitleCandidate {
++  readonly leadId: string
++  readonly taskId: string
++  readonly taskRevision: number
++  readonly taskEventSeq: number
++  readonly title: string
++}
++/** A host-owned synchronous verifier; an arbitrary plugin is not a trust boundary. */
++export interface TaskTitleAuthority {
++  verify(session: Session, candidate: TaskTitleCandidate): boolean
++}
++
++/** Fixed primitive snapshot: reject accessors and proxies before invocation. */
++function snapshotTaskCandidate(input: TaskTitleCandidate): TaskTitleCandidate {
++  if (input === null || typeof input !== 'object' || nodeTypes.isProxy(input) ||
++    ![Object.prototype, null].includes(Object.getPrototypeOf(input)) || Object.getOwnPropertySymbols(input).length) throw new Error('invalid task title candidate')
++  const fields = Object.getOwnPropertyDescriptors(input)
++  const keys = ['leadId', 'taskId', 'taskRevision', 'taskEventSeq', 'title']
++  if (Object.keys(fields).length !== keys.length || keys.some(key => !Object.hasOwn(fields, key)) ||
++    Object.values(fields).some(field => !('value' in field))) throw new Error('invalid task title candidate')
++  const {leadId, taskId, taskRevision, taskEventSeq, title} = Object.fromEntries(keys.map(key => [key, fields[key]!.value]))
++  if (typeof leadId !== 'string' || !leadId || leadId.length > 200 || typeof taskId !== 'string' || !taskId || taskId.length > 200 ||
++    !Number.isSafeInteger(taskRevision) || taskRevision < 1 || !Number.isSafeInteger(taskEventSeq) || taskEventSeq < 0 || typeof title !== 'string' || title.length > 4096) throw new Error('invalid task title candidate')
++  return Object.freeze({leadId,taskId,taskRevision,taskEventSeq,title}) as TaskTitleCandidate
++}
++
+@@ -150,0 +181 @@ function copySessionTitleSource(source: SessionTitleSource): SessionTitleSource
++    case 'task': return { ...source }
+@@ -395,0 +427,34 @@ export class SessionTitleService extends Service {
++  /**
++   * Experimental synchronous acceptance seam only: the host must observe task
++   * changes and provide a trusted authority. Not safe for a deployed profile.
++   */
++  submitTaskTitle(session: Session, input: TaskTitleCandidate, signal?: AbortSignal): SessionTitleSnapshot | undefined {
++    signal?.throwIfAborted()
++    this.assertServiceActive()
++    if (this.ctx.sessions.get(session.id) !== session) throw new Error('task title session is not live')
++    const candidate = snapshotTaskCandidate(input)
++    const title = normalizeSessionTitle(candidate.title, this.config.maxTitleBytes)
++    if (!title) throw new SessionTitleInvalidError('task title must contain visible characters')
++    const authority = this.ctx.get('taskTitleAuthority')
++    if (!authority || authority.verify(session, candidate) !== true) return undefined
++    if (this.get(session)?.source.kind === 'user') return undefined
++    // Use the child's own title events as a replayable watermark for this lead.
++    // oxlint-disable-next-line typescript/no-deprecated -- Experimental replay check.
++    for (const event of session.snapshotEvents()) {
++      if (event.type === 'session/title' && event.data.source.kind === 'task' && event.data.source.leadId === candidate.leadId && event.data.source.taskEventSeq >= candidate.taskEventSeq) return undefined
++    }
++    const state = this.stateFor(session)
++    const revision = this.supersede(state, 'task title superseded older automatic generation')
++    signal?.throwIfAborted()
++    if (!this.serviceActive() || this.ctx.sessions.get(session.id) !== session || state.revision !== revision ||
++      this.get(session)?.source.kind === 'user' || this.ctx.get('taskTitleAuthority') !== authority || authority.verify(session, candidate) !== true) return undefined
++    // A verifier or abort handler can synchronously reenter the service.
++    signal?.throwIfAborted()
++    if (!this.serviceActive() || this.ctx.sessions.get(session.id) !== session || state.revision !== revision || this.get(session)?.source.kind === 'user') return undefined
++    session.append('session/title', { title, messageSeqs: [], source: {
++      kind: 'task', leadId: candidate.leadId, taskId: candidate.taskId,
++      taskRevision: candidate.taskRevision, taskEventSeq: candidate.taskEventSeq,
++    } })
++    return this.get(session)
++  }
++
+diff --git a/packages/session/session-title/src/types.ts b/packages/session/session-title/src/types.ts
+index 20855445..2be5270b 100644
+--- a/packages/session/session-title/src/types.ts
++++ b/packages/session/session-title/src/types.ts
+@@ -29,0 +30,2 @@ export type SessionTitleSource =
++  /** Experimental task provenance; older readers do not understand this kind. */
++  | { readonly kind: 'task'; readonly leadId: string; readonly taskId: string; readonly taskRevision: number; readonly taskEventSeq: number }
+@@ -44 +46 @@ export interface SessionTitleEventData {
+-  /** Exact human `user/message` seqs used to derive this title; empty for an explicit user rename. */
++  /** Human message seqs, or empty for a user rename or experimental task title. */
+diff --git a/packages/session/session-title/tests/task-wip.spec.ts b/packages/session/session-title/tests/task-wip.spec.ts
+new file mode 100644
+index 00000000..118ea9da
+--- /dev/null
++++ b/packages/session/session-title/tests/task-wip.spec.ts
+@@ -0,0 +1,138 @@
++import { Context } from '@deepseek-ai/cordis'
++import { describe, expect, it, vi } from 'vitest'
++import { createUserMessage } from '@deepseek-ai/dsh-llm'
++import { mkdtemp, rm } from 'node:fs/promises'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import SessionStore, { SessionId, appendPluginRecord, pluginRecordOf } from '@deepseek-ai/dsh-session'
++import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
++import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
++import SessionTitleService, { SessionTitleProviderId, foldSessionTitle } from '../src/index.ts'
++
++declare module '@deepseek-ai/dsh-session/types' {
++  interface PluginRecordMap {
++    'plugin:test-task-title': {version:number; title:string}
++  }
++}
++
++const CONFIG = { fallbackMaxWords: 5, fallbackMaxBytes: 40, maxTitleBytes: 40 }
++const candidate = (seq: number, title = 'Synthetic task') => ({ leadId:'lead', taskId:'task', taskRevision:seq, taskEventSeq:seq, title })
++async function setup() {
++  const ctx = new Context()
++  await ctx.plugin(SessionStore)
++  await ctx.plugin(SessionProjectionRegistry)
++  const fiber = await ctx.plugin(SessionTitleService, CONFIG)
++  const session = ctx.sessions.create(SessionId('synthetic-child'))
++  return {ctx, fiber, session}
++}
++describe('experimental task title acceptance', () => {
++  it('requires host authority and records task provenance without human messages', async () => {
++    const {ctx,session} = await setup()
++    try {
++      expect(ctx.sessionTitle.submitTaskTitle(session,candidate(1))).toBeUndefined()
++      ctx.provide('taskTitleAuthority', {verify:()=>true})
++      const accepted = ctx.sessionTitle.submitTaskTitle(session,candidate(1))
++      expect(accepted).toMatchObject({title:'Synthetic task',messageSeqs:[],source:{kind:'task',leadId:'lead',taskId:'task',taskRevision:1,taskEventSeq:1}})
++      expect(session.snapshotEvents().some(event=>event.type==='user/message')).toBe(false)
++      expect(ctx.sessionTitle.submitTaskTitle(session,candidate(1,'stale'))).toBeUndefined()
++    } finally { await ctx.fiber.dispose() }
++  })
++  it('honors user pin and an already aborted request', async () => {
++    const {ctx,session} = await setup()
++    try {
++      ctx.provide('taskTitleAuthority',{verify:()=>true})
++      ctx.sessionTitle.rename(session,'User title')
++      expect(ctx.sessionTitle.submitTaskTitle(session,candidate(2))).toBeUndefined()
++      const controller = new AbortController(); controller.abort()
++      expect(()=>ctx.sessionTitle.submitTaskTitle(session,candidate(3),controller.signal)).toThrow()
++      expect(ctx.sessionTitle.get(session)?.title).toBe('User title')
++    } finally { await ctx.fiber.dispose() }
++  })
++  it('supersedes in-flight provider generation without a stale overwrite', async () => {
++    const {ctx,session} = await setup()
++    try {
++      ctx.provide('taskTitleAuthority',{verify:()=>true})
++      session.append('turn/start',{turn:1})
++      session.append('user/message',createUserMessage({content:[{type:'text',text:'human prompt'}],source:{kind:'user'}}),{surfaceOp:'append'})
++      await new Promise(resolve=>setTimeout(resolve,0))
++      const entered=Promise.withResolvers<void>(), release=Promise.withResolvers<void>()
++      ctx.sessionTitle.register({id:SessionTitleProviderId('synthetic'),automatic:'first-prompt',generate:async request=>{
++        entered.resolve(); await release.promise
++        return {title:'Late provider',messageSeqs:request.messages.map(m=>m.seq)}
++      }})
++      const pending=ctx.sessionTitle.refresh(session).catch(()=>undefined)
++      await entered.promise
++      expect(ctx.sessionTitle.submitTaskTitle(session,candidate(2))?.title).toBe('Synthetic task')
++      release.resolve(); await pending
++      expect(ctx.sessionTitle.get(session)?.title).toBe('Synthetic task')
++    } finally { await ctx.fiber.dispose() }
++  })
++  it('folds task provenance and rejects stale cuts after title service restart', async () => {
++    const {ctx,fiber,session} = await setup()
++    try {
++      ctx.provide('taskTitleAuthority',{verify:()=>true})
++      ctx.sessionTitle.submitTaskTitle(session,candidate(3))
++      await fiber.dispose()
++      await ctx.plugin(SessionTitleService,CONFIG)
++      expect(foldSessionTitle(session.snapshotEvents())?.source.kind).toBe('task')
++      expect(ctx.sessionTitle.submitTaskTitle(session,candidate(2,'old'))).toBeUndefined()
++      expect(ctx.sessionTitle.submitTaskTitle(session,candidate(4,'new'))?.title).toBe('new')
++    } finally { await ctx.fiber.dispose() }
++  })
++  it('does not override a pin installed synchronously by a verifier', async () => {
++    const {ctx,session} = await setup()
++    try {
++      let n = 0
++      ctx.provide('taskTitleAuthority',{verify:vi.fn(()=>{if(++n===2) ctx.sessionTitle.rename(session,'Pinned during verify');return true})})
++      expect(ctx.sessionTitle.submitTaskTitle(session,candidate(1))).toBeUndefined()
++      expect(ctx.sessionTitle.get(session)?.title).toBe('Pinned during verify')
++    } finally { await ctx.fiber.dispose() }
++  })
++  it('rejects proxy and accessor candidates without invoking them', async () => {
++    const {ctx,session} = await setup()
++    try {
++      const verify = vi.fn(()=>true); ctx.provide('taskTitleAuthority',{verify})
++      let calls=0
++      const poisoned = Object.defineProperty(candidate(1),'title',{get(){calls++;throw Error('getter')}})
++      const proxy = new Proxy(candidate(1),{getPrototypeOf(){calls++;throw Error('trap')}})
++      const revoked = Proxy.revocable(candidate(1),{}); revoked.revoke()
++      for(const input of [poisoned,proxy,revoked.proxy]) expect(()=>ctx.sessionTitle.submitTaskTitle(session,input)).toThrow(/invalid task title candidate/)
++      expect(calls).toBe(0); expect(verify).not.toHaveBeenCalled()
++      expect(ctx.sessionTitle.get(session)).toBeUndefined()
++    } finally { await ctx.fiber.dispose() }
++  })
++  it('demonstrates released JSONL reader rejects the experimental task source', async () => {
++    const root = await mkdtemp(join(tmpdir(),'task-title-wip-'))
++    const ctx = new Context()
++    try {
++      await ctx.plugin(SessionStore); await ctx.plugin(SessionProjectionRegistry)
++      await ctx.plugin(JsonlSessionPersistence,{root,compression:'none'})
++      await ctx.plugin(SessionTitleService,CONFIG)
++      ctx.provide('taskTitleAuthority',{verify:()=>true})
++      const id=SessionId('synthetic-persisted-title'), session=ctx.sessions.create(id)
++      const handle=await ctx.sessionPersistence.create(session.header)
++      ctx.sessionTitle.submitTaskTitle(session,candidate(3))
++      await handle.close()
++      await expect(ctx.sessionPersistence.open(id,'read')).rejects.toThrow(/messageSeqs must be empty exactly for a user title/)
++    } finally { await ctx.fiber.dispose(); await rm(root,{recursive:true,force:true}) }
++  })
++  it('preserves an ignorable plugin suggestion while released canonical title stays pinned', async () => {
++    const root=await mkdtemp(join(tmpdir(),'task-title-overlay-'))
++    const ctx=new Context()
++    try {
++      await ctx.plugin(SessionStore); await ctx.plugin(SessionProjectionRegistry)
++      await ctx.plugin(JsonlSessionPersistence,{root,compression:'none'}); await ctx.plugin(SessionTitleService,CONFIG)
++      const id=SessionId('synthetic-overlay'), session=ctx.sessions.create(id)
++      const handle=await ctx.sessionPersistence.create(session.header)
++      ctx.sessionTitle.rename(session,'Pinned human title')
++      appendPluginRecord(session,'plugin:test-task-title',{version:1,title:'Synthetic suggestion'})
++      await handle.close()
++      const reader=await ctx.sessionPersistence.open(id,'read')
++      try {
++        const events=(await reader.read()).events
++        expect(foldSessionTitle(events)).toMatchObject({title:'Pinned human title',source:{kind:'user'}})
++        expect(events.map(pluginRecordOf).find(x=>x?.type==='plugin:test-task-title')?.data).toEqual({version:1,title:'Synthetic suggestion'})
++      } finally { await reader.close() }
++    } finally { await ctx.fiber.dispose(); await rm(root,{recursive:true,force:true}) }
++  })
++})
