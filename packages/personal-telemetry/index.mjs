@@ -13,7 +13,9 @@ function checkId(id) {
 function unit(value, fields) {
   if (value === undefined) return null;
   if (!value || typeof value !== 'object' || Array.isArray(value)) fail('INVALID_SNAPSHOT', 'Invalid projection unit');
-  const result = {};
+  // Validated counters must never pass through inherited setters: an input
+  // getter can install one, altering or leaking this intermediate object.
+  const result = Object.create(null);
   for (const name of fields) {
     const n = value[name];
     if (typeof n !== 'number' || !Number.isFinite(n) || n < 0 || n > Number.MAX_SAFE_INTEGER || (COUNTS.has(name) && !Number.isSafeInteger(n))) {
@@ -22,6 +24,13 @@ function unit(value, fields) {
     result[name] = n;
   }
   return result;
+}
+function equalUnit(left, right, fields) {
+  if (left === null || right === null) return left === right;
+  for (const name of fields) {
+    if (left[name] !== right[name]) return false;
+  }
+  return true;
 }
 function normalize({ sessionKey, sourceIdentity, snapshot } = {}) {
   checkId(sessionKey); checkId(sourceIdentity);
@@ -68,11 +77,11 @@ export function createMemoryStore(options = {}) {
         if (previous && previous.sourceIdentity !== next.sourceIdentity) fail('SOURCE_CONFLICT', 'Source identity changed; rebuild requires explicit handling');
         if (previous && previous.asOfSeq > next.asOfSeq) { results.push('stale'); continue; }
         if (previous && previous.asOfSeq === next.asOfSeq) {
-          for (const key of ['tokenUsage', 'sessionStats']) {
-            if (previous[key] && next[key] && JSON.stringify(previous[key]) !== JSON.stringify(next[key])) fail('SEQUENCE_CONFLICT', 'Conflicting snapshots at the same sequence');
+          for (const [key, fields] of [['tokenUsage', TOKEN], ['sessionStats', STATS]]) {
+            if (previous[key] !== null && next[key] !== null && !equalUnit(previous[key], next[key], fields)) fail('SEQUENCE_CONFLICT', 'Conflicting snapshots at the same sequence');
             next[key] ??= previous[key];
           }
-          if (JSON.stringify(previous) === JSON.stringify(next)) { results.push('unchanged'); continue; }
+          if (equalUnit(previous.tokenUsage, next.tokenUsage, TOKEN) && equalUnit(previous.sessionStats, next.sessionStats, STATS)) { results.push('unchanged'); continue; }
         }
         const numbers = [...TOKEN.map(name => next.tokenUsage?.[name] ?? null), ...STATS.map(name => next.sessionStats?.[name] ?? null)];
         putStmt.run(next.sessionKey, next.sourceIdentity, next.asOfSeq, ...numbers, next.freshness);
