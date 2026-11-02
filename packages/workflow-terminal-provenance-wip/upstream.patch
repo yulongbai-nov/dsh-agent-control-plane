@@ -1,0 +1,183 @@
+diff --git a/packages/core/tools/src/index.ts b/packages/core/tools/src/index.ts
+index ca939d4d..266887dc 100644
+--- a/packages/core/tools/src/index.ts
++++ b/packages/core/tools/src/index.ts
+@@ -400,0 +401,15 @@ export interface ToolExecution extends ToolExecutionInput {
++/** WIP process-local observation; it is not a durable or authenticated source receipt. */
++export interface TerminalAttemptObservation {
++  readonly ingress: Readonly<{
++    token: ToolExecutionToken
++    callId: ToolCallId
++    rootCallId: ToolCallId
++    requestedName: string
++  }>
++  readonly ordinal: number
++  readonly resolvedName: string
++  readonly originEvent: 'unknown'
++  readonly acceptedInit: 'unknown'
++  readonly durability: 'unknown'
++}
++
+@@ -829,0 +845,3 @@ export class ToolRuntime extends Service {
++  /** Registry-owned ingress facts, never read back from the wrapper-mutable execution. */
++  private readonly terminalIngress = new WeakMap<ToolRunContext, { ingress: TerminalAttemptObservation['ingress']; ordinal: number }>()
++  private readonly terminalObservers = new Set<(observation: TerminalAttemptObservation) => void>()
+@@ -863,0 +882,17 @@ export class ToolRuntime extends Service {
++  /**
++   * WIP observer for process-local terminal dispatch. Observations contain no
++   * arguments and make no source, authorization, durability or accepted-init
++   * claim. Only trusted synchronous observers may subscribe; they must not
++   * reenter the runtime and must own any asynchronous error handling.
++   */
++  observeTerminalAttempts(observer: (observation: TerminalAttemptObservation) => void): () => void {
++    if (typeof observer !== 'function') throw new TypeError('terminal observer must be a function')
++    const observers = this.terminalObservers
++    // Each registration owns its own entry even when callbacks are identical.
++    const entry = (observation: TerminalAttemptObservation): void => { observer(observation) }
++    return this.ctx.effect(() => {
++      observers.add(entry)
++      return () => { observers.delete(entry) }
++    }, 'tools.observeTerminalAttempts()')
++  }
++
+@@ -1453,0 +1489,3 @@ export class ToolRuntime extends Service {
++      if (typeof callId === 'string' && typeof rootCallId === 'string' && typeof name === 'string') {
++        this.terminalIngress.set(execution, { ingress: Object.freeze({ token, callId, rootCallId, requestedName: name }), ordinal: 0 })
++      }
+@@ -1586 +1624,2 @@ export class ToolRuntime extends Service {
+-      const tool = this.resolveExecution(exec.name, exec.agent, exec.parent !== undefined)
++      const resolvedName = exec.name
++      const tool = this.resolveExecution(resolvedName, exec.agent, exec.parent !== undefined)
+@@ -1588,0 +1628,13 @@ export class ToolRuntime extends Service {
++      const ingress = this.terminalIngress.get(exec)
++      if (ingress !== undefined && ingress.ordinal < Number.MAX_SAFE_INTEGER) {
++        ingress.ordinal += 1
++        if (this.terminalObservers.size > 0) {
++          const observation: TerminalAttemptObservation = Object.freeze({
++            ingress: ingress.ingress, ordinal: ingress.ordinal, resolvedName,
++            originEvent: 'unknown', acceptedInit: 'unknown', durability: 'unknown',
++          })
++          for (const observer of [...this.terminalObservers]) {
++            try { observer(observation) } catch { /* WIP observers cannot replace tool outcomes. */ }
++          }
++        }
++      }
+diff --git a/packages/core/tools/tests/r15-terminal-provenance.host.spec.ts b/packages/core/tools/tests/r15-terminal-provenance.host.spec.ts
+new file mode 100644
+index 00000000..fc7d9790
+--- /dev/null
++++ b/packages/core/tools/tests/r15-terminal-provenance.host.spec.ts
+@@ -0,0 +1,113 @@
++/** WIP synthetic characterization; no production source/authentication claim. */
++import { describe,expect,it } from 'vitest'
++import { Context } from '@deepseek-ai/cordis'
++import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
++import ToolRuntime from '@deepseek-ai/dsh-tools'
++import { ToolCallId } from '@deepseek-ai/dsh-llm'
++
++async function fixture(){
++ const ctx=new Context();await ctx.plugin(SystemPrompt);await ctx.plugin(ToolRuntime)
++ const body:Array<{callId:string,value:unknown}>=[],observed:Array<{callId:string,value:unknown}>=[]
++ ctx.tools.register({name:'synthetic-r15',description:'synthetic',parameters:{type:'object',properties:{value:{type:'string'}}},
++  output:{schema:{type:'string'},render:(_args,value)=>[{type:'text',text:value as string}]},
++  execute:async(args,exec)=>{body.push({callId:String(exec.callId),value:(args as {value:unknown}).value});return 'ok'}})
++ ctx.on('tools/result',(exec)=>{observed.push({callId:String(exec.callId),value:(exec.arguments as {value:unknown}).value})})
++ const execute=()=>ctx.tools.execute({callId:ToolCallId('synthetic-original'),name:'synthetic-r15',arguments:{value:'original'},signal:new AbortController().signal})
++ return {ctx,body,observed,execute}
++}
++
++describe('Synthetic terminal provenance characterization',()=>{
++ it('a wrapper can transiently change body callId and arguments then restore final observer values',async()=>{
++  const f=await fixture();
++  try {
++   f.ctx.on('tools/execute',async(exec,next)=>{
++    const m=exec as unknown as {callId:ReturnType<typeof ToolCallId>,arguments:unknown};const oldId=m.callId,oldArgs=m.arguments
++    m.callId=ToolCallId('synthetic-replaced');m.arguments={value:'changed'}
++    try{return await next()}finally{m.callId=oldId;m.arguments=oldArgs}
++   })
++   const result=await f.execute();expect(result.isError).toBe(false)
++   expect(f.body).toEqual([{callId:'synthetic-replaced',value:'changed'}])
++   expect(f.observed).toEqual([{callId:'synthetic-original',value:'original'}])
++  } finally {await f.ctx.fiber.dispose()}
++ })
++ it('one call can delegate next twice, creating multiple actual terminal invocations',async()=>{
++  const f=await fixture();try {
++   f.ctx.on('tools/execute',async(_exec,next)=>{await next();return await next()})
++   const result=await f.execute();expect(result.isError).toBe(false)
++   expect(f.body).toHaveLength(2);expect(f.observed).toHaveLength(1)
++  } finally {await f.ctx.fiber.dispose()}
++ })
++})
++
++describe('WIP registry-owned terminal attempt observations',()=>{
++ it('retains immutable ingress across wrapper changes and numbers every terminal dispatch',async()=>{
++  const f=await fixture(), receipts:import('@deepseek-ai/dsh-tools').TerminalAttemptObservation[]=[]
++  try {
++   const stop=f.ctx.tools.observeTerminalAttempts(receipt=>{receipts.push(receipt)})
++   f.ctx.on('tools/execute',async(exec,next)=>{
++    const m=exec as unknown as {callId:ReturnType<typeof ToolCallId>,arguments:unknown};const oldId=m.callId,oldArgs=m.arguments
++    m.callId=ToolCallId('synthetic-replaced');m.arguments={value:'changed'}
++    try {await next();return await next()} finally {m.callId=oldId;m.arguments=oldArgs}
++   })
++   const result=await f.execute();expect(result.isError).toBe(false);stop()
++   expect(f.body).toHaveLength(2);expect(receipts).toHaveLength(2)
++   expect(receipts.map(x=>x.ordinal)).toEqual([1,2]);expect(receipts[0]?.ingress.token).toBe(receipts[1]?.ingress.token)
++   for(const r of receipts){
++    expect(r.ingress.callId).toBe('synthetic-original');expect(r.ingress.rootCallId).toBe('synthetic-original');expect(r.ingress.requestedName).toBe('synthetic-r15')
++    expect(r.resolvedName).toBe('synthetic-r15');expect(r.originEvent).toBe('unknown');expect(r.acceptedInit).toBe('unknown');expect(r.durability).toBe('unknown')
++    expect(Object.isFrozen(r)).toBe(true);expect(Object.isFrozen(r.ingress)).toBe(true);expect(JSON.stringify(r)).not.toContain('\"value\"') // no argument object
++   }
++  } finally {await f.ctx.fiber.dispose()}
++ })
++ it('records no terminal attempt when wrapper short-circuits',async()=>{
++  const f=await fixture(), receipts:unknown[]=[];try{
++   f.ctx.tools.observeTerminalAttempts(x=>{receipts.push(x)})
++   f.ctx.on('tools/execute',async()=>({content:[{type:'text',text:'synthetic short circuit'}],isError:false}))
++   await f.execute();expect(f.body).toHaveLength(0);expect(receipts).toHaveLength(0)
++  } finally {await f.ctx.fiber.dispose()}
++ })
++ it('separates independent calls and contains synchronous observer errors',async()=>{
++  const f=await fixture(),receipts:import('@deepseek-ai/dsh-tools').TerminalAttemptObservation[]=[];try{
++   f.ctx.tools.observeTerminalAttempts(()=>{throw Error('synthetic observer error')})
++   f.ctx.tools.observeTerminalAttempts(x=>{receipts.push(x)})
++   expect((await f.execute()).isError).toBe(false);expect((await f.execute()).isError).toBe(false)
++   expect(receipts.map(x=>x.ordinal)).toEqual([1,1]);expect(receipts[0]?.ingress.token).not.toBe(receipts[1]?.ingress.token)
++  } finally {await f.ctx.fiber.dispose()}
++ })
++})
++
++describe('WIP terminal attempt negative cases',()=>{
++ it('separates parallel calls to next under the same ingress token',async()=>{
++  const f=await fixture(),receipts:import('@deepseek-ai/dsh-tools').TerminalAttemptObservation[]=[]
++  try {
++   f.ctx.tools.observeTerminalAttempts(x=>{receipts.push(x)})
++   f.ctx.on('tools/execute',async(_exec,next)=>{const results=await Promise.all([next(),next()]);return results[1]!})
++   expect((await f.execute()).isError).toBe(false);expect(receipts.map(x=>x.ordinal).sort()).toEqual([1,2]);expect(receipts[0]?.ingress.token).toBe(receipts[1]?.ingress.token)
++  } finally {await f.ctx.fiber.dispose()}
++ })
++ it('distinguishes original requested name from wrapper-resolved terminal tool',async()=>{
++  const f=await fixture(),receipts:import('@deepseek-ai/dsh-tools').TerminalAttemptObservation[]=[]
++  try {
++   f.ctx.tools.register({name:'synthetic-other',description:'synthetic',parameters:{type:'object',properties:{}},output:{schema:{type:'string'},render:(_args,value)=>[{type:'text',text:value as string}]},execute:async()=> 'other'})
++   f.ctx.tools.observeTerminalAttempts(x=>{receipts.push(x)})
++   f.ctx.on('tools/execute',async(exec,next)=>{const m=exec as unknown as {name:string},old=m.name;m.name='synthetic-other';try{return await next()}finally{m.name=old}})
++   await f.execute();expect(receipts).toHaveLength(1);expect(receipts[0]?.ingress.requestedName).toBe('synthetic-r15');expect(receipts[0]?.resolvedName).toBe('synthetic-other')
++  } finally {await f.ctx.fiber.dispose()}
++ })
++ it('does not mint a terminal observation for a pre-aborted call',async()=>{
++  const f=await fixture(),receipts:unknown[]=[];try {
++   f.ctx.tools.observeTerminalAttempts(x=>{receipts.push(x)});const controller=new AbortController();controller.abort()
++   await f.ctx.tools.execute({callId:ToolCallId('synthetic-aborted'),name:'synthetic-r15',arguments:{value:'x'},signal:controller.signal})
++   expect(f.body).toHaveLength(0);expect(receipts).toHaveLength(0)
++  } finally {await f.ctx.fiber.dispose()}
++ })
++})
++
++describe('WIP observer ownership',()=>{
++ it('keeps identical callback registrations independently disposable',async()=>{
++  const f=await fixture();let calls=0;try {
++   const callback=()=>{calls++},stopA=f.ctx.tools.observeTerminalAttempts(callback),stopB=f.ctx.tools.observeTerminalAttempts(callback)
++   await f.execute();expect(calls).toBe(2);stopA();await f.execute();expect(calls).toBe(3);stopB();await f.execute();expect(calls).toBe(3)
++  } finally {await f.ctx.fiber.dispose()}
++ })
++})
