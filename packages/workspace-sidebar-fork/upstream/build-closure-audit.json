@@ -1,0 +1,3786 @@
+{
+  "baseline": "b830ec950faba0a46dda564be3e2d854afed94f1",
+  "method": "Recursive TypeScript project references from ui-workspace; direct dependencies listed by each referenced importer. npm cache checks use standard exact tarball URL only; pnpm store not decoded. This is not a minimal runtime or complete transitive external dependency graph.",
+  "typescriptConfigs": [
+    {
+      "config": "native/system/packages/entry/tsconfig.json",
+      "blob": "bb991d6cebb183f19438c3ca1d7d91919705606f",
+      "importer": "native/system/packages/entry"
+    },
+    {
+      "config": "packages/api/account-controller/tsconfig.json",
+      "blob": "539e4ec2371710159e611b6eb75e1b6a08828c4e",
+      "importer": "packages/api/account-controller"
+    },
+    {
+      "config": "packages/api/gateway/tsconfig.client.json",
+      "blob": "57ebeae4c3aab3ef4bf3f77ae473c6df073bdc6b",
+      "importer": "packages/api/gateway"
+    },
+    {
+      "config": "packages/api/gateway/tsconfig.host.json",
+      "blob": "7694cea7cbf8f24f5c9c9b8e26fe442d464849b5",
+      "importer": "packages/api/gateway"
+    },
+    {
+      "config": "packages/api/job-controller/tsconfig.client.json",
+      "blob": "34a220206035ce8fa62b62c6c77f9207b4e527c2",
+      "importer": "packages/api/job-controller"
+    },
+    {
+      "config": "packages/api/remote-access/tsconfig.client.json",
+      "blob": "0ddeaeac30325f91a379941cd5a56930444d3d94",
+      "importer": "packages/api/remote-access"
+    },
+    {
+      "config": "packages/api/remote-access/tsconfig.host.json",
+      "blob": "0d9e8a79c849a230c000aaf280afdb92bcea97d9",
+      "importer": "packages/api/remote-access"
+    },
+    {
+      "config": "packages/api/remotes/tsconfig.client.json",
+      "blob": "70181b08c58fe4a0267f57584f98126c4c130865",
+      "importer": "packages/api/remotes"
+    },
+    {
+      "config": "packages/api/session-controller/tsconfig.client.json",
+      "blob": "a1375420ca8cb45b0773de0dc3eed69d5c14fc4a",
+      "importer": "packages/api/session-controller"
+    },
+    {
+      "config": "packages/api/session-controller/tsconfig.host.json",
+      "blob": "8f90ca7a6a5136f5bbfc110de8a6e4ba27dc0d97",
+      "importer": "packages/api/session-controller"
+    },
+    {
+      "config": "packages/api/settings-controller/tsconfig.json",
+      "blob": "676959155838acf3e5dc641388a4811bff351125",
+      "importer": "packages/api/settings-controller"
+    },
+    {
+      "config": "packages/api/terminal-controller/tsconfig.client.json",
+      "blob": "59af4231451c91719ae2205c17a4c5a4fbed48e2",
+      "importer": "packages/api/terminal-controller"
+    },
+    {
+      "config": "packages/api/workspace-controller/tsconfig.client.json",
+      "blob": "b7174afc3440ca7bb141ad12330c174ba78eff4a",
+      "importer": "packages/api/workspace-controller"
+    },
+    {
+      "config": "packages/api/workspace-files/tsconfig.client.json",
+      "blob": "70f97e7e8e105d09654c6496c3c85aebb3beadac",
+      "importer": "packages/api/workspace-files"
+    },
+    {
+      "config": "packages/api/workspace-files/tsconfig.host.json",
+      "blob": "3bf11f51773d6336a2cd1b78fb4cc452c53ac558",
+      "importer": "packages/api/workspace-files"
+    },
+    {
+      "config": "packages/attachment/attachment/tsconfig.json",
+      "blob": "33e1dd58dec5fd1f2f011aa7eb3f74b06ca21f79",
+      "importer": "packages/attachment/attachment"
+    },
+    {
+      "config": "packages/boot/app-boot/tsconfig.json",
+      "blob": "9c3e57c80989e331b255fabb51cc16a0d225ee46",
+      "importer": "packages/boot/app-boot"
+    },
+    {
+      "config": "packages/boot/cmdline/tsconfig.json",
+      "blob": "f82b793fe47b15e97b1af8241f9306c60ccedcf1",
+      "importer": "packages/boot/cmdline"
+    },
+    {
+      "config": "packages/boot/config-editor/tsconfig.json",
+      "blob": "54ae6ebfe785a4130db190ba92842127b8c606dc",
+      "importer": "packages/boot/config-editor"
+    },
+    {
+      "config": "packages/boot/hmr/tsconfig.json",
+      "blob": "59d5089fd22f032c790d094c0656988bf9ae3388",
+      "importer": "packages/boot/hmr"
+    },
+    {
+      "config": "packages/boot/plugin-manager/tsconfig.json",
+      "blob": "ba181795a1c9e7e20b280da2f11559b4ab071463",
+      "importer": "packages/boot/plugin-manager"
+    },
+    {
+      "config": "packages/boot/plugin-market/tsconfig.json",
+      "blob": "19804b2708b63433d33b068aaf18aa3fe46c0f8d",
+      "importer": "packages/boot/plugin-market"
+    },
+    {
+      "config": "packages/client/connection/tsconfig.client.json",
+      "blob": "5441e6016c716a5fb97bb908a8400b3f79b88007",
+      "importer": "packages/client/connection"
+    },
+    {
+      "config": "packages/client/connection/tsconfig.host.json",
+      "blob": "250b9eb34a2e50580fc281f62a0c4ce8b3137e3a",
+      "importer": "packages/client/connection"
+    },
+    {
+      "config": "packages/client/file-upload/tsconfig.client.json",
+      "blob": "dc25e3845d4537a89aa11b76be29ddcc27a181fc",
+      "importer": "packages/client/file-upload"
+    },
+    {
+      "config": "packages/client/file-upload/tsconfig.host.json",
+      "blob": "9a719da31dedd7df557130b9aafcd06aa5acfd59",
+      "importer": "packages/client/file-upload"
+    },
+    {
+      "config": "packages/client/locale/tsconfig.client.json",
+      "blob": "fa01f8213971c605cf7dbe730cf9c419ae50a5b9",
+      "importer": "packages/client/locale"
+    },
+    {
+      "config": "packages/client/product-analytics/tsconfig.client.json",
+      "blob": "760e4bc2227af9b30b30075ee19e0b38404608fd",
+      "importer": "packages/client/product-analytics"
+    },
+    {
+      "config": "packages/client/resources/tsconfig.json",
+      "blob": "30cb2fc68a34e1e6c1622edf086d7ad5930ee597",
+      "importer": "packages/client/resources"
+    },
+    {
+      "config": "packages/client/shortcuts/tsconfig.client.json",
+      "blob": "6157c1a154555e5a6d0d122ec181fa6df15c70df",
+      "importer": "packages/client/shortcuts"
+    },
+    {
+      "config": "packages/client/store/tsconfig.json",
+      "blob": "4e6197e0d10cce53503459ed7421397580ef57f1",
+      "importer": "packages/client/store"
+    },
+    {
+      "config": "packages/client/ui-conversation/tsconfig.client.json",
+      "blob": "0339eebbe641fa32e1ade801821244438f283514",
+      "importer": "packages/client/ui-conversation"
+    },
+    {
+      "config": "packages/client/ui-layout/tsconfig.json",
+      "blob": "b2daaaf0542884078b0ad314f089623fb76d01da",
+      "importer": "packages/client/ui-layout"
+    },
+    {
+      "config": "packages/client/ui-primitives/tsconfig.json",
+      "blob": "93a7e9f3955b639970eb18516b3f2c448cb403ab",
+      "importer": "packages/client/ui-primitives"
+    },
+    {
+      "config": "packages/client/ui-renderer/tsconfig.json",
+      "blob": "e4e089863bd8d112d5a2bcfd9fa2f8c8db6b0770",
+      "importer": "packages/client/ui-renderer"
+    },
+    {
+      "config": "packages/client/ui-session/tsconfig.json",
+      "blob": "e38563a19b40384b23d24ef20f2af537eb2c4844",
+      "importer": "packages/client/ui-session"
+    },
+    {
+      "config": "packages/client/ui-settings/tsconfig.client.json",
+      "blob": "3ac396ee00c015f4e1457792addc7175b9234aae",
+      "importer": "packages/client/ui-settings"
+    },
+    {
+      "config": "packages/client/ui-sidebar/tsconfig.json",
+      "blob": "788b1b7a539684963d6df8c7413ba98e52a62411",
+      "importer": "packages/client/ui-sidebar"
+    },
+    {
+      "config": "packages/client/ui-slots/tsconfig.json",
+      "blob": "6a6c4319d9108fc39a52f99455a54c61d465140b",
+      "importer": "packages/client/ui-slots"
+    },
+    {
+      "config": "packages/client/ui-theme/tsconfig.client.json",
+      "blob": "5e56d362dc7d309532743c6be3aa5e4c1d106e73",
+      "importer": "packages/client/ui-theme"
+    },
+    {
+      "config": "packages/client/ui-workspace/tsconfig.json",
+      "blob": "dea11b7bd690ba5251014e5b8cc8472f6ca2e62a",
+      "importer": "packages/client/ui-workspace"
+    },
+    {
+      "config": "packages/compaction/compaction-image-offload/tsconfig.json",
+      "blob": "26fb004b6b232ae4055b022ca9a7d29ba293d356",
+      "importer": "packages/compaction/compaction-image-offload"
+    },
+    {
+      "config": "packages/compaction/compaction/tsconfig.json",
+      "blob": "ac7f17c7954c9412a9d395d3a59dbaab945c4dbb",
+      "importer": "packages/compaction/compaction"
+    },
+    {
+      "config": "packages/context/file-reference/tsconfig.json",
+      "blob": "7c07839ed03339b31c05c61ca41754f171dd79df",
+      "importer": "packages/context/file-reference"
+    },
+    {
+      "config": "packages/context/session-reference/tsconfig.json",
+      "blob": "590eb4122a47060eb0466243e5e8488db8c75c6c",
+      "importer": "packages/context/session-reference"
+    },
+    {
+      "config": "packages/core/agent-default-model/tsconfig.json",
+      "blob": "6463e58a5dd26651cadf1bbfb036f08c357a428d",
+      "importer": "packages/core/agent-default-model"
+    },
+    {
+      "config": "packages/core/agent/tsconfig.json",
+      "blob": "b597fc7068c66645c80f99b8cf974ca6f14332e3",
+      "importer": "packages/core/agent"
+    },
+    {
+      "config": "packages/core/scope/tsconfig.json",
+      "blob": "754725418e6029f676f4c4f08b23fa03530937c0",
+      "importer": "packages/core/scope"
+    },
+    {
+      "config": "packages/core/session/tsconfig.json",
+      "blob": "d4e73cafb6a035438a76831a4b89f503a1986ce3",
+      "importer": "packages/core/session"
+    },
+    {
+      "config": "packages/core/system-prompt/tsconfig.json",
+      "blob": "91e7bf1ba43a3b332587d46d478e1e78f5ef54ee",
+      "importer": "packages/core/system-prompt"
+    },
+    {
+      "config": "packages/core/tools/tsconfig.json",
+      "blob": "95c7ee1a48ede7ec9f64ca004227622c23dd962a",
+      "importer": "packages/core/tools"
+    },
+    {
+      "config": "packages/credentials/credentials/tsconfig.json",
+      "blob": "342f636170d3279539bd496ee1f6c95d8990971b",
+      "importer": "packages/credentials/credentials"
+    },
+    {
+      "config": "packages/credentials/deepseek-account/tsconfig.json",
+      "blob": "a0da11ddaad1a5d72765018fa74c68f591e40bb0",
+      "importer": "packages/credentials/deepseek-account"
+    },
+    {
+      "config": "packages/document/office-to-pdf/tsconfig.json",
+      "blob": "b9e69997f5576104d1a58f744b0f579ecf8b8915",
+      "importer": "packages/document/office-to-pdf"
+    },
+    {
+      "config": "packages/extensions/cordis-host-runner/tsconfig.json",
+      "blob": "e19c6f8aab13518e7f2712e6d47bba0fea239bd9",
+      "importer": "packages/extensions/cordis-host-runner"
+    },
+    {
+      "config": "packages/feedback/command-feedback/tsconfig.json",
+      "blob": "deabf11acb1d6995aec9db836680f0d849e3c9ab",
+      "importer": "packages/feedback/command-feedback"
+    },
+    {
+      "config": "packages/feedback/message-feedback/tsconfig.json",
+      "blob": "a35ccacc0ab64091d305005bdb73d65b061a3075",
+      "importer": "packages/feedback/message-feedback"
+    },
+    {
+      "config": "packages/fs/fs/tsconfig.json",
+      "blob": "563c6059062c1073e087a2183204700f7524df91",
+      "importer": "packages/fs/fs"
+    },
+    {
+      "config": "packages/goal/goal/tsconfig.json",
+      "blob": "8b8c742b14ee8ba11da318a2337d0eb3d8b022cc",
+      "importer": "packages/goal/goal"
+    },
+    {
+      "config": "packages/host/directory-picker/tsconfig.json",
+      "blob": "754725418e6029f676f4c4f08b23fa03530937c0",
+      "importer": "packages/host/directory-picker"
+    },
+    {
+      "config": "packages/host/plugin-inventory/tsconfig.json",
+      "blob": "776338fc6f4bef1e18c801bb6b1ebf3a00ba641b",
+      "importer": "packages/host/plugin-inventory"
+    },
+    {
+      "config": "packages/host/webserver/tsconfig.json",
+      "blob": "339809d695a267d25c99782281b3f8020050c793",
+      "importer": "packages/host/webserver"
+    },
+    {
+      "config": "packages/identity/anonymous-user-id/tsconfig.json",
+      "blob": "5a3c97ad76cb402f5a800222f5236775d8b40113",
+      "importer": "packages/identity/anonymous-user-id"
+    },
+    {
+      "config": "packages/interaction/commands/tsconfig.json",
+      "blob": "a8af5f45f72aa0524ddb4ba9be3ccc50c4e92067",
+      "importer": "packages/interaction/commands"
+    },
+    {
+      "config": "packages/interaction/permission-presets/tsconfig.json",
+      "blob": "aab4a6f538c7a143df627e113649e0124b203e31",
+      "importer": "packages/interaction/permission-presets"
+    },
+    {
+      "config": "packages/interaction/user-approval/tsconfig.json",
+      "blob": "fb9a9e6e2d9eea9abd47c2488e24581340aacf4e",
+      "importer": "packages/interaction/user-approval"
+    },
+    {
+      "config": "packages/interaction/user-questions/tsconfig.json",
+      "blob": "51a4d0dd5e787e8d7dab10db0ed8e32819a96ef4",
+      "importer": "packages/interaction/user-questions"
+    },
+    {
+      "config": "packages/jobs/jobs/tsconfig.json",
+      "blob": "88933b81d1d0004058363599c86482d1549dbe3b",
+      "importer": "packages/jobs/jobs"
+    },
+    {
+      "config": "packages/llm/llm-retry/tsconfig.json",
+      "blob": "fe04c8564d407d424eb98fdb3f79a2b67b3eb2fe",
+      "importer": "packages/llm/llm-retry"
+    },
+    {
+      "config": "packages/llm/llm/tsconfig.json",
+      "blob": "8af7fccf61f58e8f48e3968b00dcb57dde491924",
+      "importer": "packages/llm/llm"
+    },
+    {
+      "config": "packages/llm/token-meter/tsconfig.json",
+      "blob": "51e81f5e71c1ef3647801d7e4f4456c19e938521",
+      "importer": "packages/llm/token-meter"
+    },
+    {
+      "config": "packages/plan/plan-mode/tsconfig.json",
+      "blob": "f187853290ba88d50b238a971c9b026d405d9c9f",
+      "importer": "packages/plan/plan-mode"
+    },
+    {
+      "config": "packages/preset/agent-preset-registry/tsconfig.json",
+      "blob": "1323291364af9ea25249fc6e9bbacee4703ff82f",
+      "importer": "packages/preset/agent-preset-registry"
+    },
+    {
+      "config": "packages/ptc-runtime/ptc-runtime/tsconfig.json",
+      "blob": "de6feb55b93da800686a6659fe78ea4631fb9e52",
+      "importer": "packages/ptc-runtime/ptc-runtime"
+    },
+    {
+      "config": "packages/sandbox/sandbox-policy/tsconfig.json",
+      "blob": "7a1856559d168afffc1adf88a9945de52c5adf31",
+      "importer": "packages/sandbox/sandbox-policy"
+    },
+    {
+      "config": "packages/sandbox/sandbox/tsconfig.json",
+      "blob": "95245937ec08e0da3baac9a55081d8b47334db7a",
+      "importer": "packages/sandbox/sandbox"
+    },
+    {
+      "config": "packages/schedule/schedule/tsconfig.json",
+      "blob": "3667dd3ce9f8f8f6556fea45eaf1920a0b8c2a40",
+      "importer": "packages/schedule/schedule"
+    },
+    {
+      "config": "packages/session-query/session-query/tsconfig.json",
+      "blob": "3d6b2bd4896b627f8b693b243d4cba8b423a5017",
+      "importer": "packages/session-query/session-query"
+    },
+    {
+      "config": "packages/session/session-format-catalog/tsconfig.json",
+      "blob": "0dc8e0c9e98f57dfbe328eef3e54b349693f4ad1",
+      "importer": "packages/session/session-format-catalog"
+    },
+    {
+      "config": "packages/session/session-format-v0-to-v1/tsconfig.json",
+      "blob": "53a23aeafbfa93974b0c2876f583cd23e2b1d91a",
+      "importer": "packages/session/session-format-v0-to-v1"
+    },
+    {
+      "config": "packages/session/session-format-v1-to-v2/tsconfig.json",
+      "blob": "7149ab735cf27ecd13fd46a75545d3f735d77a2d",
+      "importer": "packages/session/session-format-v1-to-v2"
+    },
+    {
+      "config": "packages/session/session-format-v2-to-v3/tsconfig.json",
+      "blob": "36dcdbd69678dd99266d7bcc09fdcced07363856",
+      "importer": "packages/session/session-format-v2-to-v3"
+    },
+    {
+      "config": "packages/session/session-format-v3-to-v4/tsconfig.json",
+      "blob": "373e4c24f6346fdb42b59e04bf97ae3ae9f1f02d",
+      "importer": "packages/session/session-format-v3-to-v4"
+    },
+    {
+      "config": "packages/session/session-format/tsconfig.json",
+      "blob": "ba26eed6a69a1ef884f5bbac875561dc1c7289ba",
+      "importer": "packages/session/session-format"
+    },
+    {
+      "config": "packages/session/session-persistence-jsonl/tsconfig.json",
+      "blob": "d3484120a65e741037e917c2611b257959cb20fb",
+      "importer": "packages/session/session-persistence-jsonl"
+    },
+    {
+      "config": "packages/session/session-persistence/tsconfig.json",
+      "blob": "84c6f5ccb027a333707b0d6efc59b5dfa3ac5dd7",
+      "importer": "packages/session/session-persistence"
+    },
+    {
+      "config": "packages/session/session-projection-cache/tsconfig.json",
+      "blob": "4b68216bfde1673b2b7b0168591dfd6f12555356",
+      "importer": "packages/session/session-projection-cache"
+    },
+    {
+      "config": "packages/session/session-projection/tsconfig.json",
+      "blob": "e817086a6a0446f88524123869ce55d801762d04",
+      "importer": "packages/session/session-projection"
+    },
+    {
+      "config": "packages/session/session-title/tsconfig.json",
+      "blob": "5755ac55e22dc8d2a45a9e6dd1b6e7acfeffd506",
+      "importer": "packages/session/session-title"
+    },
+    {
+      "config": "packages/session/working-directory/tsconfig.json",
+      "blob": "6d24c1126a31788973363d07c64fc774d5655ec8",
+      "importer": "packages/session/working-directory"
+    },
+    {
+      "config": "packages/settings/settings/tsconfig.json",
+      "blob": "674969c82fea0af0318ed308b54aed30512e661d",
+      "importer": "packages/settings/settings"
+    },
+    {
+      "config": "packages/shell/shell/tsconfig.json",
+      "blob": "a94e59d03d3c854a562bfbe69bc0d02ac8c06c23",
+      "importer": "packages/shell/shell"
+    },
+    {
+      "config": "packages/skill/skill/tsconfig.json",
+      "blob": "238047137e34a1eefb8c0b3bac736ee46d3db3d4",
+      "importer": "packages/skill/skill"
+    },
+    {
+      "config": "packages/spill/spill/tsconfig.json",
+      "blob": "37663ce0b397cc7f8781ea7cc0d65c814830d5e5",
+      "importer": "packages/spill/spill"
+    },
+    {
+      "config": "packages/storage/storage-domain/tsconfig.json",
+      "blob": "a7bea73bd44dc678e818028968b815c7fb83f472",
+      "importer": "packages/storage/storage-domain"
+    },
+    {
+      "config": "packages/storage/storage-json/tsconfig.json",
+      "blob": "a7bea73bd44dc678e818028968b815c7fb83f472",
+      "importer": "packages/storage/storage-json"
+    },
+    {
+      "config": "packages/storage/storage/tsconfig.json",
+      "blob": "754725418e6029f676f4c4f08b23fa03530937c0",
+      "importer": "packages/storage/storage"
+    },
+    {
+      "config": "packages/subagent/subagent/tsconfig.json",
+      "blob": "8783b69afcadeb4589d2dccf2f9a1940362163b6",
+      "importer": "packages/subagent/subagent"
+    },
+    {
+      "config": "packages/subprocess/subprocess/tsconfig.json",
+      "blob": "e72e6a3dd735c2e56a874a886f03c3f52ea2c581",
+      "importer": "packages/subprocess/subprocess"
+    },
+    {
+      "config": "packages/todo/tool-todo/tsconfig.json",
+      "blob": "ae150deb6712505c8ed9e81bfa7bfec0943665fe",
+      "importer": "packages/todo/tool-todo"
+    },
+    {
+      "config": "packages/typert/protocol/tsconfig.json",
+      "blob": "342f636170d3279539bd496ee1f6c95d8990971b",
+      "importer": "packages/typert/protocol"
+    },
+    {
+      "config": "packages/typert/registry/tsconfig.json",
+      "blob": "7d6795a110f47fe006e758783a57896cb2557961",
+      "importer": "packages/typert/registry"
+    },
+    {
+      "config": "packages/util/atomic-write/tsconfig.json",
+      "blob": "0b174e83f6efc5416b7058f4284262bbcba3f70f",
+      "importer": "packages/util/atomic-write"
+    },
+    {
+      "config": "packages/util/brand/tsconfig.json",
+      "blob": "0b174e83f6efc5416b7058f4284262bbcba3f70f",
+      "importer": "packages/util/brand"
+    },
+    {
+      "config": "packages/util/chunked-list/tsconfig.json",
+      "blob": "749cb0208e5360c0de1ee43ff426cdcc36deef07",
+      "importer": "packages/util/chunked-list"
+    },
+    {
+      "config": "packages/util/code-language/tsconfig.json",
+      "blob": "0b174e83f6efc5416b7058f4284262bbcba3f70f",
+      "importer": "packages/util/code-language"
+    },
+    {
+      "config": "packages/util/crypto/tsconfig.json",
+      "blob": "0b174e83f6efc5416b7058f4284262bbcba3f70f",
+      "importer": "packages/util/crypto"
+    },
+    {
+      "config": "packages/util/deque/tsconfig.json",
+      "blob": "749cb0208e5360c0de1ee43ff426cdcc36deef07",
+      "importer": "packages/util/deque"
+    },
+    {
+      "config": "packages/util/home-paths/tsconfig.json",
+      "blob": "0b174e83f6efc5416b7058f4284262bbcba3f70f",
+      "importer": "packages/util/home-paths"
+    },
+    {
+      "config": "packages/util/http-proxy/tsconfig.json",
+      "blob": "0b174e83f6efc5416b7058f4284262bbcba3f70f",
+      "importer": "packages/util/http-proxy"
+    },
+    {
+      "config": "packages/util/launch-environment/tsconfig.json",
+      "blob": "f1a449634c8bdf8f87359b0b4307e07dae350408",
+      "importer": "packages/util/launch-environment"
+    },
+    {
+      "config": "packages/util/native-command/tsconfig.json",
+      "blob": "0b174e83f6efc5416b7058f4284262bbcba3f70f",
+      "importer": "packages/util/native-command"
+    },
+    {
+      "config": "packages/util/output-retention/tsconfig.json",
+      "blob": "0b174e83f6efc5416b7058f4284262bbcba3f70f",
+      "importer": "packages/util/output-retention"
+    },
+    {
+      "config": "packages/util/package-manifest/tsconfig.json",
+      "blob": "250fdad007fc09a14714c5f44d44864f6a93c45d",
+      "importer": "packages/util/package-manifest"
+    },
+    {
+      "config": "packages/util/plugin-market-index/tsconfig.json",
+      "blob": "d351f2373a6561c59bfc0df6e11f0a96dcca5f27",
+      "importer": "packages/util/plugin-market-index"
+    },
+    {
+      "config": "packages/util/time/tsconfig.json",
+      "blob": "749cb0208e5360c0de1ee43ff426cdcc36deef07",
+      "importer": "packages/util/time"
+    },
+    {
+      "config": "packages/util/timeout/tsconfig.json",
+      "blob": "0b174e83f6efc5416b7058f4284262bbcba3f70f",
+      "importer": "packages/util/timeout"
+    },
+    {
+      "config": "packages/util/values/tsconfig.json",
+      "blob": "749cb0208e5360c0de1ee43ff426cdcc36deef07",
+      "importer": "packages/util/values"
+    },
+    {
+      "config": "packages/util/workspace-path/tsconfig.json",
+      "blob": "0b174e83f6efc5416b7058f4284262bbcba3f70f",
+      "importer": "packages/util/workspace-path"
+    },
+    {
+      "config": "packages/workspace/workspace/tsconfig.json",
+      "blob": "a4d55728a4e61147330fd564611380e43df225fe",
+      "importer": "packages/workspace/workspace"
+    },
+    {
+      "config": "vendor/cordis/tsconfig.json",
+      "blob": "c7357481fd113a3437b253c7c55cd4c545562df3",
+      "importer": "vendor/cordis"
+    },
+    {
+      "config": "vendor/cosmokit/tsconfig.json",
+      "blob": "b7411f94f27115c67c45e5fbff0bdf5ea85d450e",
+      "importer": "vendor/cosmokit"
+    },
+    {
+      "config": "vendor/group/tsconfig.json",
+      "blob": "e512d1d84c0947c8c0866db99c4bf1a83108cd14",
+      "importer": "vendor/group"
+    },
+    {
+      "config": "vendor/include/tsconfig.json",
+      "blob": "6fe5099b4398bbce258210af3fb18b8eefdaf09c",
+      "importer": "vendor/include"
+    },
+    {
+      "config": "vendor/loader/tsconfig.json",
+      "blob": "341a8f0949c0c642c2a0a1bdd159f344889ec9ea",
+      "importer": "vendor/loader"
+    },
+    {
+      "config": "vendor/schemastery/tsconfig.json",
+      "blob": "b25fa05af7693ab62b91d8242e21ed00598677f0",
+      "importer": "vendor/schemastery"
+    },
+    {
+      "config": "vendor/timer/tsconfig.json",
+      "blob": "843303e870c287fcbd7707649a37b962618c872d",
+      "importer": "vendor/timer"
+    }
+  ],
+  "workspaceImporters": [
+    "native/system/packages/entry",
+    "packages/api/account-controller",
+    "packages/api/gateway",
+    "packages/api/job-controller",
+    "packages/api/remote-access",
+    "packages/api/remotes",
+    "packages/api/session-controller",
+    "packages/api/settings-controller",
+    "packages/api/terminal-controller",
+    "packages/api/workspace-controller",
+    "packages/api/workspace-files",
+    "packages/attachment/attachment",
+    "packages/boot/app-boot",
+    "packages/boot/cmdline",
+    "packages/boot/config-editor",
+    "packages/boot/hmr",
+    "packages/boot/plugin-manager",
+    "packages/boot/plugin-market",
+    "packages/client/connection",
+    "packages/client/file-upload",
+    "packages/client/locale",
+    "packages/client/product-analytics",
+    "packages/client/resources",
+    "packages/client/shortcuts",
+    "packages/client/store",
+    "packages/client/ui-conversation",
+    "packages/client/ui-layout",
+    "packages/client/ui-primitives",
+    "packages/client/ui-renderer",
+    "packages/client/ui-session",
+    "packages/client/ui-settings",
+    "packages/client/ui-sidebar",
+    "packages/client/ui-slots",
+    "packages/client/ui-theme",
+    "packages/client/ui-workspace",
+    "packages/compaction/compaction",
+    "packages/compaction/compaction-image-offload",
+    "packages/context/file-reference",
+    "packages/context/session-reference",
+    "packages/core/agent",
+    "packages/core/agent-default-model",
+    "packages/core/scope",
+    "packages/core/session",
+    "packages/core/system-prompt",
+    "packages/core/tools",
+    "packages/credentials/credentials",
+    "packages/credentials/deepseek-account",
+    "packages/document/office-to-pdf",
+    "packages/extensions/cordis-host-runner",
+    "packages/feedback/command-feedback",
+    "packages/feedback/message-feedback",
+    "packages/fs/fs",
+    "packages/goal/goal",
+    "packages/host/directory-picker",
+    "packages/host/plugin-inventory",
+    "packages/host/webserver",
+    "packages/identity/anonymous-user-id",
+    "packages/interaction/commands",
+    "packages/interaction/permission-presets",
+    "packages/interaction/user-approval",
+    "packages/interaction/user-questions",
+    "packages/jobs/jobs",
+    "packages/llm/llm",
+    "packages/llm/llm-retry",
+    "packages/llm/token-meter",
+    "packages/plan/plan-mode",
+    "packages/preset/agent-preset-registry",
+    "packages/ptc-runtime/ptc-runtime",
+    "packages/sandbox/sandbox",
+    "packages/sandbox/sandbox-policy",
+    "packages/schedule/schedule",
+    "packages/session-query/session-query",
+    "packages/session/session-format",
+    "packages/session/session-format-catalog",
+    "packages/session/session-format-v0-to-v1",
+    "packages/session/session-format-v1-to-v2",
+    "packages/session/session-format-v2-to-v3",
+    "packages/session/session-format-v3-to-v4",
+    "packages/session/session-persistence",
+    "packages/session/session-persistence-jsonl",
+    "packages/session/session-projection",
+    "packages/session/session-projection-cache",
+    "packages/session/session-title",
+    "packages/session/working-directory",
+    "packages/settings/settings",
+    "packages/shell/shell",
+    "packages/skill/skill",
+    "packages/spill/spill",
+    "packages/storage/storage",
+    "packages/storage/storage-domain",
+    "packages/storage/storage-json",
+    "packages/subagent/subagent",
+    "packages/subprocess/subprocess",
+    "packages/todo/tool-todo",
+    "packages/typert/protocol",
+    "packages/typert/registry",
+    "packages/util/atomic-write",
+    "packages/util/brand",
+    "packages/util/chunked-list",
+    "packages/util/code-language",
+    "packages/util/crypto",
+    "packages/util/deque",
+    "packages/util/home-paths",
+    "packages/util/http-proxy",
+    "packages/util/launch-environment",
+    "packages/util/native-command",
+    "packages/util/output-retention",
+    "packages/util/package-manifest",
+    "packages/util/plugin-market-index",
+    "packages/util/time",
+    "packages/util/timeout",
+    "packages/util/values",
+    "packages/util/workspace-path",
+    "packages/workspace/workspace",
+    "vendor/cordis",
+    "vendor/cosmokit",
+    "vendor/group",
+    "vendor/include",
+    "vendor/loader",
+    "vendor/schemastery",
+    "vendor/timer"
+  ],
+  "unmapped": [],
+  "localSourcePresent": [
+    "packages/client/ui-workspace"
+  ],
+  "localSourceMissing": [
+    "native/system/packages/entry",
+    "packages/api/account-controller",
+    "packages/api/gateway",
+    "packages/api/job-controller",
+    "packages/api/remote-access",
+    "packages/api/remotes",
+    "packages/api/session-controller",
+    "packages/api/settings-controller",
+    "packages/api/terminal-controller",
+    "packages/api/workspace-controller",
+    "packages/api/workspace-files",
+    "packages/attachment/attachment",
+    "packages/boot/app-boot",
+    "packages/boot/cmdline",
+    "packages/boot/config-editor",
+    "packages/boot/hmr",
+    "packages/boot/plugin-manager",
+    "packages/boot/plugin-market",
+    "packages/client/connection",
+    "packages/client/file-upload",
+    "packages/client/locale",
+    "packages/client/product-analytics",
+    "packages/client/resources",
+    "packages/client/shortcuts",
+    "packages/client/store",
+    "packages/client/ui-conversation",
+    "packages/client/ui-layout",
+    "packages/client/ui-primitives",
+    "packages/client/ui-renderer",
+    "packages/client/ui-session",
+    "packages/client/ui-settings",
+    "packages/client/ui-sidebar",
+    "packages/client/ui-slots",
+    "packages/client/ui-theme",
+    "packages/compaction/compaction",
+    "packages/compaction/compaction-image-offload",
+    "packages/context/file-reference",
+    "packages/context/session-reference",
+    "packages/core/agent",
+    "packages/core/agent-default-model",
+    "packages/core/scope",
+    "packages/core/session",
+    "packages/core/system-prompt",
+    "packages/core/tools",
+    "packages/credentials/credentials",
+    "packages/credentials/deepseek-account",
+    "packages/document/office-to-pdf",
+    "packages/extensions/cordis-host-runner",
+    "packages/feedback/command-feedback",
+    "packages/feedback/message-feedback",
+    "packages/fs/fs",
+    "packages/goal/goal",
+    "packages/host/directory-picker",
+    "packages/host/plugin-inventory",
+    "packages/host/webserver",
+    "packages/identity/anonymous-user-id",
+    "packages/interaction/commands",
+    "packages/interaction/permission-presets",
+    "packages/interaction/user-approval",
+    "packages/interaction/user-questions",
+    "packages/jobs/jobs",
+    "packages/llm/llm",
+    "packages/llm/llm-retry",
+    "packages/llm/token-meter",
+    "packages/plan/plan-mode",
+    "packages/preset/agent-preset-registry",
+    "packages/ptc-runtime/ptc-runtime",
+    "packages/sandbox/sandbox",
+    "packages/sandbox/sandbox-policy",
+    "packages/schedule/schedule",
+    "packages/session-query/session-query",
+    "packages/session/session-format",
+    "packages/session/session-format-catalog",
+    "packages/session/session-format-v0-to-v1",
+    "packages/session/session-format-v1-to-v2",
+    "packages/session/session-format-v2-to-v3",
+    "packages/session/session-format-v3-to-v4",
+    "packages/session/session-persistence",
+    "packages/session/session-persistence-jsonl",
+    "packages/session/session-projection",
+    "packages/session/session-projection-cache",
+    "packages/session/session-title",
+    "packages/session/working-directory",
+    "packages/settings/settings",
+    "packages/shell/shell",
+    "packages/skill/skill",
+    "packages/spill/spill",
+    "packages/storage/storage",
+    "packages/storage/storage-domain",
+    "packages/storage/storage-json",
+    "packages/subagent/subagent",
+    "packages/subprocess/subprocess",
+    "packages/todo/tool-todo",
+    "packages/typert/protocol",
+    "packages/typert/registry",
+    "packages/util/atomic-write",
+    "packages/util/brand",
+    "packages/util/chunked-list",
+    "packages/util/code-language",
+    "packages/util/crypto",
+    "packages/util/deque",
+    "packages/util/home-paths",
+    "packages/util/http-proxy",
+    "packages/util/launch-environment",
+    "packages/util/native-command",
+    "packages/util/output-retention",
+    "packages/util/package-manifest",
+    "packages/util/plugin-market-index",
+    "packages/util/time",
+    "packages/util/timeout",
+    "packages/util/values",
+    "packages/util/workspace-path",
+    "packages/workspace/workspace",
+    "vendor/cordis",
+    "vendor/cosmokit",
+    "vendor/group",
+    "vendor/include",
+    "vendor/loader",
+    "vendor/schemastery",
+    "vendor/timer"
+  ],
+  "declaredWorkspaceLinks": [
+    {
+      "group": "optionalDependencies",
+      "target": "native/system/packages/darwin-arm64",
+      "owners": [
+        "native/system/packages/entry"
+      ]
+    },
+    {
+      "group": "optionalDependencies",
+      "target": "native/system/packages/darwin-x64",
+      "owners": [
+        "native/system/packages/entry"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "native/system/packages/entry",
+      "owners": [
+        "packages/session/session-persistence-jsonl"
+      ]
+    },
+    {
+      "group": "optionalDependencies",
+      "target": "native/system/packages/linux-arm64",
+      "owners": [
+        "native/system/packages/entry"
+      ]
+    },
+    {
+      "group": "optionalDependencies",
+      "target": "native/system/packages/linux-x64",
+      "owners": [
+        "native/system/packages/entry"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/api/account-controller",
+      "owners": [
+        "packages/api/remotes"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/api/gateway",
+      "owners": [
+        "packages/api/job-controller",
+        "packages/api/remote-access",
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/api/terminal-controller",
+        "packages/api/workspace-controller",
+        "packages/api/workspace-files",
+        "packages/client/product-analytics",
+        "packages/extensions/cordis-host-runner"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/api/job-controller",
+      "owners": [
+        "packages/api/remotes"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/api/remote-access",
+      "owners": [
+        "packages/api/gateway",
+        "packages/api/session-controller",
+        "packages/api/workspace-controller",
+        "packages/api/workspace-files",
+        "packages/client/ui-session",
+        "packages/client/ui-workspace",
+        "packages/extensions/cordis-host-runner"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/api/remotes",
+      "owners": [
+        "packages/client/file-upload",
+        "packages/client/locale",
+        "packages/client/ui-conversation",
+        "packages/client/ui-session",
+        "packages/client/ui-settings",
+        "packages/client/ui-theme",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/api/session-controller",
+      "owners": [
+        "packages/api/remotes",
+        "packages/client/ui-conversation",
+        "packages/client/ui-session",
+        "packages/client/ui-workspace",
+        "packages/schedule/schedule"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/api/settings-controller",
+      "owners": [
+        "packages/api/remotes"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/api/terminal-controller",
+      "owners": [
+        "packages/api/remotes"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/api/workspace-controller",
+      "owners": [
+        "packages/api/remotes",
+        "packages/client/ui-conversation",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/api/workspace-files",
+      "owners": [
+        "packages/api/remotes",
+        "packages/document/office-to-pdf"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/attachment/attachment",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/client/connection",
+        "packages/client/file-upload",
+        "packages/client/ui-conversation",
+        "packages/compaction/compaction-image-offload",
+        "packages/interaction/commands",
+        "packages/llm/llm",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/boot/app-boot",
+      "owners": [
+        "packages/boot/config-editor",
+        "packages/boot/hmr",
+        "packages/client/product-analytics",
+        "packages/host/plugin-inventory",
+        "packages/settings/settings"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/boot/app-boot",
+      "owners": [
+        "packages/boot/plugin-manager",
+        "packages/boot/plugin-market",
+        "packages/preset/agent-preset-registry"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/boot/cmdline",
+      "owners": [
+        "packages/api/gateway",
+        "packages/boot/hmr"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/boot/config-editor",
+      "owners": [
+        "packages/boot/plugin-market"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/boot/config-editor",
+      "owners": [
+        "packages/core/agent-default-model",
+        "packages/settings/settings"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/boot/hmr",
+      "owners": [
+        "packages/boot/config-editor",
+        "packages/boot/plugin-manager",
+        "packages/preset/agent-preset-registry",
+        "packages/settings/settings"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/boot/plugin-manager",
+      "owners": [
+        "packages/api/remotes",
+        "packages/boot/plugin-market"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/boot/plugin-market",
+      "owners": [
+        "packages/api/remotes"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/connection",
+      "owners": [
+        "packages/api/gateway",
+        "packages/api/job-controller",
+        "packages/api/remote-access",
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/api/terminal-controller",
+        "packages/api/workspace-controller",
+        "packages/api/workspace-files",
+        "packages/client/file-upload",
+        "packages/client/locale",
+        "packages/client/ui-theme",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/file-upload",
+      "owners": [
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/client/ui-conversation"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/locale",
+      "owners": [
+        "packages/client/shortcuts",
+        "packages/client/ui-conversation",
+        "packages/client/ui-layout",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-theme",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/product-analytics",
+      "owners": [
+        "packages/api/remotes",
+        "packages/client/ui-conversation",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/resources",
+      "owners": [
+        "packages/api/workspace-files"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/shortcuts",
+      "owners": [
+        "packages/client/ui-conversation",
+        "packages/client/ui-layout",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-theme",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/store",
+      "owners": [
+        "packages/api/job-controller",
+        "packages/api/session-controller",
+        "packages/api/terminal-controller",
+        "packages/api/workspace-controller",
+        "packages/client/locale",
+        "packages/client/resources",
+        "packages/client/shortcuts",
+        "packages/client/ui-conversation",
+        "packages/client/ui-layout",
+        "packages/client/ui-primitives",
+        "packages/client/ui-session",
+        "packages/client/ui-settings",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-slots",
+        "packages/client/ui-theme",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/ui-conversation",
+      "owners": [
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/ui-layout",
+      "owners": [
+        "packages/client/ui-conversation",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/ui-plugin-manager",
+      "owners": [
+        "packages/api/remotes"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/ui-primitives",
+      "owners": [
+        "packages/client/locale",
+        "packages/client/shortcuts",
+        "packages/client/ui-conversation",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-theme",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/ui-renderer",
+      "owners": [
+        "packages/api/remote-access",
+        "packages/client/locale",
+        "packages/client/resources",
+        "packages/client/ui-conversation",
+        "packages/client/ui-layout",
+        "packages/client/ui-session",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-theme",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/ui-session",
+      "owners": [
+        "packages/client/ui-conversation",
+        "packages/client/ui-layout",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/ui-settings",
+      "owners": [
+        "packages/client/locale",
+        "packages/client/ui-conversation",
+        "packages/client/ui-theme"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/ui-sidebar",
+      "owners": [
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/ui-slots",
+      "owners": [
+        "packages/api/remote-access",
+        "packages/api/workspace-files",
+        "packages/client/locale",
+        "packages/client/resources",
+        "packages/client/ui-conversation",
+        "packages/client/ui-layout",
+        "packages/client/ui-renderer",
+        "packages/client/ui-session",
+        "packages/client/ui-settings",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-theme",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/ui-theme",
+      "owners": [
+        "packages/client/ui-layout"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/client/ui-workspace",
+      "owners": [
+        "packages/client/ui-conversation",
+        "packages/client/ui-sidebar"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/compaction/compaction",
+      "owners": [
+        "packages/client/product-analytics",
+        "packages/compaction/compaction-image-offload",
+        "packages/context/session-reference",
+        "packages/llm/token-meter"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/compaction/compaction-basic",
+      "owners": [
+        "packages/compaction/compaction-image-offload"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/compaction/compaction-image-offload",
+      "owners": [
+        "packages/llm/token-meter"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/compaction/compaction-image-offload",
+      "owners": [
+        "packages/session/session-format-catalog"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/context/file-reference",
+      "owners": [
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/client/ui-conversation"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/context/session-reference",
+      "owners": [
+        "packages/api/remotes"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/core/agent",
+      "owners": [
+        "packages/api/account-controller",
+        "packages/api/job-controller",
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/api/terminal-controller",
+        "packages/boot/plugin-manager",
+        "packages/client/file-upload",
+        "packages/client/ui-conversation",
+        "packages/client/ui-workspace",
+        "packages/compaction/compaction-image-offload",
+        "packages/context/file-reference",
+        "packages/context/session-reference",
+        "packages/core/agent-default-model",
+        "packages/core/tools",
+        "packages/credentials/deepseek-account",
+        "packages/extensions/cordis-host-runner",
+        "packages/feedback/command-feedback",
+        "packages/goal/goal",
+        "packages/interaction/commands",
+        "packages/interaction/user-approval",
+        "packages/interaction/user-questions",
+        "packages/jobs/jobs",
+        "packages/llm/llm-retry",
+        "packages/plan/plan-mode",
+        "packages/preset/agent-preset-registry",
+        "packages/sandbox/sandbox-policy",
+        "packages/schedule/schedule",
+        "packages/session/session-title",
+        "packages/session/working-directory",
+        "packages/subagent/subagent",
+        "packages/todo/tool-todo"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/core/agent-default-model",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/settings/settings"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/core/agent-loop",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/compaction/compaction-image-offload",
+        "packages/goal/goal",
+        "packages/llm/llm-retry",
+        "packages/plan/plan-mode",
+        "packages/preset/agent-preset-registry",
+        "packages/schedule/schedule",
+        "packages/session/session-title",
+        "packages/subagent/subagent",
+        "packages/todo/tool-todo"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/core/scope",
+      "owners": [
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/client/connection",
+        "packages/core/agent",
+        "packages/core/session",
+        "packages/core/system-prompt",
+        "packages/core/tools",
+        "packages/extensions/cordis-host-runner",
+        "packages/goal/goal",
+        "packages/interaction/commands",
+        "packages/interaction/user-approval",
+        "packages/interaction/user-questions",
+        "packages/preset/agent-preset-registry",
+        "packages/session/session-persistence",
+        "packages/skill/skill",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/core/session",
+      "owners": [
+        "packages/api/job-controller",
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/api/settings-controller",
+        "packages/api/terminal-controller",
+        "packages/api/workspace-controller",
+        "packages/api/workspace-files",
+        "packages/boot/plugin-manager",
+        "packages/client/connection",
+        "packages/client/file-upload",
+        "packages/client/product-analytics",
+        "packages/client/ui-conversation",
+        "packages/client/ui-session",
+        "packages/client/ui-workspace",
+        "packages/compaction/compaction",
+        "packages/compaction/compaction-image-offload",
+        "packages/context/session-reference",
+        "packages/core/agent",
+        "packages/core/tools",
+        "packages/document/office-to-pdf",
+        "packages/extensions/cordis-host-runner",
+        "packages/feedback/command-feedback",
+        "packages/feedback/message-feedback",
+        "packages/goal/goal",
+        "packages/interaction/commands",
+        "packages/interaction/permission-presets",
+        "packages/interaction/user-approval",
+        "packages/interaction/user-questions",
+        "packages/jobs/jobs",
+        "packages/llm/llm-retry",
+        "packages/llm/token-meter",
+        "packages/plan/plan-mode",
+        "packages/preset/agent-preset-registry",
+        "packages/sandbox/sandbox",
+        "packages/sandbox/sandbox-policy",
+        "packages/schedule/schedule",
+        "packages/session-query/session-query",
+        "packages/session/session-format-catalog",
+        "packages/session/session-format-v0-to-v1",
+        "packages/session/session-format-v1-to-v2",
+        "packages/session/session-persistence",
+        "packages/session/session-persistence-jsonl",
+        "packages/session/session-projection",
+        "packages/session/session-projection-cache",
+        "packages/session/session-title",
+        "packages/session/working-directory",
+        "packages/settings/settings",
+        "packages/spill/spill",
+        "packages/subagent/subagent",
+        "packages/todo/tool-todo",
+        "packages/workspace/workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/core/system-prompt",
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/boot/plugin-manager",
+        "packages/boot/plugin-market",
+        "packages/context/session-reference",
+        "packages/core/agent",
+        "packages/core/tools",
+        "packages/interaction/user-approval",
+        "packages/llm/llm-retry",
+        "packages/plan/plan-mode",
+        "packages/preset/agent-preset-registry",
+        "packages/sandbox/sandbox-policy",
+        "packages/schedule/schedule",
+        "packages/session/working-directory",
+        "packages/subagent/subagent",
+        "packages/todo/tool-todo"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/core/tools",
+      "owners": [
+        "packages/boot/plugin-manager",
+        "packages/boot/plugin-market",
+        "packages/context/session-reference",
+        "packages/extensions/cordis-host-runner",
+        "packages/interaction/user-questions",
+        "packages/llm/llm-retry",
+        "packages/plan/plan-mode",
+        "packages/preset/agent-preset-registry",
+        "packages/schedule/schedule",
+        "packages/session/working-directory",
+        "packages/subagent/subagent",
+        "packages/todo/tool-todo"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/credentials/credentials",
+      "owners": [
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/api/settings-controller"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/credentials/credentials",
+      "owners": [
+        "packages/client/connection"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/credentials/deepseek-account",
+      "owners": [
+        "packages/api/account-controller",
+        "packages/api/remotes",
+        "packages/client/product-analytics"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/document/office-to-pdf",
+      "owners": [
+        "packages/api/remotes"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/extensions/cordis-host-runner",
+      "owners": [
+        "packages/api/remotes"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/feedback/command-feedback",
+      "owners": [
+        "packages/api/remotes",
+        "packages/feedback/message-feedback"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/feedback/message-feedback",
+      "owners": [
+        "packages/api/remotes"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/fs/fs",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/api/terminal-controller",
+        "packages/api/workspace-files",
+        "packages/document/office-to-pdf",
+        "packages/session/working-directory"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/fs/fs-local",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/context/session-reference",
+        "packages/session/working-directory"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/fs/fs-sandbox",
+      "owners": [
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/fs/tool-fs",
+      "owners": [
+        "packages/context/session-reference",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/goal/goal",
+      "owners": [
+        "packages/api/remotes",
+        "packages/client/ui-conversation"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/host/directory-picker",
+      "owners": [
+        "packages/api/workspace-controller"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/host/plugin-inventory",
+      "owners": [
+        "packages/api/remotes",
+        "packages/boot/plugin-manager"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/host/product-telemetry-otel",
+      "owners": [
+        "packages/client/product-analytics"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/host/webserver",
+      "owners": [
+        "packages/api/gateway",
+        "packages/api/remote-access",
+        "packages/client/connection",
+        "packages/client/product-analytics",
+        "packages/client/shortcuts",
+        "packages/client/ui-theme"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/identity/anonymous-user-id",
+      "owners": [
+        "packages/feedback/command-feedback"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/interaction/commands",
+      "owners": [
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/client/file-upload",
+        "packages/client/ui-conversation",
+        "packages/compaction/compaction",
+        "packages/feedback/command-feedback",
+        "packages/interaction/permission-presets",
+        "packages/plan/plan-mode"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/interaction/permission-presets",
+      "owners": [
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/interaction/user-approval",
+      "owners": [
+        "packages/api/remotes",
+        "packages/boot/plugin-manager",
+        "packages/core/tools",
+        "packages/interaction/permission-presets",
+        "packages/preset/agent-preset-registry",
+        "packages/session/working-directory",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/interaction/user-questions",
+      "owners": [
+        "packages/api/remotes",
+        "packages/plan/plan-mode",
+        "packages/todo/tool-todo"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/jobs/jobs",
+      "owners": [
+        "packages/api/job-controller",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/jobs/jobs-local",
+      "owners": [
+        "packages/api/job-controller"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/llm/llm",
+      "owners": [
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/boot/plugin-market",
+        "packages/client/connection",
+        "packages/client/product-analytics",
+        "packages/client/ui-conversation",
+        "packages/compaction/compaction",
+        "packages/compaction/compaction-image-offload",
+        "packages/context/session-reference",
+        "packages/core/agent",
+        "packages/core/agent-default-model",
+        "packages/core/system-prompt",
+        "packages/core/tools",
+        "packages/credentials/deepseek-account",
+        "packages/extensions/cordis-host-runner",
+        "packages/feedback/command-feedback",
+        "packages/feedback/message-feedback",
+        "packages/fs/fs",
+        "packages/goal/goal",
+        "packages/interaction/commands",
+        "packages/interaction/user-approval",
+        "packages/interaction/user-questions",
+        "packages/llm/llm-retry",
+        "packages/llm/token-meter",
+        "packages/plan/plan-mode",
+        "packages/preset/agent-preset-registry",
+        "packages/sandbox/sandbox",
+        "packages/schedule/schedule",
+        "packages/session-query/session-query",
+        "packages/session/session-title",
+        "packages/session/working-directory",
+        "packages/skill/skill",
+        "packages/spill/spill",
+        "packages/subagent/subagent",
+        "packages/todo/tool-todo"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/llm/llm",
+      "owners": [
+        "packages/core/session",
+        "packages/session/session-format-v1-to-v2",
+        "packages/session/session-persistence-jsonl"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/llm/llm-deepseek",
+      "owners": [
+        "packages/compaction/compaction-image-offload",
+        "packages/llm/llm-retry"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/llm/llm-deepseek-api-key",
+      "owners": [
+        "packages/llm/llm-retry"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/llm/llm-retry",
+      "owners": [
+        "packages/client/ui-conversation",
+        "packages/llm/token-meter"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/llm/token-meter",
+      "owners": [
+        "packages/client/ui-conversation",
+        "packages/compaction/compaction-image-offload"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/plan/plan-mode",
+      "owners": [
+        "packages/client/ui-conversation"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/preset/agent-preset",
+      "owners": [
+        "packages/preset/agent-preset-registry"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/preset/agent-preset-registry",
+      "owners": [
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/api/settings-controller",
+        "packages/client/ui-workspace",
+        "packages/host/plugin-inventory",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/ptc-runtime/ptc-runtime",
+      "owners": [
+        "packages/core/tools",
+        "packages/plan/plan-mode"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/sandbox/sandbox",
+      "owners": [
+        "packages/api/terminal-controller",
+        "packages/boot/plugin-manager",
+        "packages/core/tools",
+        "packages/fs/fs",
+        "packages/interaction/permission-presets",
+        "packages/preset/agent-preset-registry",
+        "packages/ptc-runtime/ptc-runtime",
+        "packages/sandbox/sandbox-policy",
+        "packages/shell/shell",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/sandbox/sandbox-policy",
+      "owners": [
+        "packages/api/terminal-controller",
+        "packages/api/workspace-files",
+        "packages/boot/plugin-manager",
+        "packages/core/tools",
+        "packages/interaction/permission-presets",
+        "packages/preset/agent-preset-registry",
+        "packages/session/working-directory",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/schedule/schedule",
+      "owners": [
+        "packages/api/remotes",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/session-query/session-query",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/context/session-reference",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/session-query/session-query-sqlite",
+      "owners": [
+        "packages/context/session-reference"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/session/session-checkpoint-policy",
+      "owners": [
+        "packages/goal/goal"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/session/session-format",
+      "owners": [
+        "packages/session/session-format-catalog",
+        "packages/session/session-format-v0-to-v1",
+        "packages/session/session-format-v1-to-v2",
+        "packages/session/session-format-v2-to-v3",
+        "packages/session/session-format-v3-to-v4",
+        "packages/session/session-persistence-jsonl"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/session/session-format-catalog",
+      "owners": [
+        "packages/session-query/session-query",
+        "packages/session/session-persistence-jsonl"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/session/session-format-v0-to-v1",
+      "owners": [
+        "packages/session/session-format-catalog",
+        "packages/session/session-format-v1-to-v2",
+        "packages/session/session-format-v2-to-v3"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/session/session-format-v0-to-v1",
+      "owners": [
+        "packages/session/session-persistence-jsonl"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/session/session-format-v1-to-v2",
+      "owners": [
+        "packages/session/session-format-catalog",
+        "packages/session/session-format-v2-to-v3"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/session/session-format-v2-to-v3",
+      "owners": [
+        "packages/session/session-format-catalog",
+        "packages/session/session-format-v3-to-v4"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/session/session-format-v3-to-v4",
+      "owners": [
+        "packages/session/session-format-catalog",
+        "packages/session/session-persistence-jsonl"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/session/session-persistence",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/api/workspace-files",
+        "packages/feedback/message-feedback",
+        "packages/schedule/schedule",
+        "packages/session-query/session-query",
+        "packages/session/session-persistence-jsonl",
+        "packages/subagent/subagent",
+        "packages/workspace/workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/session/session-persistence-jsonl",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/feedback/message-feedback",
+        "packages/goal/goal",
+        "packages/interaction/user-questions",
+        "packages/llm/llm-retry",
+        "packages/schedule/schedule",
+        "packages/session/session-title",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/session/session-projection",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/api/terminal-controller",
+        "packages/boot/plugin-manager",
+        "packages/compaction/compaction-image-offload",
+        "packages/context/session-reference",
+        "packages/core/agent",
+        "packages/core/tools",
+        "packages/goal/goal",
+        "packages/interaction/permission-presets",
+        "packages/interaction/user-questions",
+        "packages/llm/llm-retry",
+        "packages/llm/token-meter",
+        "packages/plan/plan-mode",
+        "packages/preset/agent-preset-registry",
+        "packages/sandbox/sandbox-policy",
+        "packages/schedule/schedule",
+        "packages/session-query/session-query",
+        "packages/session/session-projection-cache",
+        "packages/session/session-title",
+        "packages/session/working-directory",
+        "packages/subagent/subagent",
+        "packages/todo/tool-todo"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/session/session-projection-cache",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/context/session-reference",
+        "packages/session-query/session-query"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/session/session-title",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/context/session-reference",
+        "packages/session-query/session-query"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/session/tool-working-directory",
+      "owners": [
+        "packages/session/working-directory"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/session/working-directory",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/api/terminal-controller",
+        "packages/context/session-reference",
+        "packages/core/tools",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/settings/settings",
+      "owners": [
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/api/settings-controller",
+        "packages/boot/plugin-market",
+        "packages/client/locale",
+        "packages/client/product-analytics",
+        "packages/client/ui-conversation",
+        "packages/client/ui-settings",
+        "packages/client/ui-theme",
+        "packages/core/agent-default-model",
+        "packages/interaction/permission-presets",
+        "packages/preset/agent-preset-registry"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/shell/bash-local",
+      "owners": [
+        "packages/goal/goal"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/shell/shell",
+      "owners": [
+        "packages/interaction/permission-presets"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/skill/skill",
+      "owners": [
+        "packages/api/session-controller"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/spill/spill",
+      "owners": [
+        "packages/context/session-reference"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/spill/spill-local",
+      "owners": [
+        "packages/context/session-reference"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/storage/storage",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/schedule/schedule",
+        "packages/session/session-projection-cache",
+        "packages/storage/storage-domain",
+        "packages/storage/storage-json",
+        "packages/workspace/workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/storage/storage-domain",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/api/workspace-controller",
+        "packages/schedule/schedule",
+        "packages/session/session-projection-cache",
+        "packages/workspace/workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/storage/storage-json",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/schedule/schedule",
+        "packages/session/session-projection-cache"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/subagent/subagent",
+      "owners": [
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/client/ui-workspace",
+        "packages/context/session-reference",
+        "packages/schedule/schedule"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/subprocess/subprocess",
+      "owners": [
+        "packages/api/terminal-controller",
+        "packages/boot/plugin-manager",
+        "packages/shell/shell"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/subprocess/subprocess-local",
+      "owners": [
+        "packages/api/terminal-controller",
+        "packages/goal/goal"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/telemetry/otel",
+      "owners": [
+        "packages/client/product-analytics"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/test-support/agent-loop-testkit",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/compaction/compaction-image-offload",
+        "packages/core/tools",
+        "packages/feedback/command-feedback",
+        "packages/goal/goal",
+        "packages/llm/llm-retry",
+        "packages/plan/plan-mode",
+        "packages/schedule/schedule",
+        "packages/session/working-directory",
+        "packages/subagent/subagent",
+        "packages/todo/tool-todo"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/test-support/client-runtime",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/api/workspace-controller",
+        "packages/client/locale",
+        "packages/client/resources",
+        "packages/client/shortcuts",
+        "packages/client/ui-conversation",
+        "packages/client/ui-renderer",
+        "packages/client/ui-session",
+        "packages/client/ui-settings",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-theme",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/test-support/llm-mock-server",
+      "owners": [
+        "packages/llm/llm-retry"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/test-support/loader-smoke",
+      "owners": [
+        "packages/client/product-analytics",
+        "packages/goal/goal"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/test-support/remote-mock",
+      "owners": [
+        "packages/api/gateway",
+        "packages/api/session-controller",
+        "packages/api/terminal-controller",
+        "packages/api/workspace-controller",
+        "packages/api/workspace-files",
+        "packages/client/ui-session"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/todo/tool-todo",
+      "owners": [
+        "packages/client/ui-conversation",
+        "packages/session-query/session-query"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/typert/protocol",
+      "owners": [
+        "packages/api/account-controller",
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/api/settings-controller",
+        "packages/api/workspace-controller",
+        "packages/boot/plugin-manager",
+        "packages/boot/plugin-market",
+        "packages/client/connection",
+        "packages/client/resources",
+        "packages/client/ui-workspace",
+        "packages/context/session-reference",
+        "packages/core/agent",
+        "packages/core/session",
+        "packages/extensions/cordis-host-runner",
+        "packages/feedback/command-feedback",
+        "packages/feedback/message-feedback",
+        "packages/goal/goal",
+        "packages/host/plugin-inventory",
+        "packages/interaction/commands",
+        "packages/interaction/permission-presets",
+        "packages/interaction/user-questions",
+        "packages/preset/agent-preset-registry",
+        "packages/schedule/schedule",
+        "packages/subagent/subagent",
+        "packages/typert/registry",
+        "packages/workspace/workspace"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/typert/protocol",
+      "owners": [
+        "packages/api/gateway",
+        "packages/api/job-controller",
+        "packages/api/remote-access",
+        "packages/api/terminal-controller",
+        "packages/api/workspace-files",
+        "packages/client/file-upload",
+        "packages/client/product-analytics",
+        "packages/document/office-to-pdf",
+        "packages/llm/llm"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/typert/registry",
+      "owners": [
+        "packages/api/gateway",
+        "packages/api/job-controller",
+        "packages/api/remote-access",
+        "packages/api/session-controller",
+        "packages/core/agent",
+        "packages/core/session"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/util/atomic-write",
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/boot/config-editor",
+        "packages/boot/plugin-manager"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/atomic-write",
+      "owners": [
+        "packages/boot/hmr",
+        "packages/preset/agent-preset-registry"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/brand",
+      "owners": [
+        "packages/api/gateway",
+        "packages/api/terminal-controller",
+        "packages/attachment/attachment",
+        "packages/boot/plugin-manager",
+        "packages/client/connection",
+        "packages/client/shortcuts",
+        "packages/client/ui-conversation",
+        "packages/client/ui-layout",
+        "packages/compaction/compaction",
+        "packages/credentials/deepseek-account",
+        "packages/extensions/cordis-host-runner",
+        "packages/feedback/message-feedback",
+        "packages/fs/fs",
+        "packages/goal/goal",
+        "packages/host/plugin-inventory",
+        "packages/identity/anonymous-user-id",
+        "packages/interaction/commands",
+        "packages/interaction/user-approval",
+        "packages/jobs/jobs",
+        "packages/llm/llm-retry",
+        "packages/schedule/schedule",
+        "packages/session-query/session-query",
+        "packages/session/session-persistence",
+        "packages/session/session-title",
+        "packages/settings/settings",
+        "packages/spill/spill"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/util/brand",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/client/file-upload",
+        "packages/context/session-reference",
+        "packages/core/session",
+        "packages/core/tools",
+        "packages/credentials/credentials",
+        "packages/document/office-to-pdf",
+        "packages/llm/llm",
+        "packages/plan/plan-mode",
+        "packages/subagent/subagent",
+        "packages/typert/protocol",
+        "packages/workspace/workspace"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/util/chunked-list",
+      "owners": [
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/code-language",
+      "owners": [
+        "packages/client/ui-primitives"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/crypto",
+      "owners": [
+        "packages/api/gateway",
+        "packages/api/session-controller",
+        "packages/api/terminal-controller",
+        "packages/client/file-upload",
+        "packages/client/ui-conversation"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/util/crypto",
+      "owners": [
+        "packages/client/shortcuts",
+        "packages/interaction/commands",
+        "packages/llm/llm"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/util/deque",
+      "owners": [
+        "packages/api/gateway",
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/api/terminal-controller",
+        "packages/api/workspace-controller",
+        "packages/api/workspace-files"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/home-paths",
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/identity/anonymous-user-id"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/http-proxy",
+      "owners": [
+        "packages/subprocess/subprocess"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/launch-environment",
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/subprocess/subprocess"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/util/lazy-require",
+      "owners": [
+        "packages/api/terminal-controller"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/native-command",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/api/settings-controller"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/util/native-command",
+      "owners": [
+        "packages/api/workspace-controller"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/output-retention",
+      "owners": [
+        "packages/context/session-reference"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/util/package-manifest",
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/boot/plugin-market",
+        "packages/util/plugin-market-index"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/package-manifest",
+      "owners": [
+        "packages/boot/plugin-manager",
+        "packages/client/locale",
+        "packages/host/plugin-inventory"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/util/plugin-market-index",
+      "owners": [
+        "packages/boot/plugin-market"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/time",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/util/timeout",
+      "owners": [
+        "packages/api/gateway",
+        "packages/boot/plugin-market",
+        "packages/llm/llm"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/timeout",
+      "owners": [
+        "packages/llm/llm-retry",
+        "packages/session/session-persistence"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "packages/util/values",
+      "owners": [
+        "packages/api/remotes",
+        "packages/api/terminal-controller",
+        "packages/boot/plugin-manager",
+        "packages/boot/plugin-market",
+        "packages/client/shortcuts",
+        "packages/compaction/compaction-image-offload",
+        "packages/context/session-reference",
+        "packages/core/session",
+        "packages/core/tools",
+        "packages/extensions/cordis-host-runner",
+        "packages/llm/llm",
+        "packages/llm/token-meter",
+        "packages/sandbox/sandbox",
+        "packages/session/session-format",
+        "packages/session/session-format-v0-to-v1",
+        "packages/session/session-format-v1-to-v2",
+        "packages/session/session-persistence",
+        "packages/session/session-projection-cache",
+        "packages/session/session-title",
+        "packages/settings/settings",
+        "packages/skill/skill",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/values",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/client/ui-conversation",
+        "packages/client/ui-session",
+        "packages/client/ui-settings",
+        "packages/client/ui-workspace",
+        "packages/core/agent",
+        "packages/credentials/deepseek-account"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/util/workspace-path",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/api/workspace-files",
+        "packages/client/ui-conversation",
+        "packages/client/ui-primitives",
+        "packages/client/ui-workspace"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "packages/workspace/workspace",
+      "owners": [
+        "packages/api/session-controller",
+        "packages/api/workspace-controller",
+        "packages/client/ui-conversation",
+        "packages/core/agent",
+        "packages/jobs/jobs",
+        "packages/schedule/schedule",
+        "packages/subagent/subagent"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "vendor/cordis",
+      "owners": [
+        "packages/api/account-controller",
+        "packages/api/gateway",
+        "packages/api/job-controller",
+        "packages/api/remote-access",
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/api/settings-controller",
+        "packages/api/terminal-controller",
+        "packages/api/workspace-controller",
+        "packages/api/workspace-files",
+        "packages/attachment/attachment",
+        "packages/boot/app-boot",
+        "packages/boot/cmdline",
+        "packages/boot/config-editor",
+        "packages/boot/hmr",
+        "packages/boot/plugin-manager",
+        "packages/boot/plugin-market",
+        "packages/client/connection",
+        "packages/client/file-upload",
+        "packages/client/locale",
+        "packages/client/product-analytics",
+        "packages/client/resources",
+        "packages/client/shortcuts",
+        "packages/client/store",
+        "packages/client/ui-conversation",
+        "packages/client/ui-layout",
+        "packages/client/ui-primitives",
+        "packages/client/ui-renderer",
+        "packages/client/ui-session",
+        "packages/client/ui-settings",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-slots",
+        "packages/client/ui-theme",
+        "packages/client/ui-workspace",
+        "packages/compaction/compaction",
+        "packages/compaction/compaction-image-offload",
+        "packages/context/file-reference",
+        "packages/context/session-reference",
+        "packages/core/agent",
+        "packages/core/agent-default-model",
+        "packages/core/scope",
+        "packages/core/session",
+        "packages/core/system-prompt",
+        "packages/core/tools",
+        "packages/credentials/credentials",
+        "packages/credentials/deepseek-account",
+        "packages/document/office-to-pdf",
+        "packages/extensions/cordis-host-runner",
+        "packages/feedback/command-feedback",
+        "packages/feedback/message-feedback",
+        "packages/fs/fs",
+        "packages/goal/goal",
+        "packages/host/directory-picker",
+        "packages/host/plugin-inventory",
+        "packages/host/webserver",
+        "packages/identity/anonymous-user-id",
+        "packages/interaction/commands",
+        "packages/interaction/permission-presets",
+        "packages/interaction/user-approval",
+        "packages/interaction/user-questions",
+        "packages/jobs/jobs",
+        "packages/llm/llm",
+        "packages/llm/llm-retry",
+        "packages/llm/token-meter",
+        "packages/plan/plan-mode",
+        "packages/preset/agent-preset-registry",
+        "packages/ptc-runtime/ptc-runtime",
+        "packages/sandbox/sandbox",
+        "packages/sandbox/sandbox-policy",
+        "packages/schedule/schedule",
+        "packages/session-query/session-query",
+        "packages/session/session-format",
+        "packages/session/session-format-catalog",
+        "packages/session/session-format-v0-to-v1",
+        "packages/session/session-format-v1-to-v2",
+        "packages/session/session-format-v2-to-v3",
+        "packages/session/session-format-v3-to-v4",
+        "packages/session/session-persistence",
+        "packages/session/session-persistence-jsonl",
+        "packages/session/session-projection",
+        "packages/session/session-projection-cache",
+        "packages/session/session-title",
+        "packages/session/working-directory",
+        "packages/settings/settings",
+        "packages/shell/shell",
+        "packages/skill/skill",
+        "packages/spill/spill",
+        "packages/storage/storage",
+        "packages/storage/storage-domain",
+        "packages/storage/storage-json",
+        "packages/subagent/subagent",
+        "packages/subprocess/subprocess",
+        "packages/todo/tool-todo",
+        "packages/typert/protocol",
+        "packages/typert/registry",
+        "packages/util/atomic-write",
+        "packages/util/brand",
+        "packages/util/chunked-list",
+        "packages/util/code-language",
+        "packages/util/crypto",
+        "packages/util/deque",
+        "packages/util/home-paths",
+        "packages/util/http-proxy",
+        "packages/util/launch-environment",
+        "packages/util/native-command",
+        "packages/util/output-retention",
+        "packages/util/package-manifest",
+        "packages/util/plugin-market-index",
+        "packages/util/time",
+        "packages/util/timeout",
+        "packages/util/values",
+        "packages/util/workspace-path",
+        "packages/workspace/workspace"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "vendor/cordis",
+      "owners": [
+        "vendor/group",
+        "vendor/include",
+        "vendor/loader",
+        "vendor/timer"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "vendor/cosmokit",
+      "owners": [
+        "packages/boot/plugin-market"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "vendor/cosmokit",
+      "owners": [
+        "packages/settings/settings",
+        "vendor/cordis",
+        "vendor/include",
+        "vendor/loader",
+        "vendor/schemastery",
+        "vendor/timer"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "vendor/group",
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/preset/agent-preset-registry"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "vendor/include",
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/boot/cmdline",
+        "packages/boot/config-editor",
+        "packages/boot/hmr",
+        "packages/context/session-reference",
+        "packages/document/office-to-pdf",
+        "packages/feedback/command-feedback",
+        "packages/feedback/message-feedback",
+        "packages/llm/llm-retry",
+        "packages/preset/agent-preset-registry",
+        "packages/subagent/subagent",
+        "packages/todo/tool-todo"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "vendor/include",
+      "owners": [
+        "vendor/cordis"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "vendor/loader",
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/boot/cmdline",
+        "packages/boot/config-editor",
+        "packages/boot/hmr",
+        "packages/boot/plugin-manager",
+        "packages/boot/plugin-market",
+        "packages/client/product-analytics",
+        "packages/context/session-reference",
+        "packages/document/office-to-pdf",
+        "packages/feedback/command-feedback",
+        "packages/feedback/message-feedback",
+        "packages/host/plugin-inventory",
+        "packages/llm/llm-retry",
+        "packages/preset/agent-preset-registry",
+        "packages/schedule/schedule",
+        "packages/subagent/subagent",
+        "packages/todo/tool-todo"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "vendor/loader",
+      "owners": [
+        "packages/settings/settings",
+        "vendor/cordis",
+        "vendor/group",
+        "vendor/include"
+      ]
+    },
+    {
+      "group": "dependencies",
+      "target": "vendor/schemastery",
+      "owners": [
+        "packages/api/gateway",
+        "packages/api/job-controller",
+        "packages/api/session-controller",
+        "packages/api/settings-controller",
+        "packages/api/terminal-controller",
+        "packages/api/workspace-controller",
+        "packages/api/workspace-files",
+        "packages/boot/hmr",
+        "packages/boot/plugin-manager",
+        "packages/boot/plugin-market",
+        "packages/client/connection",
+        "packages/client/locale",
+        "packages/client/product-analytics",
+        "packages/client/shortcuts",
+        "packages/client/ui-conversation",
+        "packages/client/ui-settings",
+        "packages/client/ui-theme",
+        "packages/context/session-reference",
+        "packages/core/agent-default-model",
+        "packages/core/system-prompt",
+        "packages/core/tools",
+        "packages/document/office-to-pdf",
+        "packages/extensions/cordis-host-runner",
+        "packages/feedback/message-feedback",
+        "packages/goal/goal",
+        "packages/host/webserver",
+        "packages/interaction/permission-presets",
+        "packages/interaction/user-approval",
+        "packages/interaction/user-questions",
+        "packages/llm/llm",
+        "packages/llm/llm-retry",
+        "packages/llm/token-meter",
+        "packages/preset/agent-preset-registry",
+        "packages/sandbox/sandbox-policy",
+        "packages/schedule/schedule",
+        "packages/session/session-persistence-jsonl",
+        "packages/session/session-projection-cache",
+        "packages/session/session-title",
+        "packages/session/working-directory",
+        "packages/settings/settings",
+        "packages/skill/skill",
+        "packages/storage/storage-domain",
+        "packages/storage/storage-json",
+        "packages/subagent/subagent",
+        "packages/todo/tool-todo",
+        "vendor/loader"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "vendor/schemastery",
+      "owners": [
+        "packages/boot/app-boot"
+      ]
+    },
+    {
+      "group": "devDependencies",
+      "target": "vendor/timer",
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/boot/hmr",
+        "packages/boot/plugin-manager",
+        "packages/extensions/cordis-host-runner",
+        "packages/settings/settings"
+      ]
+    }
+  ],
+  "externalDirect": [
+    {
+      "name": "@babel/code-frame",
+      "version": "7.29.7",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/boot/hmr"
+      ],
+      "lockIntegrity": "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==",
+      "npmCache": "VERIFIED_LOCK_INTEGRITY"
+    },
+    {
+      "name": "@deepseek-ai/libreoffice-kit",
+      "version": "0.1.5",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/document/office-to-pdf"
+      ],
+      "lockIntegrity": "sha512-H12xtUsAyl70zFeQ5pk5GGRc3N1+6zn+DVAcqwlguI6EvqopBGP3xkUmePU7g5f6ydYlDZLWedHT9lTSL7zLxA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@eslint-community/regexpp",
+      "version": "4.12.2",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/boot/app-boot"
+      ],
+      "lockIntegrity": "sha512-EriSTlt5OC9/7SXkRSCAhfSxxoSUgBm33OH+IkwbdpgoqsSsUg7y3uh+IICI/Qg4BBWr3U2i39RpmycbxMq4ew==",
+      "npmCache": "VERIFIED_LOCK_INTEGRITY"
+    },
+    {
+      "name": "@js-temporal/polyfill",
+      "version": "0.5.1",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/schedule/schedule"
+      ],
+      "lockIntegrity": "sha512-hloP58zRVCRSpgDxmqCWJNlizAlUgJFqG2ypq79DCvyv9tHjRYMDOcPFjzfl/A1/YxDvRCZz8wvZvmapQnKwFQ==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@lexical/headless",
+      "version": "0.49.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-conversation"
+      ],
+      "lockIntegrity": "sha512-3fQiKMAZ+K5/YlnGli9MId4LM8TPuOdLXIy1eUszfA/8hTZyPMcAxLjG99940UClgcoW9XxP03T37PJpFvpqIA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@lexical/history",
+      "version": "0.49.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-conversation"
+      ],
+      "lockIntegrity": "sha512-uQdtEd34gIJklXNSdHS2Wko1zxx1xUMVXbiodcLO6a3GeFTE5bKnx6af1zGX78KpYhUQYnHWorKuUvtdZlJPaA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@lexical/plain-text",
+      "version": "0.49.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-conversation"
+      ],
+      "lockIntegrity": "sha512-l7IuUj9n9CtFfz4Fz6zU6mmO+VkcnvyyebABx+lHevvTa7B6YI5PPVgABFfzdyPanyW/FGs7qpKBf59inAqbkg==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@lexical/text",
+      "version": "0.49.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-conversation"
+      ],
+      "lockIntegrity": "sha512-mowedvbvx0HDaW+ymVdYmWVhueqgauhhqIWaCtbJj33tPk8pOu1BB0pZuJQbOB+1bDnFiZhkJV8W/CvR2M9lEA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@lexical/utils",
+      "version": "0.49.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-conversation"
+      ],
+      "lockIntegrity": "sha512-Jaa6DERBqxiFOFa49VPRV1WOb7mzRbMZ5U+v+RFagjzTmBhfxDmEkbQQ9nYTU3n3DPfdT8Hkyffextmw04etXg==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@shikijs/langs",
+      "version": "4.4.3",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-ePic0yfAJGOF83D5wBHK/00EjK65oahBYxFk5epgq33WRv7X9UuxLEV8PtR0szC0z8dl7INIpIodB99JRFlR+A==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@standard-schema/spec",
+      "version": "1.1.0",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "vendor/cordis",
+        "vendor/schemastery"
+      ],
+      "lockIntegrity": "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@types/babel__code-frame",
+      "version": "7.27.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/boot/hmr"
+      ],
+      "lockIntegrity": "sha512-Dwlo+LrxDx/0SpfmJ/BKveHf7QXWvLBLc+x03l5sbzykj3oB9nHygCpSECF1a+s+QIxbghe+KHqC90vGtxLRAA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@types/compression",
+      "version": "1.8.1",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/host/webserver"
+      ],
+      "lockIntegrity": "sha512-kCFuWS0ebDbmxs0AXYn6e2r2nrGAb5KwQhknjSPSPgJcGd8+HVSILlUyFhGqML2gk39HcG7D1ydW9/qpYkN00Q==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@types/js-yaml",
+      "version": "4.0.9",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/boot/config-editor",
+        "packages/preset/agent-preset-registry"
+      ],
+      "lockIntegrity": "sha512-k4MGaQl5TGo/iipqb2UDG2UwjXziSWkh0uysQelTlJpX1qGlpUZYm8PnO4DxG1qBomtJUdYJ6qR6xdIah10JLg==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@types/mdast",
+      "version": "4.0.4",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@types/mime-types",
+      "version": "3.0.1",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/api/session-controller"
+      ],
+      "lockIntegrity": "sha512-xRMsfuQbnRq1Ef+C+RKaENOxXX87Ygl38W1vDfPHRku02TgQr+Qd8iivLtAMcR0KF5/29xlnFihkTlbqFrGOVQ==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@types/negotiator",
+      "version": "0.6.5",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/host/webserver"
+      ],
+      "lockIntegrity": "sha512-MPOlB48mfWhoUlynY0ga7CFsXIPcH6vGPkjzXMn2p+4PH1QUyn2KPtw0hrLLmO6SaX4zse3X6h2x/083vveAlA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@types/picomatch",
+      "version": "4.0.3",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/boot/hmr"
+      ],
+      "lockIntegrity": "sha512-iG0T6+nYJ9FAPmx9SsUlnwcq1ZVRuCXcVEvWnntoPlrOpwtSTKNDC9uVAxTsC3PUvJ+99n4RpAcNgBbHX3JSnQ==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@types/semver",
+      "version": "7.8.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/boot/plugin-market",
+        "packages/util/plugin-market-index"
+      ],
+      "lockIntegrity": "sha512-1mAINjtQCXXeLkJ9ehXkwOcBpqtLxiVtKhpUf83DdRNdQKV0iXZpaHYqRr7nj+wvxuJzoAmAwXI+sCNMv1CzLQ==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@types/use-sync-external-store",
+      "version": "1.7.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-renderer"
+      ],
+      "lockIntegrity": "sha512-v8435kzWm3FuxyUa4r8o4sG6b0D+r+uOrzF5MXHxZKW4Haoo6txu/lq56Vio45e2i1nkmFPA+R7myWcmV7Z7Bg==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@types/ws",
+      "version": "8.18.1",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/api/gateway"
+      ],
+      "lockIntegrity": "sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@xterm/addon-serialize",
+      "version": "0.14.0",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/api/terminal-controller"
+      ],
+      "lockIntegrity": "sha512-uteyTU1EkrQa2Ux6P/uFl2fzmXI46jy5uoQMKEOM0fKTyiW7cSn0WrFenHm5vO5uEXX/GpwW/FgILvv3r0WbkA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "@xterm/headless",
+      "version": "6.0.0",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/api/terminal-controller"
+      ],
+      "lockIntegrity": "sha512-5Yj1QINYCyzrZtf8OFIHi47iQtI+0qYFPHmouEfG8dHNxbZ9Tb9YGSuLcsEwj9Z+OL75GJqPyJbyoFer80a2Hw==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "ajv",
+      "version": "8.20.0",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/boot/app-boot"
+      ],
+      "lockIntegrity": "sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "anser",
+      "version": "2.3.5",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-vcZjxvvVoxTeR5XBNJB38oTu/7eDCZlwdz32N1eNgpyPF7j/Z7Idf+CUwQOkKKpJ7RJyjxgLHCM7vdIK0iCNMQ==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "chokidar",
+      "version": "4.0.3",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/boot/plugin-manager"
+      ],
+      "lockIntegrity": "sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "chokidar",
+      "version": "5.0.0",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/boot/hmr"
+      ],
+      "lockIntegrity": "sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw==",
+      "npmCache": "VERIFIED_LOCK_INTEGRITY"
+    },
+    {
+      "name": "clsx",
+      "version": "2.1.1",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-conversation",
+        "packages/client/ui-primitives",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-theme",
+        "packages/client/ui-workspace"
+      ],
+      "lockIntegrity": "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "commander",
+      "version": "15.0.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/boot/cmdline"
+      ],
+      "lockIntegrity": "sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "compression",
+      "version": "1.8.2",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/host/webserver"
+      ],
+      "lockIntegrity": "sha512-o8vI5RE5A6EVVOd9o41jKp41aJom+QTEO/Bx8MYNjexMo/Bv2WOjUfZr+aL0WnYSgymUy6zeguqLTsIhV0gMvQ==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "diff",
+      "version": "9.0.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "esbuild",
+      "version": "0.28.2",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/boot/hmr"
+      ],
+      "lockIntegrity": "sha512-HKVLS8dvII+xoKW9kmqxbRKrnWEXfJJr/FZhhJmiqIB0e053QNYFqOBouTMO/k5sID4MvCiUCvv8b9M4h32wIA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "execa",
+      "version": "10.0.1",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/boot/plugin-manager"
+      ],
+      "lockIntegrity": "sha512-ge98qjkRK4IB7tL7Ju/6qmm5LHoH1eEMt5FNZrz3f4UIYhF28lggX20z3FaX1sgc67msLEn0N0BscOs29iuwyw==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "immer",
+      "version": "10.2.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/store"
+      ],
+      "lockIntegrity": "sha512-d/+XTN3zfODyjr89gM3mPq1WNX2B8pYsu7eORitdwyA2sBubnTl3laYlBk4sXY5FUa5qTZGBDPJICVbvqzjlbw==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "ipaddr.js",
+      "version": "2.5.0",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/host/webserver"
+      ],
+      "lockIntegrity": "sha512-aq+t5NAc+cS6rZQQVWC2x98CPqGtKKTMDd4Gaodv0wShnItdKg/51djkGJ1hqH+Oy0ivDftCbSLCQob8zso01w==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "js-yaml",
+      "version": "4.3.2",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/boot/config-editor",
+        "packages/preset/agent-preset-registry",
+        "vendor/include"
+      ],
+      "lockIntegrity": "sha512-SFNOvSJ+Dgf/9An904Yx+CgSlIPCkIpao4qo51lpee25TIRejdH3rhR4EZMGoNx3/TP3O+wzWuiTFl4sqbltzA==",
+      "npmCache": "VERIFIED_LOCK_INTEGRITY"
+    },
+    {
+      "name": "katex",
+      "version": "0.18.7",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-h+UCwkZ+4Jz8WQ7MLGfj7UVFrRCizGb912fwF4luGdYsC5paYG1vx+jy+KRcC/XkpjGva/P7nAWuxNnPzRvzHw==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "koffi",
+      "version": "3.1.1",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/session/session-persistence-jsonl"
+      ],
+      "lockIntegrity": "sha512-mRX6AMeeKCxSOeOopqAcLAl5jcNvge7NAG8l7rF/8gGJATI0tdHFYjteIdE0mGOtWdsrJOij+PjnP8Q9c1gwgA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "lexical",
+      "version": "0.49.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-conversation"
+      ],
+      "lockIntegrity": "sha512-9V1ZIzGpJEd8rIN+nN7veL4fW4fFWbS66Un4JNqSZB4D5t9euzN9+3+jEXy83FjNjNy0MiiUI3+DQaGCLYko0w==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "mdast-util-from-markdown",
+      "version": "2.0.3",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-W4mAWTvSlKvf8L6J+VN9yLSqQ9AOAAvHuoDAmPkz4dHf553m5gVj2ejadHJhoJmcmxEnOv6Pa8XJhpxE93kb8Q==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "mdast-util-gfm",
+      "version": "3.1.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-0ulfdQOM3ysHhCJ1p06l0b0VKlhU0wuQs3thxZQagjcjPrlFRqY215uZGHHJan9GEAXd9MbfPjFJz+qMkVR6zQ==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "mdast-util-math",
+      "version": "3.0.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-Tl9GBNeG/AhJnQM221bJR2HPvLOSnLE/T9cJI9tlc6zwQk2nPk/4f0cHkOdEixQPC/j8UtKDdITswvLAy1OZ1w==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "micromark-core-commonmark",
+      "version": "2.0.3",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-RDBrHEMSxVFLg6xvnXmb1Ayr2WzLAWjeSATAoxwKYJV94TeNavgoIdA0a9ytzDSVzBy2YKFK+emCPOEibLeCrg==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "micromark-extension-gfm",
+      "version": "3.0.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-vsKArQsicm7t0z2GugkCKtZehqUm31oeGBV/KVSorWSy8ZlNAv7ytjFhvaryUiCUJYqs+NoE6AFhpQvBTM6Q4w==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "micromark-extension-math",
+      "version": "3.1.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-lvEqd+fHjATVs+2v/8kg9i5Q0AP2k85H0WUOwpIVvUML8BapsMvh1XAogmQjOCsLpoKRCVQqEkQBB3NhVBcsOg==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "micromark-factory-space",
+      "version": "2.0.1",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-zRkxjtBxxLd2Sc0d+fbnEunsTj46SWXgXciZmHq0kDYGnck/ZSGj9/wULTV95uoeYiK5hRXP2mJ98Uo4cq/LQg==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "micromark-util-character",
+      "version": "2.1.1",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-wv8tdUTJ3thSFFFJKtpYKOYiGP2+v96Hvk4Tu8KpCAsTMs6yi+nVmGh1syvSCsaxz45J6Jbw+9DD6g97+NV67Q==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "micromark-util-classify-character",
+      "version": "2.0.1",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-K0kHzM6afW/MbeWYWLjoHQv1sgg2Q9EccHEDzSkxiP/EaagNzCm7T/WMKZ3rjMbvIpvBiZgwR3dKMygtA4mG1Q==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "micromark-util-sanitize-uri",
+      "version": "2.0.1",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-9N9IomZ/YuGGZZmQec1MbgxtlgougxTodVwDzzEouPKo3qFWvymFHWcnDi2vzV1ff6kas9ucW+o3yzJK9YB1AQ==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "micromark-util-symbol",
+      "version": "2.0.1",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-vs5t8Apaud9N28kgCrRUdEed4UJ+wWNvicHLPxCa9ENlYuAY31M0ETy5y1vA33YoNPDFTghEbnh6efaE8h4x0Q==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "micromark-util-types",
+      "version": "2.0.2",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-Yw0ECSpJoViF1qTU4DC6NwtC4aWGt1EkzaQB8KPPyCRR8z9TWeV0HbEFGTO+ZY1wB22zmxnJqhPyTpOVCpeHTA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "mime-types",
+      "version": "3.0.2",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/api/session-controller"
+      ],
+      "lockIntegrity": "sha512-Lbgzdk0h4juoQ9fCKXW4by0UJqj+nOOrI9MJ1sSj4nI8aI2eo1qmvQEie4VD1glsS250n15LsWsYtCugiStS5A==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "minisearch",
+      "version": "7.2.0",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/boot/plugin-market"
+      ],
+      "lockIntegrity": "sha512-dqT2XBYUOZOiC5t2HRnwADjhNS2cecp9u+TJRiJ1Qp/f5qjkeT5APcGPjHw+bz89Ms8Jp+cG4AlE+QZ/QnDglg==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "negotiator",
+      "version": "1.1.0",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/host/webserver"
+      ],
+      "lockIntegrity": "sha512-NMPBRMJgiQHjbd8phG3Vebdx4kZ1H121rbl5IkMqeOsahptB9BKo/d7oJ3zTXqTgagn2bWlNSXkh0QUGM31RYg==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "node-addon-require-builtin",
+      "version": "0.1.9",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/boot/hmr",
+        "vendor/loader"
+      ],
+      "lockIntegrity": "sha512-BCxXCMZDs/VLLh64SwKNw/me7Qx1I7Be4qxWwYVRRm8tJoOB8fL7qg6CmXhSXeUqsKt72t8RaKCX4EN+5nocVg==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "p-limit",
+      "version": "7.3.3",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/session/session-persistence-jsonl"
+      ],
+      "lockIntegrity": "sha512-SKgVvDU5TNIxQ4r30U75BNLC6a+6GOEjngrk/ysM5+Zu3oJuk1SC5ApzIzY/7PjCEjoVPMWJ0zho/4QUiEB7TQ==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "picomatch",
+      "version": "4.0.7",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/boot/hmr"
+      ],
+      "lockIntegrity": "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==",
+      "npmCache": "VERIFIED_LOCK_INTEGRITY"
+    },
+    {
+      "name": "react-dom",
+      "version": "18.3.1",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-conversation",
+        "packages/client/ui-primitives",
+        "packages/client/ui-renderer"
+      ],
+      "lockIntegrity": "sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "react",
+      "version": "18.3.1",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/locale",
+        "packages/client/ui-conversation",
+        "packages/client/ui-layout",
+        "packages/client/ui-primitives",
+        "packages/client/ui-renderer",
+        "packages/client/ui-session",
+        "packages/client/ui-settings",
+        "packages/client/ui-sidebar",
+        "packages/client/ui-slots",
+        "packages/client/ui-theme",
+        "packages/client/ui-workspace"
+      ],
+      "lockIntegrity": "sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "resolve.exports",
+      "version": "2.0.3",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/boot/app-boot"
+      ],
+      "lockIntegrity": "sha512-OcXjMsGdhL4XnbShKpAcSqPMzQoYkYyhbEaeSko47MjRP9NfEQMhZkXL1DoFlt9LWQn4YttrdnV6X2OiyzBi+A==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "selfsigned",
+      "version": "4.0.1",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/host/webserver"
+      ],
+      "lockIntegrity": "sha512-QVGzJryYPB7ctpYxoK4DDvH4kFf23wtBl0s6km/wN+JCWLqjutdyWaiXHwSg3B3ftDOFfu0B7FWRVNH0xNn6rw==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "semver",
+      "version": "7.8.5",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/boot/app-boot",
+        "packages/boot/plugin-market",
+        "packages/util/plugin-market-index"
+      ],
+      "lockIntegrity": "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA==",
+      "npmCache": "VERIFIED_LOCK_INTEGRITY"
+    },
+    {
+      "name": "shiki",
+      "version": "4.4.3",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-Mb/GvXPHBAXdgGIcnfU5L3ldpn1XcxrGkPHwqgRx17/I2XRfqlFKk2vGkHWINn1kdXvzJZeuO3is6I9KLPFm0g==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "simple-icons",
+      "version": "16.31.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-primitives"
+      ],
+      "lockIntegrity": "sha512-dDEqvQrmxL7ZnqQtGHGjCNW6CfiwzAif+83Hol9JXAnAB6wh2zsZD7Sc1kWT0O/RRAKt7xfG8W6UZhYBPD+GAA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "undici",
+      "version": "8.11.2",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/util/http-proxy"
+      ],
+      "lockIntegrity": "sha512-u4UB2/IrKdU6lFxumHmmo1a3fCQO5tzQllRorfoRS63txhrB7xTpSn1PftwC4qEHkOaqP95fCWW4lJzwErwzhQ==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "use-sync-external-store",
+      "version": "1.6.0",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/ui-renderer"
+      ],
+      "lockIntegrity": "sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "ws",
+      "version": "8.21.3",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/api/gateway"
+      ],
+      "lockIntegrity": "sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "yaml",
+      "version": "2.9.0",
+      "groups": [
+        "dependencies"
+      ],
+      "owners": [
+        "packages/boot/config-editor",
+        "packages/boot/plugin-manager",
+        "packages/settings/settings"
+      ],
+      "lockIntegrity": "sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "zod",
+      "version": "4.4.3",
+      "groups": [
+        "dependencies",
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/api/account-controller",
+        "packages/api/gateway",
+        "packages/api/job-controller",
+        "packages/api/remote-access",
+        "packages/api/remotes",
+        "packages/api/session-controller",
+        "packages/api/settings-controller",
+        "packages/api/terminal-controller",
+        "packages/api/workspace-controller",
+        "packages/api/workspace-files",
+        "packages/boot/plugin-manager",
+        "packages/boot/plugin-market",
+        "packages/client/connection",
+        "packages/client/file-upload",
+        "packages/client/product-analytics",
+        "packages/client/ui-conversation",
+        "packages/context/session-reference",
+        "packages/document/office-to-pdf",
+        "packages/extensions/cordis-host-runner",
+        "packages/feedback/command-feedback",
+        "packages/feedback/message-feedback",
+        "packages/goal/goal",
+        "packages/host/plugin-inventory",
+        "packages/interaction/commands",
+        "packages/interaction/permission-presets",
+        "packages/interaction/user-questions",
+        "packages/llm/llm",
+        "packages/llm/llm-retry",
+        "packages/llm/token-meter",
+        "packages/plan/plan-mode",
+        "packages/preset/agent-preset-registry",
+        "packages/sandbox/sandbox-policy",
+        "packages/schedule/schedule",
+        "packages/session/session-projection",
+        "packages/session/session-projection-cache",
+        "packages/session/session-title",
+        "packages/session/working-directory",
+        "packages/storage/storage-domain",
+        "packages/subagent/subagent",
+        "packages/todo/tool-todo",
+        "packages/typert/protocol",
+        "packages/typert/registry",
+        "packages/util/chunked-list",
+        "packages/workspace/workspace"
+      ],
+      "lockIntegrity": "sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    },
+    {
+      "name": "zustand",
+      "version": "4.5.7",
+      "groups": [
+        "devDependencies"
+      ],
+      "owners": [
+        "packages/client/store"
+      ],
+      "lockIntegrity": "sha512-CHOUy7mu3lbD6o6LJLfllpjkzhHXSBlX8B9+qPddUsIfeF5S/UZ5q0kmCsnRqT1UHFQZchNFDDzMbQsuesHWlw==",
+      "npmCache": "NOT_FOUND_EXACT_URL"
+    }
+  ]
+}

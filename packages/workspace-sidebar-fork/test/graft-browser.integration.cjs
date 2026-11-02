@@ -7,8 +7,10 @@ assert.equal(createHash('sha256').update(frontend).digest('hex'),'0f3fc6b857e4f8
 const start=frontend.indexOf('var l0={exports:{}},Te={};'),end=frontend.indexOf('var Th;const w2=',start);
 assert.ok(start>=0&&end>start);
 const react='function qs(e){return e&&e.__esModule&&Object.prototype.hasOwnProperty.call(e,"default")?e.default:e}function P1(e){return e}\n'+frontend.slice(start,end)+'\nwindow.React=C;window.ReactDOM=Sn;window.ReactJSX=d;';
-const lineage=fs.readFileSync(__dirname+'/../../session-tree/lineage.mjs','utf8').replace('export { catalogOf, buildRows, navigationTarget };','window.lineage={buildRows,navigationTarget};');
-const planner=fs.readFileSync(__dirname+'/../candidate-src/client/rows/lineage-plan.mjs','utf8').replace("import { buildRows, navigationTarget } from '../../../../session-tree/lineage.mjs';",'const {buildRows,navigationTarget}=window.lineage;').replace('export function planLineage','window.planLineage=function planLineage');
+const lineagePath=process.env.R7_STAGED_ROWS?process.env.R7_STAGED_ROWS+'/shared-lineage.mjs':__dirname+'/../../session-tree/lineage.mjs';
+const plannerPath=process.env.R7_STAGED_ROWS?process.env.R7_STAGED_ROWS+'/lineage-plan.mjs':__dirname+'/../candidate-src/client/rows/lineage-plan.mjs';
+const lineage=fs.readFileSync(lineagePath,'utf8').replace('export { catalogOf, buildRows, navigationTarget };','window.lineage={buildRows,navigationTarget};');
+const planner=fs.readFileSync(plannerPath,'utf8').replace(/import \{ buildRows, navigationTarget \} from '(?:\.\.\/\.\.\/\.\.\/\.\.\/session-tree\/lineage|\.\/shared-lineage)\.mjs';/,'const {buildRows,navigationTarget}=window.lineage;').replace('export function planLineage','window.planLineage=function planLineage');
 const compiled=fs.readFileSync(process.env.GRAFT_COMPILED_PATH,'utf8')
  .replace('import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";','const {jsx:_jsx,jsxs:_jsxs}=window.ReactJSX;')
  .replace("import { Fragment, useEffect, useRef, useState } from 'react';",'const {Fragment,useEffect,useRef,useState}=window.React;')
