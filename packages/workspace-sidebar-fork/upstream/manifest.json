@@ -1,0 +1,146 @@
+{
+  "commit": "b830ec950faba0a46dda564be3e2d854afed94f1",
+  "sourceTree": "a5081d6ca03a3dbe2d4db6ca9dfa0f4511d85db6",
+  "files": [
+    {
+      "path": "client/WorkspacePicker.module.css",
+      "sha": "c99164aacf903de5fad8f79db9668506b6e79694",
+      "size": 408
+    },
+    {
+      "path": "client/WorkspacePicker.tsx",
+      "sha": "a8e40b78895709a67bb9df1a52aee95a554ddcb0",
+      "size": 10556
+    },
+    {
+      "path": "client/contract/slots.ts",
+      "sha": "d00b3658d82e30f6efea26adbadb1b4533a67868",
+      "size": 23351
+    },
+    {
+      "path": "client/contract/toast.ts",
+      "sha": "94d3b51228543053a4d3fcd0e5ab16a61d91bab0",
+      "size": 3006
+    },
+    {
+      "path": "client/index.ts",
+      "sha": "cc9da072c9bd8053baf4a3551b61069ce594fd6b",
+      "size": 19071
+    },
+    {
+      "path": "client/locales.ts",
+      "sha": "0214ab995f39101bf25f2184012963787f7917d3",
+      "size": 12249
+    },
+    {
+      "path": "client/navigation.ts",
+      "sha": "55e03054cecce5d677b184853c55dac885c51336",
+      "size": 24027
+    },
+    {
+      "path": "client/pin-order.ts",
+      "sha": "fd80c53027f1e81be0ca5a6fbc127027219d37ff",
+      "size": 2225
+    },
+    {
+      "path": "client/rows/AnimatedRows.module.css",
+      "sha": "6d6c538f442dc83900153e56cf1647ee7a042fc5",
+      "size": 106
+    },
+    {
+      "path": "client/rows/AnimatedRows.tsx",
+      "sha": "12030ab6f21f015e910f237a2cb68246949caabb",
+      "size": 6766
+    },
+    {
+      "path": "client/rows/Rows.module.css",
+      "sha": "6d35a231137605ed245fac0b32bb98bbfa85ba67",
+      "size": 9569
+    },
+    {
+      "path": "client/rows/Rows.tsx",
+      "sha": "216a6fc00f9b58db67b19c696562b01d61089457",
+      "size": 29048
+    },
+    {
+      "path": "client/rows/WorkspaceBrowser.module.css",
+      "sha": "ce49fcb4bb728a8557b8e24a706aef3b2387f3ef",
+      "size": 13813
+    },
+    {
+      "path": "client/rows/WorkspaceBrowser.tsx",
+      "sha": "df871654ee16030fbe639a6748e77944a8f13904",
+      "size": 65847
+    },
+    {
+      "path": "client/session-actions/ArchiveSession.tsx",
+      "sha": "aaef1991ad63a3cb2b9d8f5fe47a0152607155d1",
+      "size": 6846
+    },
+    {
+      "path": "client/session-actions/ForkSession.tsx",
+      "sha": "a71dc67638b1496358ff5f580e6dfe1c5d09cd01",
+      "size": 1267
+    },
+    {
+      "path": "client/session-actions/PinSession.tsx",
+      "sha": "a6d54df8f863b05decac4a85a1fc0390f677e7de",
+      "size": 2855
+    },
+    {
+      "path": "client/session-actions/RenameSession.tsx",
+      "sha": "5e67673e77849ed9948616fb926e350e633be9d0",
+      "size": 4511
+    },
+    {
+      "path": "client/session-actions/RowActionToast.tsx",
+      "sha": "fae564a45bfe29d9061e6253da2d06399bbe8b7c",
+      "size": 680
+    },
+    {
+      "path": "client/session-actions/SessionId.tsx",
+      "sha": "da292e67b39cebd946a0d7f1a3a9d625c2117922",
+      "size": 806
+    },
+    {
+      "path": "client/session-actions/derived.ts",
+      "sha": "900fc8f053ceec96dcc093e8f6d7389be149d95a",
+      "size": 974
+    },
+    {
+      "path": "client/shortcuts.ts",
+      "sha": "ed9852b81a3d674aeec05ed2db09607c9ecbfe02",
+      "size": 6597
+    },
+    {
+      "path": "client/stores.ts",
+      "sha": "bf32225b88ac09053c03bacbf8cf76cf00893589",
+      "size": 6008
+    },
+    {
+      "path": "client/toast/Toast.tsx",
+      "sha": "fea6c6d1090b40213bd6d0e988dca652870c96ba",
+      "size": 2199
+    },
+    {
+      "path": "client/toast/register.ts",
+      "sha": "efadbf89c28686b15a25b4da79d846ba56ad02de",
+      "size": 5643
+    },
+    {
+      "path": "client/tree.ts",
+      "sha": "eb67d0ebe33fabe4c85d61fc3fb0673bdb509c16",
+      "size": 25202
+    },
+    {
+      "path": "css-modules.d.ts",
+      "sha": "bc5e482353ccdad2cac56977c6880a9453324cd6",
+      "size": 123
+    },
+    {
+      "path": "index.ts",
+      "sha": "bb551f7b1a3c6697dc48b52eeabb2666671aa253",
+      "size": 412
+    }
+  ]
+}

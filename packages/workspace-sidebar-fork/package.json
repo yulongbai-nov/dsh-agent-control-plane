@@ -1,0 +1,8 @@
+{
+  "name": "@dsh-agent-control-plane/workspace-sidebar-fork-research",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Non-installable research candidate for the workspace sidebar",
+  "engines": { "node": ">=24" },
+  "scripts": { "test": "node --test test/*.integration.mjs" }
+}
