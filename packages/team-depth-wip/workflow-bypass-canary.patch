@@ -1,0 +1,25 @@
+diff --git a/packages/workflow/workflow-ptc/tests/host.spec.ts b/packages/workflow/workflow-ptc/tests/host.spec.ts
+index 4a866175..4194459a 100644
+--- a/packages/workflow/workflow-ptc/tests/host.spec.ts
++++ b/packages/workflow/workflow-ptc/tests/host.spec.ts
+@@ -33 +33 @@ class ControlledRuntime extends PtcRuntime {
+-async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Promise<PtcRunResult>, language = 'typescript') {
++async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Promise<PtcRunResult>, language = 'typescript', maxDepth = 1) {
+@@ -41 +41 @@ async function setup(execute?: (bindings: HostBindings, spec: PtcRunSpec) => Pro
+-  await ctx.plugin(SubagentRuntime)
++  await ctx.plugin(SubagentRuntime, { maxDepth })
+@@ -64,0 +65,14 @@ describe('workflow host callback validation', () => {
++  it('documents workflow host omits the global depth cap when starting a child', async () => {
++    const {ctx,start} = await setup(async bindings => {
++      await bindings.startChild!({prompt:'synthetic'})
++      return completed
++    }, 'typescript', 0)
++    expect(ctx.subagents.resolveMaxDepth()).toBe(0)
++    const activation = vi.spyOn(ctx.subagents,'startActivation')
++    const run=start()
++    try {
++      expect((await run.result).stopReason).toBe('completed')
++      expect(activation).toHaveBeenCalledOnce()
++      expect(activation.mock.calls[0]![0].request.maxDepth).toBeUndefined()
++    } finally { await run.dispose() }
++  })
