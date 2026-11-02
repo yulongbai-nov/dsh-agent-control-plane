@@ -53,6 +53,15 @@ function checkStoredRows(db, version) {
     if (db.prepare(`SELECT 1 FROM ${table} WHERE ${invalid}${output} LIMIT 1`).get()) fail('INVALID_STORED_DATA');
   }
 }
+function checkCurrentState(db) {
+  if (db.prepare('PRAGMA user_version').get().user_version !== 2) fail('UNSUPPORTED_SCHEMA');
+  checkSchema(db, 2);
+  checkStoredRows(db, 2);
+  if (db.prepare(`SELECT 1 FROM snapshots s LEFT JOIN source_cursors c ON s.session_key=c.session_key
+    WHERE c.session_key IS NULL OR s.source_epoch<>c.source_epoch OR s.seq<>c.seq
+    UNION ALL SELECT 1 FROM source_cursors c LEFT JOIN snapshots s ON s.session_key=c.session_key
+    WHERE s.session_key IS NULL UNION ALL SELECT 1 FROM tombstones t JOIN snapshots s ON t.session_key=s.session_key LIMIT 1`).get()) fail('CURSOR_INCONSISTENT');
+}
 function verifyDir(directory) {
   if (typeof directory !== 'string' || resolve(directory) !== directory || realpathSync(directory) !== directory) fail('UNSAFE_DIRECTORY');
   const d = lstatSync(directory);
@@ -105,13 +114,12 @@ export function openSyntheticLedger(directory) {
       } catch(e) { db.exec('ROLLBACK'); throw e; }
     }
     if (version !== 2) fail('UNSUPPORTED_SCHEMA');
-    checkSchema(db, version);
-    checkStoredRows(db, version);
-    if (db.prepare(`SELECT 1 FROM snapshots s LEFT JOIN source_cursors c ON s.session_key=c.session_key
-      WHERE c.session_key IS NULL OR s.source_epoch<>c.source_epoch OR s.seq<>c.seq
-      UNION ALL SELECT 1 FROM source_cursors c LEFT JOIN snapshots s ON s.session_key=c.session_key
-      WHERE s.session_key IS NULL UNION ALL SELECT 1 FROM tombstones t JOIN snapshots s ON t.session_key=s.session_key LIMIT 1`).get()) fail('CURSOR_INCONSISTENT');
-    const tx = fn => { db.exec('BEGIN IMMEDIATE'); try { const v = fn(); db.exec('COMMIT'); return v; } catch(e) { db.exec('ROLLBACK'); throw e; } };
+    const tx = (fn, write = true) => {
+      db.exec(write ? 'BEGIN IMMEDIATE' : 'BEGIN');
+      try { checkCurrentState(db); const v = fn(); db.exec('COMMIT'); return v; }
+      catch(e) { db.exec('ROLLBACK'); throw e; }
+    };
+    tx(() => undefined, false);
     const writeOne = v => {
       if (db.prepare('SELECT 1 FROM tombstones WHERE session_key=?').get(v.sessionKey)) fail('TOMBSTONED');
       const old = db.prepare('SELECT source_epoch,seq,output_tokens FROM snapshots WHERE session_key=?').get(v.sessionKey);
@@ -144,12 +152,14 @@ export function openSyntheticLedger(directory) {
       },
       get(input) {
         const v = identity(input);
-        const tombstone = db.prepare('SELECT source_epoch FROM tombstones WHERE session_key=?').get(v.sessionKey);
-        if (tombstone) { if (tombstone.source_epoch !== v.sourceEpoch) fail('SOURCE_EPOCH_CONFLICT'); return { status: 'tombstoned' }; }
-        const row = db.prepare('SELECT source_epoch,seq,output_tokens FROM snapshots WHERE session_key=?').get(v.sessionKey);
-        if (!row) return { status:'unknown' };
-        if (row.source_epoch !== v.sourceEpoch) fail('SOURCE_EPOCH_CONFLICT');
-        return { status:'observed', asOfSeq:row.seq, outputTokens:row.output_tokens, durable:'unknown' };
+        return tx(() => {
+          const tombstone = db.prepare('SELECT source_epoch FROM tombstones WHERE session_key=?').get(v.sessionKey);
+          if (tombstone) { if (tombstone.source_epoch !== v.sourceEpoch) fail('SOURCE_EPOCH_CONFLICT'); return { status: 'tombstoned' }; }
+          const row = db.prepare('SELECT source_epoch,seq,output_tokens FROM snapshots WHERE session_key=?').get(v.sessionKey);
+          if (!row) return { status:'unknown' };
+          if (row.source_epoch !== v.sourceEpoch) fail('SOURCE_EPOCH_CONFLICT');
+          return { status:'observed', asOfSeq:row.seq, outputTokens:row.output_tokens, durable:'unknown' };
+        }, false);
       },
       clear(input) {
         const v = identity(input);

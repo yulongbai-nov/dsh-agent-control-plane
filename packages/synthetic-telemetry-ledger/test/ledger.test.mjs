@@ -209,3 +209,24 @@ test('v1 malformed snapshot is rejected before migration', () => {
  assert.throws(()=>openSyntheticLedger(dir),errorCode('INVALID_STORED_DATA'));
  const check=new DatabaseSync(path);try {assert.equal(check.prepare('PRAGMA user_version').get().user_version,1);assert.equal(check.prepare("SELECT 1 FROM sqlite_master WHERE name='source_cursors'").get(),undefined);} finally {check.close();}
 });
+
+test('already-open instance rejects later malformed values without overwriting', () => {
+ const dir=createDir(), path=join(dir,'ledger.sqlite'); const db=openSyntheticLedger(dir); db.ingest(row());
+ const raw=new DatabaseSync(path); raw.prepare('UPDATE snapshots SET output_tokens=-2 WHERE session_key=?').run(key); raw.close();
+ try {
+  assert.throws(()=>db.get(id()),errorCode('INVALID_STORED_DATA'));
+  assert.throws(()=>db.ingest(row(2,8)),errorCode('INVALID_STORED_DATA'));
+  assert.throws(()=>db.clear(id()),errorCode('INVALID_STORED_DATA'));
+ } finally { db.close(); }
+ const check=new DatabaseSync(path); try { assert.equal(check.prepare('SELECT output_tokens FROM snapshots').get().output_tokens,-2); assert.equal(check.prepare('SELECT count(*) n FROM tombstones').get().n,0); } finally { check.close(); }
+});
+
+test('already-open instance refuses cursor divergence and rolls back batch', () => {
+ const dir=createDir(), path=join(dir,'ledger.sqlite'), second='d'.repeat(64); const db=openSyntheticLedger(dir); db.ingest(row());
+ const raw=new DatabaseSync(path); raw.prepare('UPDATE source_cursors SET seq=2 WHERE session_key=?').run(key); raw.close();
+ try {
+  assert.throws(()=>db.get(id()),errorCode('CURSOR_INCONSISTENT'));
+  assert.throws(()=>db.ingestBatch([{...row(1,7),sessionKey:second},row(2,8)]),errorCode('CURSOR_INCONSISTENT'));
+ } finally { db.close(); }
+ const check=new DatabaseSync(path); try { assert.equal(check.prepare('SELECT count(*) n FROM snapshots WHERE session_key=?').get(second).n,0); } finally { check.close(); }
+});
