@@ -627,6 +627,24 @@ test('deleted roots disappear, archive and current status track provided snapsho
   assert.deepEqual(core.buildRows(list, new Set(['root']), new Set(), new Map()), []);
 });
 
+const avatarBytesA=await readFile(new URL('../avatars/lead.png',import.meta.url));
+const avatarBytesB=await readFile(new URL('../avatars/code.png',import.meta.url));
+const avatarBytesC=await readFile(new URL('../avatars/data.png',import.meta.url));
+const pngA='data:image/png;base64,'+avatarBytesA.toString('base64');
+const pngB='data:image/png;base64,'+avatarBytesB.toString('base64');
+const pngC='data:image/png;base64,'+avatarBytesC.toString('base64');
+function pngChunk(type,data=Buffer.alloc(0)) {
+  const length=Buffer.alloc(4);length.writeUInt32BE(data.length);
+  return Buffer.concat([length,Buffer.from(type,'ascii'),data,Buffer.alloc(4)]);
+}
+function pngUrl(buffer){return 'data:image/png;base64,'+buffer.toString('base64');}
+function insertBeforeIend(bytes,chunk){return Buffer.concat([bytes.subarray(0,-12),chunk,bytes.subarray(-12)]);}
+function sizedPng(size) {
+  const overhead=avatarBytesA.length+12;
+  assert.ok(size>=overhead);
+  return insertBeforeIend(avatarBytesA,pngChunk('tEXt',Buffer.alloc(size-overhead)));
+}
+
 test('avatar policy is deterministic, explicit and browser-local with safe fallback', () => {
   const values = new Map();
   const storage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) };
@@ -647,12 +665,48 @@ test('avatar policy is deterministic, explicit and browser-local with safe fallb
   assert.equal(core.readAvatarPrefs({ getItem: () => '{bad' }).root, undefined);
   assert.equal(core.saveAvatarPrefs({ setItem() { throw new Error('blocked'); } }, {}), false);
   assert.equal(core.saveAvatarPrefs(undefined, {}), false);
-  const png = 'data:image/png;base64,iVBORw0KGgoAAAA=';
+  const png = pngA;
   assert.equal(core.validImage(png), true);
   assert.equal(core.validImage('data:image/svg+xml;base64,iVBORw0KGgoAAAA='), false);
   assert.equal(core.saveCustomImages(storage, { qa: png }), true);
   assert.deepEqual(core.readCustomImages(storage), { qa: png });
   assert.equal(core.saveCustomImages(undefined, {}), false);
+});
+
+test('bounded static PNG precheck rejects malformed chunks, animation, metadata and excess dimensions', () => {
+  assert.equal(core.validImage(pngA),true);
+  const invalid=[Buffer.from('89504e470d0a1a0a','hex'),avatarBytesA.subarray(0,23),avatarBytesA.subarray(0,-12),Buffer.concat([avatarBytesA,Buffer.from([0])])];
+  const corruptFirst=Buffer.from(avatarBytesA);corruptFirst.writeUInt32BE(12,8);invalid.push(corruptFirst);
+  const tooLong=Buffer.from(avatarBytesA);tooLong.writeUInt32BE(0xffffffff,8);invalid.push(tooLong);
+  const nonzeroIend=Buffer.concat([avatarBytesA.subarray(0,-12),pngChunk('IEND',Buffer.from([0]))]);invalid.push(nonzeroIend);
+  const noCrc=avatarBytesA.subarray(0,-1);invalid.push(noCrc);
+  for(const tag of ['acTL','fcTL','fdAT','iCCP','zTXt','iTXt'])invalid.push(insertBeforeIend(avatarBytesA,pngChunk(tag)));
+  invalid.push(Buffer.concat([avatarBytesA.subarray(0,-12),Buffer.from([0xff,0xff,0xff,0xff]),Buffer.from('tEXt'),Buffer.alloc(4),avatarBytesA.subarray(-12)]));
+  for(const bytes of invalid)assert.equal(core.validImage(pngUrl(bytes)),false,`accepted malformed ${bytes.length}`);
+  for(const [w,h,allowed] of [[0,1,false],[1,0,false],[2048,2048,true],[2049,1,false],[1,2049,false]]) {
+    const bytes=Buffer.from(avatarBytesA);bytes.writeUInt32BE(w,16);bytes.writeUInt32BE(h,20);
+    assert.equal(core.validImage(pngUrl(bytes)),allowed,`${w}x${h}`);
+  }
+  assert.equal(core.validImage(pngUrl(insertBeforeIend(avatarBytesA,pngChunk('tEXt',Buffer.from('acTL fcTL fdAT iCCP zTXt iTXt'))))),true);
+  assert.equal(core.validImage(pngUrl(insertBeforeIend(avatarBytesA,pngChunk('IDAT')))),true);
+  assert.equal(core.validImage(pngUrl(sizedPng(180000))),true);
+  assert.equal(core.validImage(pngUrl(sizedPng(180001))),false);
+  assert.equal(core.validImage('data:image/png;base64,iVBORw0KGgo='),false);
+  assert.equal(core.validImage(pngA+'='),false);
+  const oldAtob=globalThis.atob;try{globalThis.atob=undefined;assert.equal(core.validImage(pngA),false);globalThis.atob=()=>{throw Error('invalid')};assert.equal(core.validImage(pngA),false);}finally{globalThis.atob=oldAtob;}
+});
+
+test('duplicate IHDR chunks cannot bypass the unique dimension precheck', () => {
+  const other=Buffer.from(avatarBytesA.subarray(16,29));other.writeUInt32BE(4096,0);other.writeUInt32BE(4096,4);
+  const duplicate=pngChunk('IHDR',other);
+  for(const data of [other,avatarBytesA.subarray(16,29)]) {
+    const second=pngChunk('IHDR',data);
+    for(const bytes of [Buffer.concat([avatarBytesA.subarray(0,33),second,avatarBytesA.subarray(33)]),insertBeforeIend(avatarBytesA,second)]) {
+      assert.equal(core.validImage(pngUrl(bytes)),false,'duplicate IHDR rejected');
+    }
+  }
+  assert.equal(core.validImage(pngUrl(insertBeforeIend(avatarBytesA,pngChunk('tEXt',Buffer.from('IHDR'))))),true);
+  assert.equal(duplicate.length,25);
 });
 
 test('prototype-named session IDs do not inherit avatar preferences or stored errors', () => {
@@ -975,18 +1029,19 @@ test('component collapse preserves another root behind an unknown-mode cached ed
   assert.deepEqual([...actions.expansion],['barrier','other']);
 });
 
-function avatarHarness({ strict = false, storage } = {}) {
+function avatarHarness({ strict = false, storage, decoder = 'auto', readFailure = false } = {}) {
   states = []; effects = []; pendingEffects = []; stateIndex = 0; mountedForTest = true; postUnmountUpdates = 0;
-  const previousWindow = globalThis.window, previousReader = globalThis.FileReader;
+  const previousWindow = globalThis.window, previousReader = globalThis.FileReader, previousImage = globalThis.Image;
   const values = storage ?? new Map(), readers = [], writes = [];
-  let failWrites = false, unmounted = false;
-  globalThis.window = {localStorage:{getItem:key => values.get(key) ?? null,setItem(key,value){ if(failWrites) throw Error('blocked'); values.set(key,value); writes.push([key,value]); }}};
+  let failWrites = false, failReads = readFailure, unmounted = false;
+  globalThis.window = {localStorage:{getItem(key){if(failReads)throw Error('blocked');return values.get(key) ?? null;},setItem(key,value){ if(failWrites) throw Error('blocked'); values.set(key,value); writes.push([key,value]); }}};
   globalThis.FileReader = class {
     constructor(){readers.push(this);}
     readAsDataURL(file){this.file=file;}
     finish(value){this.result=value;this.onload?.();}
     fail(){this.onerror?.();}
   };
+  if(decoder==='auto')globalThis.Image=class {constructor(){this.naturalWidth=144;this.naturalHeight=144;}decode(){return Promise.resolve();}};
   let registration;
   applyPlugin({slots:{inject(_name,callback){callback();},register(options,component){if(options.name==='main')registration={options,component};}},sessions:{},uiWorkspace:{}});
   const actions = registration.options.inject(), list = baseList();
@@ -1011,29 +1066,266 @@ function avatarHarness({ strict = false, storage } = {}) {
   function layoutUnmount(){if(layoutGone)return;for(const effect of effects)if(effect?.layout)effect.cleanup?.();layoutGone=true;unmounted=true;mountedForTest=false;}
   function passiveUnmount(){if(passiveGone)return;for(const effect of effects)if(effect && !effect.layout)effect.cleanup?.();passiveGone=true;}
   function unmount(){layoutUnmount();passiveUnmount();}
-  function dispose(){unmount();mountedForTest=true;globalThis.window=previousWindow;globalThis.FileReader=previousReader;}
-  return {render,select,upload,reset,notice,stored,readers,writes,layoutUnmount,passiveUnmount,unmount,dispose,updatesAfterUnmount:()=>postUnmountUpdates,setFail(value){failWrites=value;}};
+  function dispose(){unmount();mountedForTest=true;globalThis.window=previousWindow;globalThis.FileReader=previousReader;globalThis.Image=previousImage;}
+  return {render,select,upload,reset,notice,stored,readers,writes,layoutUnmount,passiveUnmount,unmount,dispose,updatesAfterUnmount:()=>postUnmountUpdates,setFail(value){failWrites=value;},setReadFail(value){failReads=value;}};
 }
-const pngA = 'data:image/png;base64,iVBORw0KGgoAAAA=';
-const pngB = 'data:image/png;base64,iVBORw0KGgoAAAB=';
-const pngC = 'data:image/png;base64,iVBORw0KGgoAAAC=';
+test('upload requires asynchronous native decode and never mistakes old notice for success', async () => {
+  const previousImage=globalThis.Image, decoders=[];
+  globalThis.Image=class {constructor(){decoders.push(this);this.naturalWidth=144;this.naturalHeight=144;this.wait=deferred();}decode(){return this.wait.promise;}};
+  const app=avatarHarness({decoder:'external'});
+  try {
+    app.upload().finish(pngA);
+    assert.deepEqual(app.stored(),{});
+    assert.match(app.notice(),/正在验证头像/);
+    assert.equal(decoders.length,1);
+    decoders[0].wait.resolve();await flushRefresh();
+    assert.deepEqual(app.stored(),{lead:pngA});
+    assert.match(app.notice(),/已保存在此浏览器/);
+    app.upload();assert.match(app.notice(),/正在验证头像/);
+  } finally {app.dispose();globalThis.Image=previousImage;}
+});
 
-test('avatar readers merge different types in either completion order', () => {
+test('malformed image storage cannot be overwritten by reset or upload', () => {
+  for(const raw of ['broken-json','null','[]','123','"text"']) {
+    const storage=new Map([['dsh-session-tree.avatar-images.v1',raw]]),app=avatarHarness({storage});
+    try {app.reset();assert.equal(storage.get('dsh-session-tree.avatar-images.v1'),raw);assert.match(app.notice(),/头像无法保存/);}
+    finally {app.dispose();}
+  }
+  const storage=new Map([['dsh-session-tree.avatar-images.v1','{"lead":"untouched"}']]);
+  const app=avatarHarness({storage,readFailure:true});
+  try {app.render();app.setReadFail(false);app.reset();assert.equal(storage.get('dsh-session-tree.avatar-images.v1'),'{"lead":"untouched"}');assert.match(app.notice(),/头像无法保存/);}
+  finally {app.dispose();}
+});
+
+test('corrupt storage blocks even a successfully decoded replacement', async () => {
+  const raw='{"broken":',storage=new Map([['dsh-session-tree.avatar-images.v1',raw]]),app=avatarHarness({storage});
+  try {app.upload().finish(pngB);await flushRefresh();assert.equal(storage.get('dsh-session-tree.avatar-images.v1'),raw);assert.equal(app.writes.length,0);assert.match(app.notice(),/头像无法保存/);}
+  finally {app.dispose();}
+});
+
+test('potentially lossy image JSON round trips refuse reset without touching raw text', () => {
+  const cases=[
+    '{"future":{"n":1e400}}',
+    '{"future":{"n":9007199254740993}}',
+    '{"future":[{"n":-0}]}',
+    '{"future":1.0}',
+    '{"future":1e0}',
+    '{"future":1,"future":2}',
+    '{"future":1,"\\u0066uture":2}',
+    '{"future":"\\u0061"}',
+    '{"future":"two  spaces" ,"n":-0}',
+    '{"10":"ten","2":"two"}',
+    '{"future":{"nested":[{"n":1e400}]}}',
+  ];
+  for(const raw of cases) {
+    const storage=new Map([['dsh-session-tree.avatar-images.v1',raw]]),app=avatarHarness({storage});
+    try {
+      app.reset();
+      assert.equal(storage.get('dsh-session-tree.avatar-images.v1'),raw,raw);
+      assert.equal(app.writes.length,0,raw);
+      assert.match(app.notice(),/头像无法保存/);
+    } finally {app.dispose();}
+  }
+});
+
+test('unsafe round-trip image JSON also rejects a decoded upload', async () => {
+  const raw=' { "future" : [9007199254740993] } ',storage=new Map([['dsh-session-tree.avatar-images.v1',raw]]),app=avatarHarness({storage});
+  try {
+    app.upload().finish(pngB);await flushRefresh();
+    assert.equal(storage.get('dsh-session-tree.avatar-images.v1'),raw);
+    assert.equal(app.writes.length,0);assert.match(app.notice(),/头像无法保存/);
+  } finally {app.dispose();}
+});
+
+test('safe image JSON whitespace, escaped quotes and backslashes preserve unknown values', () => {
+  const parsed={lead:'legacy',future:{text:'space \t quote " slash \\ end',number:42,arr:[0,true,null]}};
+  const raw=' \n'+JSON.stringify(parsed,null,2)+'\r\n',storage=new Map([['dsh-session-tree.avatar-images.v1',raw]]),app=avatarHarness({storage});
+  try {app.select('code');app.reset();assert.deepEqual(app.stored(),parsed);assert.equal(app.writes.length,1);}
+  finally {app.dispose();}
+});
+
+test('legacy and unknown image fields survive a different type reset', () => {
+  const raw='{"lead":"broken-legacy","extra":{"nested":1},"__proto__":{"x":1},"code":"legacy-code"}';
+  const storage=new Map([['dsh-session-tree.avatar-images.v1',raw]]),app=avatarHarness({storage});
+  try {
+    app.select('code');app.reset();
+    const saved=JSON.parse(storage.get('dsh-session-tree.avatar-images.v1'));
+    assert.equal(saved.lead,'broken-legacy');assert.deepEqual(saved.extra,{nested:1});
+    assert.equal(Object.hasOwn(saved,'__proto__'),true);assert.deepEqual(saved.__proto__,{x:1});
+    assert.equal(Object.hasOwn(saved,'code'),false);
+  } finally {app.dispose();}
+});
+
+test('legacy render error falls back by committed revision and does not delete stored data', async () => {
+  const storage=new Map([['dsh-session-tree.avatar-images.v1',JSON.stringify({lead:pngB,code:pngC,extra:'untouched'})]]);
+  const previousImage=globalThis.Image,decoders=[];
+  globalThis.Image=class {constructor(){decoders.push(this);this.naturalWidth=144;this.naturalHeight=144;this.wait=deferred();}decode(){return this.wait.promise;}};
+  const app=avatarHarness({storage,decoder:'external'});
+  try {
+    const first=app.render().find(node=>node.type==='img'&&node.props.className==='image');
+    assert.equal(first.props.src,pngB);assert.equal(typeof first.props.onError,'function');
+    app.upload().finish(pngB);decoders[0].wait.resolve();await flushRefresh();
+    const latest=app.render().find(node=>node.type==='img'&&node.props.className==='image');
+    first.props.onError({currentTarget:{src:pngB}});
+    assert.equal(app.render().find(node=>node.type==='img'&&node.props.className==='image').props.src,pngB);
+    latest.props.onError({currentTarget:{src:pngB}});
+    const fallback=app.render().find(node=>node.type==='img'&&node.props.className==='image');
+    assert.notEqual(fallback.props.src,pngB);
+    assert.equal(fallback.props.onError,undefined);
+    assert.deepEqual(app.stored(),{lead:pngB,code:pngC,extra:'untouched'});
+  } finally {app.dispose();globalThis.Image=previousImage;}
+});
+
+test('decode completion obeys selection, reset, cross-type and unmount fences', async () => {
+  const previousImage=globalThis.Image, decoders=[];
+  globalThis.Image=class {constructor(){decoders.push(this);this.naturalWidth=144;this.naturalHeight=144;this.wait=deferred();}decode(){return this.wait.promise;}};
+  const app=avatarHarness({decoder:'external'});
+  try {
+    app.upload().finish(pngA);app.upload().finish(pngB);
+    decoders[1].wait.resolve();await flushRefresh();decoders[0].wait.resolve();await flushRefresh();
+    assert.equal(app.stored().lead,pngB);
+    app.upload().finish(pngA);app.reset();decoders[2].wait.resolve();await flushRefresh();
+    assert.equal(Object.hasOwn(app.stored(),'lead'),false);
+    app.upload().finish(pngA);app.select('code');app.upload().finish(pngB);
+    decoders[4].wait.resolve();decoders[3].wait.resolve();await flushRefresh();
+    assert.deepEqual(app.stored(),{lead:pngA,code:pngB});
+    app.upload().finish(pngC);const writes=app.writes.length;app.layoutUnmount();decoders[5].wait.resolve();await flushRefresh();
+    assert.equal(app.writes.length,writes);assert.equal(app.updatesAfterUnmount(),0);
+  } finally {app.dispose();globalThis.Image=previousImage;}
+});
+
+test('layout replay fences decode already pending and new intent still succeeds', async () => {
+  const previousImage=globalThis.Image,decoders=[];
+  globalThis.Image=class {constructor(){decoders.push(this);this.naturalWidth=144;this.naturalHeight=144;this.wait=deferred();}decode(){return this.wait.promise;}};
+  const app=avatarHarness({decoder:'external'});
+  try {
+    app.upload().finish(pngA);
+    const effect=effects.find(item=>item?.layout);effect.cleanup();effect.cleanup=effect.setup();
+    decoders[0].wait.resolve();await flushRefresh();assert.deepEqual(app.stored(),{});
+    app.upload().finish(pngB);decoders[1].wait.resolve();await flushRefresh();assert.equal(app.stored().lead,pngB);
+  } finally {app.dispose();globalThis.Image=previousImage;}
+});
+
+test('legacy and unknown fields survive upload and a failed save leaves current value intact', async () => {
+  const storage=new Map([['dsh-session-tree.avatar-images.v1','{"lead":"bad-legacy","future":{"x":1},"__proto__":{"kept":true}}']]);
+  const app=avatarHarness({storage});
+  try {
+    app.select('code');app.upload().finish(pngB);await flushRefresh();
+    let saved=app.stored();assert.equal(saved.lead,'bad-legacy');assert.deepEqual(saved.future,{x:1});assert.deepEqual(saved.__proto__,{kept:true});assert.equal(saved.code,pngB);
+    const original=storage.get('dsh-session-tree.avatar-images.v1');app.setFail(true);app.upload().finish(pngC);await flushRefresh();
+    assert.equal(storage.get('dsh-session-tree.avatar-images.v1'),original);
+    assert.match(app.notice(),/头像无法保存/);
+  } finally {app.dispose();}
+});
+
+test('upload rejects structurally bad PNG and dimension excess before decode starts', () => {
+  const previousImage=globalThis.Image;let calls=0;
+  globalThis.Image=class {constructor(){calls++;}decode(){return Promise.resolve();}};
+  const app=avatarHarness({decoder:'external'});
+  try {
+    const cases=[['data:image/png;base64,iVBORw0KGgo=','无法验证或解码'],[pngUrl(avatarBytesA.subarray(0,-12)),'无法验证或解码']];
+    const big=Buffer.from(avatarBytesA);big.writeUInt32BE(2049,16);cases.push([pngUrl(big),'宽高各不能超过 2048']);
+    for(const [data,message] of cases){app.upload().finish(data);assert.match(app.notice(),new RegExp(message));}
+    assert.equal(calls,0);assert.deepEqual(app.stored(),{});
+  } finally {app.dispose();globalThis.Image=previousImage;}
+});
+
+test('legacy image failure is isolated by avatar type', () => {
+  const storage=new Map([['dsh-session-tree.avatar-images.v1',JSON.stringify({lead:pngB,code:pngC})]]),app=avatarHarness({storage});
+  try {
+    const select=app.render().find(node=>node.props?.className==='avatar-select');select.props.onChange({target:{value:'code'}});
+    const code=app.render().find(node=>node.type==='img'&&node.props.className==='image');assert.equal(code.props.src,pngC);
+    code.props.onError({currentTarget:{src:pngC}});
+    const leadSelect=app.render().find(node=>node.props?.className==='avatar-select');leadSelect.props.onChange({target:{value:'lead'}});
+    assert.equal(app.render().find(node=>node.type==='img'&&node.props.className==='image').props.src,pngB);
+    assert.deepEqual(app.stored(),{lead:pngB,code:pngC});
+  } finally {app.dispose();}
+});
+
+test('failed upload does not invalidate old image error fallback', async () => {
+  const storage=new Map([['dsh-session-tree.avatar-images.v1',JSON.stringify({lead:pngB})]]),app=avatarHarness({storage});
+  try {
+    const old=app.render().find(node=>node.type==='img'&&node.props.className==='image');
+    app.setFail(true);app.upload().finish(pngC);await flushRefresh();
+    old.props.onError({currentTarget:{src:pngB}});
+    assert.notEqual(app.render().find(node=>node.type==='img'&&node.props.className==='image').props.src,pngB);
+    assert.equal(app.stored().lead,pngB);
+  } finally {app.dispose();}
+});
+
+test('legacy precheck excludes oversized or animated images without changing raw storage', () => {
+  const big=Buffer.from(avatarBytesA);big.writeUInt32BE(2049,16);
+  const animated=insertBeforeIend(avatarBytesA,pngChunk('acTL'));
+  const raw=JSON.stringify({lead:pngUrl(big),code:pngUrl(animated),extra:'keep'}),storage=new Map([['dsh-session-tree.avatar-images.v1',raw]]);
+  const app=avatarHarness({storage});
+  try {
+    const image=app.render().find(node=>node.type==='img'&&node.props.className==='image');
+    assert.notEqual(image.props.src,pngUrl(big));assert.equal(image.props.onError,undefined);
+    assert.equal(storage.get('dsh-session-tree.avatar-images.v1'),raw);
+    app.select('write');app.reset();assert.deepEqual(app.stored(),JSON.parse(raw));
+  } finally {app.dispose();}
+});
+
+test('legacy render error handler remains valid across layout replay and never affects other type', () => {
+  const storage=new Map([['dsh-session-tree.avatar-images.v1',JSON.stringify({lead:pngB,code:pngC})]]),app=avatarHarness({storage});
+  try {
+    const before=app.render().find(node=>node.type==='img'&&node.props.className==='image');
+    const layout=effects.find(effect=>effect?.layout);layout.cleanup();layout.cleanup=layout.setup();
+    before.props.onError({currentTarget:{src:pngB}});
+    assert.notEqual(app.render().find(node=>node.type==='img'&&node.props.className==='image').props.src,pngB);
+    assert.equal(app.stored().code,pngC);
+  } finally {app.dispose();}
+});
+
+test('stale decode rejection cannot overwrite newer successful operation notice', async () => {
+  const previousImage=globalThis.Image,decoders=[];
+  globalThis.Image=class {constructor(){decoders.push(this);this.naturalWidth=144;this.naturalHeight=144;this.wait=deferred();}decode(){return this.wait.promise;}};
+  const app=avatarHarness({decoder:'external'});
+  try {
+    app.upload().finish(pngA);app.upload().finish(pngB);
+    decoders[1].wait.resolve();await flushRefresh();
+    assert.equal(app.stored().lead,pngB);assert.match(app.notice(),/已保存在此浏览器/);
+    decoders[0].wait.reject(Error('stale'));await flushRefresh();
+    assert.equal(app.stored().lead,pngB);assert.match(app.notice(),/已保存在此浏览器/);
+  } finally {app.dispose();globalThis.Image=previousImage;}
+});
+
+test('decoder rejection, unsupported API or changed size preserves committed image', async () => {
+  const previousImage=globalThis.Image, decoders=[];
+  globalThis.Image=class {constructor(){decoders.push(this);this.naturalWidth=144;this.naturalHeight=144;this.wait=deferred();}decode(){return this.wait.promise;}};
+  const app=avatarHarness({decoder:'external'});
+  try {
+    app.upload().finish(pngA);decoders[0].wait.resolve();await flushRefresh();
+    const duplicate=pngUrl(insertBeforeIend(avatarBytesB,pngChunk('IHDR',avatarBytesB.subarray(16,29))));
+    app.upload().finish(duplicate);assert.equal(decoders.length,1);assert.equal(app.stored().lead,pngA);
+    app.upload().finish(pngB);decoders[1].wait.reject(Error('bad image'));await flushRefresh();
+    assert.deepEqual(app.stored(),{lead:pngA});assert.match(app.notice(),/PNG/);
+    app.upload().finish(pngB);decoders[2].naturalWidth=145;decoders[2].wait.resolve();await flushRefresh();
+    assert.deepEqual(app.stored(),{lead:pngA});
+    for(const Broken of [class {},class {set src(_){throw Error('blocked');}},class {decode(){throw Error('blocked');}},class {decode(){return undefined;}}]) {
+      globalThis.Image=Broken;app.upload().finish(pngC);await flushRefresh();
+      assert.deepEqual(app.stored(),{lead:pngA});assert.match(app.notice(),/无法验证或解码/);
+    }
+  } finally {app.dispose();globalThis.Image=previousImage;}
+});
+
+test('avatar readers merge different types in either completion order', async () => {
   for(const reverse of [false,true]) {
     const app=avatarHarness();
     try {
       const lead=app.upload(); app.select('code'); const code=app.upload();
       if(reverse){code.finish(pngB);lead.finish(pngA);}else{lead.finish(pngA);code.finish(pngB);}
+      await flushRefresh();
       assert.deepEqual(app.stored(),{lead:pngA,code:pngB});
       assert.ok(app.notice().includes('开发头像已保存在此浏览器'));
     } finally {app.dispose();}
   }
 });
 
-test('same-type latest upload and reset invalidate earlier readers', () => {
+test('same-type latest upload and reset invalidate earlier readers', async () => {
   const app=avatarHarness();
   try {
-    const first=app.upload(), second=app.upload(); second.finish(pngB); first.finish(pngA);
+    const first=app.upload(), second=app.upload(); second.finish(pngB); first.finish(pngA);await flushRefresh();
     assert.deepEqual(app.stored(),{lead:pngB});
     const pending=app.upload(); app.reset(); pending.finish(pngC);
     assert.deepEqual(app.stored(),{});
@@ -1041,32 +1333,32 @@ test('same-type latest upload and reset invalidate earlier readers', () => {
   } finally {app.dispose();}
 });
 
-test('failed reset preserves committed picture but invalidates pending upload', () => {
+test('failed reset preserves committed picture but invalidates pending upload', async () => {
   const app=avatarHarness();
   try {
-    app.upload().finish(pngA); const pending=app.upload(); app.setFail(true); app.reset(); app.setFail(false); pending.finish(pngB);
+    app.upload().finish(pngA); await flushRefresh();const pending=app.upload(); app.setFail(true); app.reset(); app.setFail(false); pending.finish(pngB);
     assert.deepEqual(app.stored(),{lead:pngA});
     assert.ok(app.notice().includes('头像无法保存'));
   } finally {app.dispose();}
 });
 
-test('latest errors suppress old success and failed storage never contaminates later type', () => {
+test('latest errors suppress old success and failed storage never contaminates later type', async () => {
   const app=avatarHarness();
   try {
     const old=app.upload(), latest=app.upload(); latest.fail(); old.finish(pngA);
     assert.deepEqual(app.stored(),{}); assert.ok(app.notice().includes('无法读取头像图片'));
-    app.setFail(true); app.upload().finish(pngA); app.setFail(false);
+    app.setFail(true); app.upload().finish(pngA); await flushRefresh();app.setFail(false);
     assert.deepEqual(app.stored(),{}); assert.ok(app.notice().includes('头像无法保存'));
-    app.select('code'); app.upload().finish(pngB);
+    app.select('code'); app.upload().finish(pngB);await flushRefresh();
     assert.deepEqual(app.stored(),{code:pngB});
   } finally {app.dispose();}
 });
 
-test('cross-type writes merge even before React renders again', () => {
+test('cross-type writes merge even before React renders again', async () => {
   const app=avatarHarness();
   try {
     const lead=app.upload(); app.select('code'); const code=app.upload();
-    code.finish(pngB); lead.finish(pngA);
+    code.finish(pngB); lead.finish(pngA);await flushRefresh();
     assert.deepEqual(app.stored(),{code:pngB,lead:pngA});
     const images=app.render().filter(node=>node.type==='img');
     assert.ok(images.some(image=>image.props.src===pngA));
@@ -1082,48 +1374,48 @@ test('newer invalid selections, invalid image contents, and synchronous reader f
     old.finish(pngA);
     assert.deepEqual(app.stored(),{}); assert.ok(app.notice().includes('请选择不超过 180 KB 的 PNG 图片'));
     app.upload().finish('invalid-png');
-    assert.deepEqual(app.stored(),{}); assert.ok(app.notice().includes('头像文件不是有效的 PNG'));
+    assert.deepEqual(app.stored(),{}); assert.ok(app.notice().includes('无法验证或解码此静态 PNG'));
     const Previous=globalThis.FileReader; globalThis.FileReader=class {readAsDataURL(){throw Error('blocked');}};
     try { app.upload(); assert.ok(app.notice().includes('无法读取头像图片')); } finally {globalThis.FileReader=Previous;}
   } finally {app.dispose();}
 });
 
-test('latest operation notice stays authoritative while older different-type upload still commits', () => {
+test('latest operation notice stays authoritative while older different-type upload still commits', async () => {
   const app=avatarHarness();
   try {
     const lead=app.upload(); app.select('code'); const code=app.upload(); code.fail();
     assert.ok(app.notice().includes('无法读取头像图片'));
-    lead.finish(pngA);
+    lead.finish(pngA);await flushRefresh();
     assert.deepEqual(app.stored(),{lead:pngA});
     assert.ok(app.notice().includes('无法读取头像图片'));
   } finally {app.dispose();}
 });
 
-test('single FileReader settles once and ignores later callbacks', () => {
+test('single FileReader settles once and ignores later callbacks', async () => {
   const app=avatarHarness();
   try {
     const reader=app.upload(); reader.fail(); reader.finish(pngA);
     assert.deepEqual(app.stored(),{}); assert.ok(app.notice().includes('无法读取头像图片'));
-    const success=app.upload(); success.finish(pngB); const writes=app.writes.length;
+    const success=app.upload(); success.finish(pngB); await flushRefresh();const writes=app.writes.length;
     success.fail(); success.finish(pngC);
     assert.equal(app.writes.length,writes); assert.deepEqual(app.stored(),{lead:pngB});
     assert.ok(app.notice().includes('组长 / 默认头像已保存在此浏览器'));
   } finally {app.dispose();}
 });
 
-test('latest image notice guarantee does not order unrelated notices', () => {
+test('latest image notice guarantee does not order unrelated notices', async () => {
   const app=avatarHarness();
   try {
     const reader=app.upload();
     const select=app.render().find(node=>node.props?.className==='avatar-select');
     app.setFail(true); select.props.onChange({target:{value:'code'}}); app.setFail(false);
     assert.ok(app.notice().includes('头像偏好无法保存'));
-    reader.finish(pngA);
+    reader.finish(pngA);await flushRefresh();
     assert.ok(app.notice().includes('组长 / 默认头像已保存在此浏览器'));
   } finally {app.dispose();}
 });
 
-test('effect replay invalidates pending work while reactivated instance accepts new work', () => {
+test('effect replay invalidates pending work while reactivated instance accepts new work', async () => {
   const app=avatarHarness();
   try {
     const old=app.upload();
@@ -1132,7 +1424,7 @@ test('effect replay invalidates pending work while reactivated instance accepts 
     // React StrictMode setup replay is represented by re-running the captured setup.
     effect.cleanup=effect.setup();
     old.finish(pngA); assert.deepEqual(app.stored(),{});
-    app.upload().finish(pngB); assert.deepEqual(app.stored(),{lead:pngB});
+    app.upload().finish(pngB); await flushRefresh();assert.deepEqual(app.stored(),{lead:pngB});
   } finally {app.dispose();}
 });
 
@@ -1152,7 +1444,7 @@ test('layout unmount fences image success and failure before passive cleanup', (
   }
 });
 
-test('old generation readers stay fenced after layout setup replay', () => {
+test('old generation readers stay fenced after layout setup replay', async () => {
   const app=avatarHarness();
   try {
     const lead=app.upload();app.select('code');const code=app.upload();
@@ -1161,12 +1453,12 @@ test('old generation readers stay fenced after layout setup replay', () => {
     lead.finish(pngA);code.fail();
     assert.deepEqual(app.stored(),{});
     assert.doesNotMatch(app.notice(),/无法读取头像图片/);
-    app.upload().finish(pngB);
+    app.upload().finish(pngB);await flushRefresh();
     assert.deepEqual(app.stored(),{code:pngB});
   } finally {app.dispose();}
 });
 
-test('old unmounted instance callbacks cannot overwrite a fresh instance', () => {
+test('old unmounted instance callbacks cannot overwrite a fresh instance', async () => {
   const previousWindow=globalThis.window,previousReader=globalThis.FileReader, shared=new Map();
   const old=avatarHarness({storage:shared});
   let fresh;
@@ -1174,7 +1466,7 @@ test('old unmounted instance callbacks cannot overwrite a fresh instance', () =>
     const pending=old.upload();old.select('code');const oldError=old.upload();old.layoutUnmount();
     fresh=avatarHarness({storage:shared});const freshPending=fresh.upload();
     old.passiveUnmount();
-    freshPending.finish(pngB);
+    freshPending.finish(pngB);await flushRefresh();
     const before=fresh.writes.length;
     pending.finish(pngA);oldError.fail();
     assert.equal(fresh.writes.length,before);

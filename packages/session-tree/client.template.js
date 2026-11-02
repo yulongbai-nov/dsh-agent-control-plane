@@ -14,9 +14,9 @@ window.__ModuleLoader__.load({
         migration: '需要迁移', external: '外部任务', unknownMode: '模式未知', ambiguous: '身份存在歧义', cannotOpen: '无法打开会话', depthLimit: '达到显示深度上限', rowLabel: '{title}，{state}', collapse: '折叠 {title}', expand: '展开 {title}', changeAvatar: '更改 {title} 的头像', autoAvatar: '自动头像',
         catalogError: '目录读取失败：{error}', catalogReadError: '读取目录失败', catalogUnavailable: '宿主未提供子代理目录投影。', catalogLoading: '正在读取子代理目录…', catalogUnknown: '目录状态未知，缓存暂不显示。', retry: '重试',
         openError: '打开失败：{error}', refreshError: '刷新失败：{error}', preferencesError: '头像偏好无法保存：浏览器存储不可用或空间不足。', preferencesSaved: '头像选择已保存在此浏览器。',
-        imageInvalidSize: '请选择不超过 180 KB 的 PNG 图片。', imageReadError: '无法读取头像图片。', imageInvalid: '头像文件不是有效的 PNG 数据。', imageSaveError: '头像无法保存：浏览器存储不可用或空间不足。',
+        imageInvalidSize: '请选择不超过 180 KB 的 PNG 图片。', imageDimensions: 'PNG 宽高各不能超过 2048 像素。', imageValidating: '正在验证头像…', imageReadError: '无法读取头像图片。', imageInvalid: '无法验证或解码此静态 PNG 图片。', imageSaveError: '头像无法保存：浏览器存储不可用、空间不足或原有数据无法安全保留。',
         imageSaved: '{type}头像已保存在此浏览器。', imageReset: '{type}头像已恢复内置图。', customAvatars: '自定义头像（仅此浏览器）', avatarType: '头像类型 ', replacePng: '替换为 PNG ', resetImage: '恢复内置图',
-        imageHelp: '建议 144×144；每张 ≤180 KB。保存在浏览器本地，清理站点数据会丢失。', listLoading: '会话列表尚未就绪。', noRoots: '暂无可显示的根会话。'
+        imageHelp: '建议 144×144；静态 PNG ≤180 KB，宽高各 ≤2048 像素，不支持动画和压缩文本/ICC。保存在浏览器本地，清理站点数据会丢失。', listLoading: '会话列表尚未就绪。', noRoots: '暂无可显示的根会话。'
       },
       en: {
         panel: 'Session tree', intro: 'Independent session tree; the native sidebar and header directory are unchanged. Expanding loads that level.', lineage: 'Session lineage',
@@ -25,15 +25,16 @@ window.__ModuleLoader__.load({
         migration: 'Migration required', external: 'External task', unknownMode: 'Unknown mode', ambiguous: 'Ambiguous identity', cannotOpen: 'Cannot open session', depthLimit: 'Display depth limit reached', rowLabel: '{title}, {state}', collapse: 'Collapse {title}', expand: 'Expand {title}', changeAvatar: 'Change avatar for {title}', autoAvatar: 'Automatic avatar',
         catalogError: 'Failed to load catalog: {error}', catalogReadError: 'Failed to read catalog', catalogUnavailable: 'The host did not provide a subagent catalog projection.', catalogLoading: 'Loading subagent catalog…', catalogUnknown: 'Catalog status unknown; cached entries are hidden.', retry: 'Retry',
         openError: 'Failed to open: {error}', refreshError: 'Failed to refresh: {error}', preferencesError: 'Could not save avatar preferences: browser storage is unavailable or full.', preferencesSaved: 'Avatar selection saved in this browser.',
-        imageInvalidSize: 'Choose a PNG image no larger than 180 KB.', imageReadError: 'Could not read the avatar image.', imageInvalid: 'The avatar file is not valid PNG data.', imageSaveError: 'Could not save the avatar: browser storage is unavailable or full.',
+        imageInvalidSize: 'Choose a PNG image no larger than 180 KB.', imageDimensions: 'PNG width and height must each be at most 2048 pixels.', imageValidating: 'Validating avatar…', imageReadError: 'Could not read the avatar image.', imageInvalid: 'Could not validate or decode this static PNG image.', imageSaveError: 'Could not save the avatar: browser storage is unavailable, full, or contains data that cannot be safely preserved.',
         imageSaved: '{type} avatar saved in this browser.', imageReset: '{type} avatar restored to the built-in image.', customAvatars: 'Custom avatars (this browser only)', avatarType: 'Avatar type ', replacePng: 'Replace with PNG ', resetImage: 'Restore built-in image',
-        imageHelp: 'Recommended: 144×144; ≤180 KB each. Stored locally in this browser; clearing site data removes them.', listLoading: 'The session list is not ready.', noRoots: 'No root sessions to display.'
+        imageHelp: 'Recommended: 144×144; static PNG ≤180 KB, width and height ≤2048 pixels. Animation and compressed text/ICC are unsupported. Stored locally in this browser; clearing site data removes them.', listLoading: 'The session list is not ready.', noRoots: 'No root sessions to display.'
       }
     };
     const DEFAULT_IMAGES = /* AVATAR_DATA */ null /* END_AVATAR_DATA */;
     const PREF_KEY = 'dsh-session-tree.avatar-types.v1';
     const IMAGE_KEY = 'dsh-session-tree.avatar-images.v1';
-    const IMAGE_LIMIT = 250000;
+    const IMAGE_BYTE_LIMIT = 180000;
+    const IMAGE_URL_LIMIT = 22 + 4 * Math.ceil(IMAGE_BYTE_LIMIT / 3);
 
     function validId(value) { return typeof value === 'string' && value.length > 0; }
     function ownValue(object, key) { return object != null && Object.prototype.hasOwnProperty.call(object, key) ? object[key] : undefined; }
@@ -49,12 +50,61 @@ window.__ModuleLoader__.load({
     function saveAvatarPrefs(storage, prefs) {
       try { if (!storage) return false; storage.setItem(PREF_KEY, JSON.stringify(prefs)); return true; } catch { return false; }
     }
-    function validImage(value) {
-      return typeof value === 'string' && value.length <= IMAGE_LIMIT && /^data:image\/png;base64,iVBORw0KGgo[A-Za-z0-9+/]*={0,2}$/.test(value);
+    // Bounded structural admission, not full PNG/CRC validation or a decoder sandbox.
+    function inspectImage(value) {
+      const prefix = 'data:image/png;base64,';
+      if (typeof value !== 'string' || value.length > IMAGE_URL_LIMIT || !value.startsWith(prefix)) return { error: 'invalid' };
+      const encoded = value.slice(prefix.length);
+      if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(encoded)) return { error: 'invalid' };
+      let bytes;
+      try { bytes = atob(encoded); } catch { return { error: 'invalid' }; }
+      if (bytes.length > IMAGE_BYTE_LIMIT || bytes.length < 33 || bytes.slice(0, 8) !== '\x89PNG\r\n\x1a\n') return { error: 'invalid' };
+      const u32 = offset => ((bytes.charCodeAt(offset) * 0x1000000) + (bytes.charCodeAt(offset + 1) << 16) + (bytes.charCodeAt(offset + 2) << 8) + bytes.charCodeAt(offset + 3));
+      if (u32(8) !== 13 || bytes.slice(12, 16) !== 'IHDR') return { error: 'invalid' };
+      const width = u32(16), height = u32(20);
+      if (!width || !height) return { error: 'invalid' };
+      if (width > 2048 || height > 2048) return { error: 'dimensions' };
+      for (let offset = 8; offset < bytes.length;) {
+        if (bytes.length - offset < 12) return { error: 'invalid' };
+        const length = u32(offset), type = bytes.slice(offset + 4, offset + 8);
+        if (length > bytes.length - offset - 12) return { error: 'invalid' };
+        if (type === 'IHDR' && offset !== 8) return { error: 'invalid' };
+        if (['acTL', 'fcTL', 'fdAT', 'iCCP', 'zTXt', 'iTXt'].includes(type)) return { error: 'invalid' };
+        offset += length + 12;
+        if (type === 'IEND') return length === 0 && offset === bytes.length ? { width, height } : { error: 'invalid' };
+      }
+      return { error: 'invalid' };
     }
-    function readCustomImages(storage) {
-      return Object.fromEntries(Object.entries(readObject(storage, IMAGE_KEY)).filter(([type, value]) => TYPES.includes(type) && validImage(value)));
+    function validImage(value) { return !inspectImage(value).error; }
+    // JSON.parse has already validated syntax; only whitespace outside strings is ignored.
+    function compactJsonWhitespace(text) {
+      let compact = '', inString = false, escaped = false;
+      for (const char of text) {
+        if (inString) {
+          compact += char;
+          if (escaped) escaped = false;
+          else if (char === '\\') escaped = true;
+          else if (char === '"') inString = false;
+        } else if (char === '"') { inString = true; compact += char; }
+        else if (char !== ' ' && char !== '\t' && char !== '\r' && char !== '\n') compact += char;
+      }
+      return compact;
     }
+    function readImageData(storage) {
+      try {
+        if (!storage) return { ok: false, raw: {} };
+        const stored = storage.getItem(IMAGE_KEY);
+        if (stored === null) return { ok: true, raw: {} };
+        const raw = JSON.parse(stored);
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, raw: {} };
+        if (compactJsonWhitespace(stored) !== JSON.stringify(raw)) return { ok: false, raw: {} };
+        return { ok: true, raw };
+      } catch { return { ok: false, raw: {} }; }
+    }
+    function visibleImages(raw) {
+      return Object.fromEntries(Object.entries(raw).filter(([type, value]) => TYPES.includes(type) && validImage(value)));
+    }
+    function readCustomImages(storage) { return visibleImages(readImageData(storage).raw); }
     function saveCustomImages(storage, images) {
       try { if (!storage) return false; storage.setItem(IMAGE_KEY, JSON.stringify(images)); return true; } catch { return false; }
     }
@@ -211,15 +261,20 @@ window.__ModuleLoader__.load({
       const [expanded, setExpanded] = React.useState(() => new Set(expansion));
       const [failures, setFailures] = React.useState({});
       const [prefs, setPrefs] = React.useState(() => readAvatarPrefs(getStorage()));
-      const [images, setImages] = React.useState(() => readCustomImages(getStorage()));
+      const [imageData, setImageData] = React.useState(() => {
+        const loaded = readImageData(getStorage());
+        return { ...loaded, visible: visibleImages(loaded.raw) };
+      });
+      const images = imageData.visible;
       const [imageType, setImageType] = React.useState('lead');
       const [notice, setNotice] = React.useState(null);
       const [focusKey, setFocusKey] = React.useState(null);
       const treeRef = React.useRef(null);
+      const [brokenImages, setBrokenImages] = React.useState({});
       const lifecycle = React.useRef({ active: false, generation: 0 });
       const refreshIntents = React.useRef(new Map());
       const imageOperations = React.useRef(null);
-      if (!imageOperations.current) imageOperations.current = { images, versions: new Map(), notice: 0 };
+      if (!imageOperations.current) imageOperations.current = { data: imageData, versions: new Map(), revisions: new Map(), notice: 0 };
       React.useLayoutEffect(() => {
         const current = lifecycle.current;
         current.active = true;
@@ -291,12 +346,27 @@ window.__ModuleLoader__.load({
         const valid = () => life.active && life.generation === generation && current.versions.get(type) === version;
         return { current, valid, tell: value => { if (valid() && current.notice === notice) setNotice(value); } };
       }
+      function commitImage(operation, type, value, reset) {
+        if (!operation.valid()) return;
+        const current = operation.current;
+        if (!current.data.ok) { operation.tell({ key: 'imageSaveError' }); return; }
+        const raw = { ...current.data.raw };
+        if (reset) delete raw[type]; else Object.defineProperty(raw, type, { value, enumerable: true, writable: true, configurable: true });
+        if (!saveCustomImages(getStorage(), raw)) { operation.tell({ key: 'imageSaveError' }); return; }
+        const visible = { ...current.data.visible };
+        if (reset) delete visible[type]; else visible[type] = value;
+        current.data = { ok: true, raw, visible };
+        current.revisions.set(type, (current.revisions.get(type) ?? 0) + 1);
+        setImageData(current.data);
+        operation.tell({ key: reset ? 'imageReset' : 'imageSaved', type });
+      }
       function changeImage(event) {
         const file = event.target.files?.[0];
         event.target.value = '';
         if (!file) return;
         const selectedType = imageType, operation = beginImageOperation(selectedType);
-        if (file.type !== 'image/png' || file.size > 180000) { operation.tell({ key: 'imageInvalidSize' }); return; }
+        operation.tell({ key: 'imageValidating' });
+        if (file.type !== 'image/png' || file.size > IMAGE_BYTE_LIMIT) { operation.tell({ key: 'imageInvalidSize' }); return; }
         let settled = false;
         try {
           const reader = new FileReader();
@@ -305,21 +375,27 @@ window.__ModuleLoader__.load({
             if (settled) return;
             settled = true;
             if (!operation.valid()) return;
-            if (!validImage(reader.result)) { operation.tell({ key: 'imageInvalid' }); return; }
-            const next = { ...operation.current.images, [selectedType]: reader.result };
-            if (!saveCustomImages(getStorage(), next)) { operation.tell({ key: 'imageSaveError' }); return; }
-            operation.current.images = next;
-            setImages(next); operation.tell({ key: 'imageSaved', type: selectedType });
+            const value = reader.result, info = inspectImage(value);
+            if (info.error) { operation.tell({ key: info.error === 'dimensions' ? 'imageDimensions' : 'imageInvalid' }); return; }
+            try {
+              const image = new Image();
+              image.src = value;
+              if (typeof image.decode !== 'function') { operation.tell({ key: 'imageInvalid' }); return; }
+              const decoded = image.decode();
+              if (!decoded || typeof decoded.then !== 'function') { operation.tell({ key: 'imageInvalid' }); return; }
+              Promise.resolve(decoded).then(() => {
+                if (!operation.valid()) return;
+                if (image.naturalWidth !== info.width || image.naturalHeight !== info.height) { operation.tell({ key: 'imageInvalid' }); return; }
+                commitImage(operation, selectedType, value, false);
+              }, () => operation.tell({ key: 'imageInvalid' })).catch(() => {});
+            } catch { operation.tell({ key: 'imageInvalid' }); }
           };
           reader.readAsDataURL(file);
         } catch { if (!settled) { settled = true; operation.tell({ key: 'imageReadError' }); } }
       }
       function resetImage() {
-        const operation = beginImageOperation(imageType), next = { ...operation.current.images };
-        delete next[imageType];
-        if (!saveCustomImages(getStorage(), next)) { operation.tell({ key: 'imageSaveError' }); return; }
-        operation.current.images = next;
-        setImages(next); operation.tell({ key: 'imageReset', type: imageType });
+        const operation = beginImageOperation(imageType);
+        commitImage(operation, imageType, undefined, true);
       }
       function treeKeys(event, row) {
         if (event.target !== event.currentTarget) return;
@@ -344,6 +420,8 @@ window.__ModuleLoader__.load({
       }
       function renderRow(row) {
         const type = avatarType(row, prefs);
+        const customImage = images[type], imageRevision = imageOperations.current.revisions.get(type) ?? 0;
+        const showCustom = Boolean(customImage) && brokenImages[type] !== imageRevision;
         const target = navigationTarget(row);
         const stateText = [t(`status.${row.status}`), row.migrationRequired && t('migration'), row.external && t('external'), row.unknownMode && t('unknownMode'), row.ambiguous && t('ambiguous'), target === null && t('cannotOpen'), row.depthLimit && t('depthLimit'), row.model, `L${row.level - 1}`].filter(Boolean).join(' · ');
         const error = ownValue(failures, row.id) ?? row.error ?? (row.catalogState === 'error' ? t('catalogReadError') : undefined);
@@ -362,7 +440,12 @@ window.__ModuleLoader__.load({
           onKeyDown: event => treeKeys(event, row),
           onClick: event => { if (event.target === event.currentTarget) navigate(row); }
         }, h('button', { type: 'button', className: 'caret', tabIndex: -1, disabled: !row.expandable, 'aria-label': t(row.expanded ? 'collapse' : 'expand', { title: label }), onClick: event => { toggle(row); event.currentTarget.closest('[role="treeitem"]')?.focus(); } }, row.expandable ? (row.expanded ? '▾' : '▸') : '·'),
-        h('img', { className: 'image', src: images[type] ?? DEFAULT_IMAGES[type], alt: '' }),
+        h('img', { key: `${type}:${imageRevision}:${showCustom ? 'custom' : 'default'}`, className: 'image', src: showCustom ? customImage : DEFAULT_IMAGES[type], alt: '',
+          onError: showCustom ? () => {
+            const current = imageOperations.current;
+            if (!lifecycle.current.active || (current.revisions.get(type) ?? 0) !== imageRevision || current.data.visible[type] !== customImage) return;
+            setBrokenImages(previous => ({ ...previous, [type]: imageRevision }));
+          } : undefined }),
         h('button', { type: 'button', className: 'body', tabIndex: -1, disabled: target === null, onClick: () => navigate(row) },
           h('span', { className: `dot ${row.status}`, 'aria-hidden': true }), h('span', { className: 'bodytext' }, h('span', { className: 'title' }, label), h('span', { className: 'meta' }, stateText))),
         h('select', { className: 'avatar-select', disabled: row.ambiguous, 'aria-label': t('changeAvatar', { title: label }), value: ownValue(prefs, row.id) ?? '', onChange: event => changeAvatar(row.id, event.target.value) },
