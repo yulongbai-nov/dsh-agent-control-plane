@@ -7,10 +7,11 @@
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
+    "./lineage": "./lineage.mjs",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
-  "files": ["index.js", "client.js", "client.template.js", "build.mjs", "cordis.patch.yml", "avatars", "test", "README.md"],
+  "files": ["index.js", "client.js", "client.template.js", "lineage.mjs", "build.mjs", "cordis.patch.yml", "avatars", "test", "README.md"],
   "scripts": {
     "build": "node build.mjs",
     "test": "node build.mjs --check && node --test test/*.test.mjs"

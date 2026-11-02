@@ -44,6 +44,60 @@ const ready = entries => ({ state: 'ready', error: null, values: { subagentCatal
 const child = (id, mode = 'continuable', label = id) => ({ id, mode, label });
 const baseList = () => ({ phase: 'ready', ids: ['root'], byId: { root: summary('root') }, projectionsBySession: {} });
 
+test('shared lineage module and shipped factory agree on varied projection fixtures', async () => {
+  const shared = await import('../lineage.mjs');
+  assert.deepEqual(Object.keys(shared).sort(), ['buildRows', 'catalogOf', 'navigationTarget']);
+  const catalogs = [undefined, { state: 'idle', values: {} }, { state: 'idle', values: { subagentCatalog: [] } },
+    { state: 'idle', values: { subagentCatalog: [child('cached')] } }, { state: 'loading', values: {} },
+    { state: 'error', error: { message: 'offline' }, values: { subagentCatalog: [child('cached')] } },
+    { state: 'migration-required', values: { subagentCatalog: [child('cached')] } },
+    { state: 'ready', values: {} }, ready([]), ready([child('a')]),
+    { state: 'future-state', values: { subagentCatalog: [child('cached')] } }];
+  for (const catalog of catalogs) assert.deepEqual(shared.catalogOf(catalog), core.catalogOf(catalog));
+  const first = baseList();
+  first.ids = ['root', 'other', 'blank', 'sub', '__proto__'];
+  first.byId = Object.assign(Object.create(null), {
+    root: summary('root'), other: summary('other'), blank: summary('blank', { blank: true }),
+    sub: summary('sub', { origin: 'subagent' }), a: summary('a', { origin: 'subagent' }),
+    b: summary('b', { origin: 'subagent' }), migrate: summary('migrate', { formatStatus: 'migration-required' }),
+  });
+  first.byId.__proto__ = summary('__proto__');
+  first.projectionsBySession = {
+    root: ready([child('a'), child('dup'), child('ext', 'external'), child('mystery', 'unknown')]),
+    other: ready([child('dup'), child('migrate')]), a: ready([child('b', 'one-shot')]), b: ready([]),
+  };
+  const duplicateRoots = baseList(); duplicateRoots.ids = ['root', 'root'];
+  duplicateRoots.projectionsBySession = { root: ready([child('root')]) };
+  const hiddenConflict = baseList(); hiddenConflict.ids = ['root', 'other']; hiddenConflict.byId.other = summary('other');
+  hiddenConflict.projectionsBySession = { root: ready([child('same')]), other: { state: 'future-state', values: { subagentCatalog: [child('same')] } } };
+  const fixtures = [
+    { list: first, expanded: new Set(['root', 'other', 'a']), archived: new Set(['b']), statuses: new Map([['a', { running: true }]]) },
+    { list: first, expanded: new Set(), archived: new Set(), statuses: new Map() },
+    { list: duplicateRoots, expanded: new Set(['root']), archived: new Set(), statuses: new Map() },
+    { list: hiddenConflict, expanded: new Set(['root', 'other']), archived: new Set(), statuses: new Map() },
+  ];
+  for (const { list, expanded, archived, statuses } of fixtures) {
+    const expected = core.buildRows(list, expanded, archived, statuses);
+    const actual = shared.buildRows(list, expanded, archived, statuses);
+    assert.deepEqual(actual, expected);
+    for (const row of actual) assert.deepEqual(shared.navigationTarget(row), core.navigationTarget(row));
+  }
+  const rows = shared.buildRows(first, fixtures[0].expanded, fixtures[0].archived, fixtures[0].statuses);
+  const facts = rows.map(row => [row.id, row.parentId, row.level, row.ambiguous, row.archived, row.unknownMode, row.external, row.migrationRequired, row.expandable, row.expanded, row.catalogState, row.status, shared.navigationTarget(row)]);
+  assert.deepEqual(facts, [
+    ['root', null, 1, false, false, false, false, false, true, true, 'ready', 'inactive', 'root'],
+    ['a', 'root', 2, false, false, false, false, false, true, true, 'ready', 'running', { parentSessionId: 'root', childSessionId: 'a', mode: 'continuable' }],
+    ['b', 'a', 3, false, true, false, false, false, false, false, 'ready', 'archived', null],
+    ['dup', 'root', 2, true, false, false, false, false, false, false, 'unloaded', 'unknown', null],
+    ['ext', 'root', 2, false, false, false, true, false, false, false, 'unloaded', 'unknown', null],
+    ['mystery', 'root', 2, false, false, true, false, false, false, false, 'unloaded', 'unknown', null],
+    ['other', null, 1, false, false, false, false, false, true, true, 'ready', 'inactive', 'other'],
+    ['dup', 'other', 2, true, false, false, false, false, false, false, 'unloaded', 'unknown', null],
+    ['migrate', 'other', 2, false, false, false, false, true, false, false, 'unloaded', 'unknown', { parentSessionId: 'other', childSessionId: 'migrate', mode: 'continuable' }],
+    ['__proto__', null, 1, false, false, false, false, false, true, false, 'unloaded', 'inactive', '__proto__'],
+  ]);
+});
+
 // Mirror rc.5's namespace registration, slot t injection and owning effects.
 function mockLocale() {
   const namespaces = new Map();
@@ -1800,6 +1854,27 @@ test('clicking disclosure restores row focus so keyboard navigation remains avai
   assert.deepEqual(calls.at(-1), ['focus', 'a']);
 });
 
+test('browser generation rejects missing, repeated or reversed source markers', async () => {
+  const { renderClient } = await import('../build.mjs');
+  const template = await readFile(new URL('../client.template.js', import.meta.url), 'utf8');
+  const lineage = await readFile(new URL('../lineage.mjs', import.meta.url), 'utf8');
+  const avatarStart = '/* AVATAR_DATA */', avatarEnd = '/* END_AVATAR_DATA */';
+  const lineageStart = '/* LINEAGE_SOURCE */', lineageEnd = '/* END_LINEAGE_SOURCE */';
+  const reordered = [
+    template.replace(avatarStart, 'TEMP_MARKER').replace(lineageStart, avatarStart).replace('TEMP_MARKER', lineageStart),
+    template.replace(avatarEnd, 'TEMP_MARKER').replace(lineageEnd, avatarEnd).replace('TEMP_MARKER', lineageEnd),
+    template.replace(lineageStart, 'TEMP_MARKER').replace(avatarEnd, lineageStart).replace('TEMP_MARKER', avatarEnd),
+  ];
+  for (const broken of reordered) assert.throws(() => renderClient(broken, {}, lineage), 'crossed or nested blocks must fail');
+  for (const [start, end] of [[avatarStart, avatarEnd], [lineageStart, lineageEnd]]) {
+    assert.equal(template.split(start).length, 2);assert.equal(template.split(end).length, 2);
+    for (const broken of [template.replace(start, ''), template.replace(end, ''), template.replace(start, start + start), template.replace(end, end + end), template.replace(start, 'TEMP_MARKER').replace(end, start).replace('TEMP_MARKER', end)]) {
+      assert.throws(() => renderClient(broken, {}, lineage));
+    }
+  }
+  assert.throws(() => renderClient(template, {}, lineage + '\nexport const extra = 1;\n'));
+});
+
 test('generated browser entry matches its source and six PNG assets', () => {
   execFileSync(process.execPath, [fileURLToPath(new URL('../build.mjs', import.meta.url)), '--check']);
 });
@@ -1809,6 +1884,10 @@ test('browser entry only needs React and host bundle is self-contained', async (
   const patch = await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8');
   assert.equal(manifest.name, 'dsh-session-tree');
   assert.equal(manifest.exports['./client'], './client.js');
+  assert.equal(manifest.exports['./lineage'], './lineage.mjs');
+  assert.ok(manifest.files.includes('lineage.mjs'));
+  const exposed = await import('dsh-session-tree/lineage');
+  assert.deepEqual(Object.keys(exposed).sort(), ['buildRows', 'catalogOf', 'navigationTarget']);
   assert.equal(manifest.dsh.bundle.patch, './cordis.patch.yml');
   assert.equal(manifest.dsh.client.platform, 'web');
   assert.ok(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-locale'));
