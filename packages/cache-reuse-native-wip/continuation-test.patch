@@ -1,0 +1,30 @@
+diff --git a/packages/subagent/subagent/tests/continuation.spec.ts b/packages/subagent/subagent/tests/continuation.spec.ts
+index afe176af..8ca77cdb 100644
+--- a/packages/subagent/subagent/tests/continuation.spec.ts
++++ b/packages/subagent/subagent/tests/continuation.spec.ts
+@@ -4044,0 +4045,25 @@ describe('SubagentRuntime.interrupt', () => {
++
++
++describe('synthetic cache reuse characterization', () => {
++  it('cold-resumes the same Session and reports only explicitly supplied mock cache usage', async () => {
++    const {deriveTurnTokenUsage}=await import('../../../llm/token-meter/src/turn-usage.ts')
++    const response=(text:string,cacheReadTokens?:number)=>textResponse(text).map(chunk=>chunk.type==='usage'?{...chunk,usage:{...chunk.usage,...cacheReadTokens===undefined?{totalTokens:10+text.length}:{cacheReadTokens,cacheWriteTokens:0}}}:chunk)
++    const adapter=new MockAdapter([response('first',0),response('continued',6),response('fresh',undefined)])
++    const {ctx,parent}=await setupWith(adapter);parkParent(ctx,parent)
++    const created:Array<{id:string,provider:unknown,model:unknown}>=[]
++    ctx.on('agent/created',({agent})=>{if(agent!==parent)created.push({id:agent.id,provider:agent.options.provider,model:agent.options.model})})
++    const first=await ctx.subagents.startActivation({...startSpec(parent),delivery:'parent'});await waitNoActivation(ctx,first.childId)
++    await queuePrompt(ctx,parent,first.childId,message('continue fixture'));await waitNoActivation(ctx,first.childId)
++    const fresh=await ctx.subagents.startActivation({...startSpec(parent),delivery:'parent'});await waitNoActivation(ctx,fresh.childId)
++    expect(fresh.childId).not.toBe(first.childId)
++    const stored=await loadStoredSession(ctx.sessionPersistence,first.childId),freshStored=await loadStoredSession(ctx.sessionPersistence,fresh.childId)
++    expect(stored.meta.id).toBe(first.childId);expect(stored.events.filter(e=>e.type==='subagent/descriptor')).toHaveLength(1)
++    expect(created.filter(x=>x.id===first.childId)).toHaveLength(2)
++    expect(created.filter(x=>x.id===first.childId).map(x=>[x.provider,x.model])).toEqual([['mock','mock'],['mock','mock']])
++    const turns=(events:readonly SessionEvent[])=>{const groups:SessionEvent[][]=[];let active:SessionEvent[]|undefined;for(const e of events){if(e.type==='turn/start'){active=[];groups.push(active)}if(active)active.push(e);if(e.type==='turn/end')active=undefined}return groups}
++    const reused=turns(stored.events).map(deriveTurnTokenUsage),brandNew=turns(freshStored.events).map(deriveTurnTokenUsage)
++    expect(reused).toHaveLength(2);expect(reused[0]?.cacheReadTokens).toBe(0);expect(reused[1]?.cacheReadTokens).toBe(6)
++    expect(brandNew).toHaveLength(1);expect(brandNew[0]).toBeDefined();expect(brandNew[0]?.cacheReadTokens).toBeUndefined()
++    expect(adapter.requests).toHaveLength(3)
++  })
++})
