@@ -20,16 +20,26 @@ function ownFields(value, fields) {
   }
   return result;
 }
-function snapshot(input) {
+export function normalizeSyntheticSnapshot(input) {
   const v = ownFields(input, ['sessionKey', 'sourceEpoch', 'asOfSeq', 'outputTokens']);
   if (!key(v.sessionKey) || !key(v.sourceEpoch) || !Number.isSafeInteger(v.asOfSeq) || v.asOfSeq < 0 || Object.is(v.asOfSeq, -0) ||
       !(v.outputTokens === null || Number.isSafeInteger(v.outputTokens) && v.outputTokens >= 0 && !Object.is(v.outputTokens, -0))) fail('INVALID_INPUT');
   return v;
 }
-function identity(input) {
+export function normalizeSyntheticIdentity(input) {
   const v = ownFields(input, ['sessionKey', 'sourceEpoch']);
   if (!key(v.sessionKey) || !key(v.sourceEpoch)) fail('INVALID_INPUT');
   return v;
+}
+export function normalizeSyntheticBatch(inputs) {
+  if (types.isProxy(inputs) || !Array.isArray(inputs) || inputs.length < 1 || inputs.length > 100) fail('INVALID_INPUT');
+  const values = [];
+  for (let i=0; i<inputs.length; i++) {
+    const d = Object.getOwnPropertyDescriptor(inputs, String(i));
+    if (!d || !Object.hasOwn(d, 'value')) fail('INVALID_INPUT');
+    values.push(normalizeSyntheticSnapshot(d.value));
+  }
+  return values;
 }
 function checkSchema(db, version) {
   const schema = db.prepare("SELECT type,name FROM sqlite_master WHERE lower(substr(name,1,7)) <> 'sqlite_' ORDER BY name").all();
@@ -137,21 +147,15 @@ export function openSyntheticLedger(directory) {
     };
     return {
       ingest(input) {
-        const v = snapshot(input);
+        const v = normalizeSyntheticSnapshot(input);
         return tx(() => writeOne(v));
       },
       ingestBatch(inputs) {
-        if (types.isProxy(inputs) || !Array.isArray(inputs) || inputs.length < 1 || inputs.length > 100) fail('INVALID_INPUT');
-        const values = [];
-        for (let i=0; i<inputs.length; i++) {
-          const d = Object.getOwnPropertyDescriptor(inputs, String(i));
-          if (!d || !Object.hasOwn(d, 'value')) fail('INVALID_INPUT');
-          values.push(snapshot(d.value));
-        }
+        const values = normalizeSyntheticBatch(inputs);
         return tx(() => values.map(writeOne));
       },
       get(input) {
-        const v = identity(input);
+        const v = normalizeSyntheticIdentity(input);
         return tx(() => {
           const tombstone = db.prepare('SELECT source_epoch FROM tombstones WHERE session_key=?').get(v.sessionKey);
           if (tombstone) { if (tombstone.source_epoch !== v.sourceEpoch) fail('SOURCE_EPOCH_CONFLICT'); return { status: 'tombstoned' }; }
@@ -162,7 +166,7 @@ export function openSyntheticLedger(directory) {
         }, false);
       },
       clear(input) {
-        const v = identity(input);
+        const v = normalizeSyntheticIdentity(input);
         return tx(() => {
           const tombstone = db.prepare('SELECT source_epoch FROM tombstones WHERE session_key=?').get(v.sessionKey);
           if (tombstone) { if (tombstone.source_epoch !== v.sourceEpoch) fail('SOURCE_EPOCH_CONFLICT'); return 'already-cleared'; }
