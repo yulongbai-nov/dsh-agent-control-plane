@@ -1,0 +1,135 @@
+diff --git a/packages/test-support/client-runtime/src/assembly/bundle-roster.ts b/packages/test-support/client-runtime/src/assembly/bundle-roster.ts
+index 6b362b18..8975cd2c 100644
+--- a/packages/test-support/client-runtime/src/assembly/bundle-roster.ts
++++ b/packages/test-support/client-runtime/src/assembly/bundle-roster.ts
+@@ -16,2 +16 @@
+-import { existsSync, readFileSync, realpathSync } from 'node:fs'
+-import { createRequire } from 'node:module'
++import { readFileSync } from 'node:fs'
+@@ -24,0 +24 @@ import { ClientRoster, type ClientRosterRow } from './roster.ts'
++import { locateManifest, resolveRosterManifest } from './bundle-resolution.ts'
+@@ -35,0 +36 @@ interface BundleLayer {
++  readonly name: string
+@@ -58 +58,0 @@ export function bundleRoster(
+-  const anchors = layers.map(layer => layer.manifestPath)
+@@ -67 +67 @@ export function bundleRoster(
+-    const manifestPath = locateManifest(anchors, name)
++    const manifestPath = resolveRosterManifest(layers, name)
+@@ -89 +89,3 @@ function readLayer(bundle: string, anchor: string): BundleLayer {
+-  const declared = readManifest(manifestPath).dsh?.bundle?.patch
++  const manifest = readManifest(manifestPath)
++  if (manifest.name !== bundle) throw new Error(`client-test-runtime: bundle manifest identity mismatch`)
++  const declared = manifest.dsh?.bundle?.patch
+@@ -100 +102 @@ function readLayer(bundle: string, anchor: string): BundleLayer {
+-  return { manifestPath, patches }
++  return { name: bundle, manifestPath, patches }
+@@ -133,14 +134,0 @@ function readManifest(path: string): PackageManifest {
+-/** Resolve package manifests to real paths so linked bundles use their own dependency directories. */
+-function locateManifest(anchors: readonly string[], name: string): string | undefined {
+-  const paths = anchors.map(anchor => createRequire(anchor).resolve.paths(name) ?? [])
+-  for (let depth = 0; depth < Math.max(...paths.map(search => search.length)); depth++) {
+-    for (const search of paths) {
+-      const directory = search[depth]
+-      if (directory === undefined) continue
+-      const candidate = join(directory, name, 'package.json')
+-      if (existsSync(candidate)) return realpathSync(candidate)
+-    }
+-  }
+-  return undefined
+-}
+-
+diff --git a/packages/test-support/client-runtime/src/assembly/bundle-resolution.ts b/packages/test-support/client-runtime/src/assembly/bundle-resolution.ts
+new file mode 100644
+index 00000000..492fdec2
+--- /dev/null
++++ b/packages/test-support/client-runtime/src/assembly/bundle-resolution.ts
+@@ -0,0 +1,46 @@
++/** Test-assembly package lookup. Bundle identity is checked independently of a package name in a patch. */
++import { existsSync, readFileSync, realpathSync } from 'node:fs'
++import { createRequire } from 'node:module'
++import { join } from 'node:path'
++
++export interface BundleIdentity {
++  readonly name: string
++  readonly manifestPath: string
++}
++
++/** Original dependency search order: nearest node_modules level, then anchor order. */
++export function locateManifest(anchors: readonly string[], name: string): string | undefined {
++  const paths = anchors.map(anchor => createRequire(anchor).resolve.paths(name) ?? [])
++  for (let depth = 0; depth < Math.max(...paths.map(search => search.length)); depth++) {
++    for (const search of paths) {
++      const directory = search[depth]
++      if (directory === undefined) continue
++      const candidate = join(directory, name, 'package.json')
++      if (existsSync(candidate)) return realpathSync(candidate)
++    }
++  }
++  return undefined
++}
++
++/**
++ * A bundle may list itself as a plugin even though pnpm does not create a
++ * self-link. Accept its already-selected, identity-checked manifest; refuse a
++ * conflicting dependency resolution rather than choosing a shadow copy.
++ */
++export function resolveRosterManifest(layers: readonly BundleIdentity[], name: string): string | undefined {
++  const own = new Set<string>()
++  for (const layer of layers) {
++    if (layer.name !== name) continue
++    const actual = realpathSync(layer.manifestPath)
++    const manifest = JSON.parse(readFileSync(actual, 'utf8')) as { name?: unknown }
++    if (manifest.name !== name) throw new Error('client-test-runtime: bundle identity mismatch')
++    own.add(actual)
++  }
++  if (own.size > 1) throw new Error('client-test-runtime: ambiguous bundle identity')
++  const selected = own.values().next().value as string | undefined
++  const dependency = locateManifest(layers.map(layer => layer.manifestPath), name)
++  if (selected !== undefined && dependency !== undefined && selected !== dependency) {
++    throw new Error('client-test-runtime: ambiguous bundle resolution')
++  }
++  return selected ?? dependency
++}
+diff --git a/packages/test-support/client-runtime/tests/r7-bundle-resolution.synthetic.test.mjs b/packages/test-support/client-runtime/tests/r7-bundle-resolution.synthetic.test.mjs
+new file mode 100644
+index 00000000..71731c53
+--- /dev/null
++++ b/packages/test-support/client-runtime/tests/r7-bundle-resolution.synthetic.test.mjs
+@@ -0,0 +1,37 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { mkdtempSync,mkdirSync,writeFileSync,realpathSync } from 'node:fs';
++import { join,resolve,dirname } from 'node:path';
++import { tmpdir } from 'node:os';
++import { locateManifest,resolveRosterManifest } from '../src/assembly/bundle-resolution.ts';
++
++const fixture=()=>mkdtempSync(join(resolve(tmpdir()),'r7-roster-'));
++function manifest(path,name){mkdirSync(dirname(path),{recursive:true});writeFileSync(path,JSON.stringify({name}));return realpathSync(path);}
++
++test('workspace bundle entry resolves its own verified manifest without a self link',()=>{
++ const root=fixture(),web=manifest(join(root,'packages/web/package.json'),'@fixture/web');
++ assert.equal(locateManifest([web],'@fixture/web'),undefined);
++ assert.equal(resolveRosterManifest([{name:'@fixture/web',manifestPath:web}],'@fixture/web'),web);
++});
++
++test('normal dependency search and missing package semantics remain unchanged',()=>{
++ const root=fixture(),web=manifest(join(root,'packages/web/package.json'),'@fixture/web');
++ const dep=manifest(join(root,'node_modules/@fixture/dep/package.json'),'@fixture/dep');
++ assert.equal(resolveRosterManifest([{name:'@fixture/web',manifestPath:web}],'@fixture/dep'),dep);
++ assert.equal(resolveRosterManifest([{name:'@fixture/web',manifestPath:web}],'@fixture/missing'),undefined);
++});
++
++test('rejects an identity-mismatched or ambiguous self manifest',()=>{
++ const root=fixture(),wrong=manifest(join(root,'packages/wrong/package.json'),'@fixture/other');
++ assert.throws(()=>resolveRosterManifest([{name:'@fixture/web',manifestPath:wrong}],'@fixture/web'),/identity mismatch/);
++ const web=manifest(join(root,'packages/web/package.json'),'@fixture/web');
++ manifest(join(root,'node_modules/@fixture/web/package.json'),'@fixture/web');
++ assert.throws(()=>resolveRosterManifest([{name:'@fixture/web',manifestPath:web}],'@fixture/web'),/ambiguous bundle resolution/);
++ const second=manifest(join(root,'packages/second/package.json'),'@fixture/web');
++ assert.throws(()=>resolveRosterManifest([{name:'@fixture/web',manifestPath:web},{name:'@fixture/web',manifestPath:second}],'@fixture/web'),/ambiguous bundle identity/);
++});
++
++test('accepts a self resolution when realpaths identify the same manifest',()=>{
++ const root=fixture(),web=manifest(join(root,'node_modules/@fixture/web/package.json'),'@fixture/web');
++ assert.equal(resolveRosterManifest([{name:'@fixture/web',manifestPath:web}],'@fixture/web'),web);
++});

@@ -1,12 +1,15 @@
 {
   "public_source_commit": "b830ec950faba0a46dda564be3e2d854afed94f1",
   "sha256": {
-    "patch": "a532f0a3d62959e72cfe891c9f81f6520aac45b688ecf816527dca4d2552b542",
+    "patch": "76aedbe7d06dce1bf370bcefb06e212bd70f94fc05efa37bf1b30ef7196cc356",
     "codec_test": "eb17732b98e0e42ebdaa7b9dac0a01865522dd782f5ed7c74449cd9e1ed1950e",
     "old_public_host": "0c12316ed398710bcd87520f2332ebb647f0ab5f71cdfe04551c0592b48b2c3c",
     "old_public_remote_client": "f8760911d70173fc2e845b74747bda43f9d9e1d09789d78a00522decf853bb5b",
     "candidate_public_host": "0c072fdab027a5bd561efac38b35755971fe09f7c3e6659f21ed5d93182bf9b1",
-    "candidate_public_remote_client": "ef35613236137b5a915069e0daa09c1ce80ee9666f2f284deb685e416db14293"
+    "candidate_public_remote_client": "ef35613236137b5a915069e0daa09c1ce80ee9666f2f284deb685e416db14293",
+    "test_runtime_self_resolution_patch": "d4bba1e68b94d4c62eff287fd94498a0ee7f86a32053ff70b0ef3b250753d257",
+    "r7-client-apply-sandbox-v2.log": "a83b3b47c71e1056d857511fca6d50944ed3e097a1599e183826e180c723d6b9",
+    "r7-assembly-deps-sandbox-v2.log": "4dac4890facfade146e02a3635929d3e83067ced33fc3ada88d0dc15848a2814"
   },
   "scope": "Synthetic public-source build artifacts; not installed app, release compatibility or E2E proof."
 }

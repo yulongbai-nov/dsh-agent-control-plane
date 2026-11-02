@@ -215,6 +215,20 @@ index 8f90ca7a..1e0857f7 100644
 +++ b/packages/api/session-controller/tsconfig.host.json
 @@ -14,0 +15 @@
 +    "src/catalog-access.ts",
+diff --git a/packages/test-support/client-runtime/src/assembly/remote-default-responses.ts b/packages/test-support/client-runtime/src/assembly/remote-default-responses.ts
+index 0debc5a6..93175bcc 100644
+--- a/packages/test-support/client-runtime/src/assembly/remote-default-responses.ts
++++ b/packages/test-support/client-runtime/src/assembly/remote-default-responses.ts
+@@ -51,0 +52,2 @@ export const remoteDefaultResponses: RemoteTable = {
++    // WIP candidate opts into access-reset via its distinct V2 endpoint.
++    'session/controlV2': openStream([{ type: 'baseline', value: { projections: {} } }]),
+diff --git a/packages/test-support/client-runtime/tests/assembly-dependencies.client.spec.ts b/packages/test-support/client-runtime/tests/assembly-dependencies.client.spec.ts
+index 4bd4835b..10d1245b 100644
+--- a/packages/test-support/client-runtime/tests/assembly-dependencies.client.spec.ts
++++ b/packages/test-support/client-runtime/tests/assembly-dependencies.client.spec.ts
+@@ -34 +34 @@ describe('bundle dependency closures', () => {
+-      expect(mock.log.streams('session/control')).toHaveLength(1)
++      expect(mock.log.streams('session/controlV2')).toHaveLength(1)
 diff --git a/packages/api/session-controller/src/catalog-access.ts b/packages/api/session-controller/src/catalog-access.ts
 new file mode 100644
 index 00000000..e7f88b3a
