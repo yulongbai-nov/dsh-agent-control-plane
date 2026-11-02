@@ -25,7 +25,8 @@ import { APP_URL, ART } from './helpers.mjs'
 const MOCK = process.env.DSH_E2E_MOCK_MODEL === '1'
 const PROFILE = process.env.DSH_E2E_PROFILE || 'e2e'
 const ROOT = process.env.DSH_E2E_ROOT || '/tmp/dsh-e2e'
-const CLI = join(homedir(), '.dsh/profiles', PROFILE, 'node_modules/dsh-local-telemetry/bin/telemetry.mjs')
+const DSH_HOME = process.env.DSH_E2E_HOME || join(homedir(), '.dsh')
+const CLI = join(DSH_HOME, 'profiles', PROFILE, 'node_modules/dsh-local-telemetry/bin/telemetry.mjs')
 const STORE = join(ROOT, 'state/telemetry')
 const PURGE_ALL_CUTOFF = '2100-01-01T00:00:00Z' // future date -> 删除当前全部事件
 const PROMPT_MARKER = `E2E_TELEMETRY_MARKER_${Date.now()}`
