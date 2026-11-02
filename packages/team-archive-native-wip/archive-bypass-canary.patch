@@ -1,0 +1,75 @@
+diff --git a/packages/experimental/agent-team/tests/archive-bypass-wip.spec.ts b/packages/experimental/agent-team/tests/archive-bypass-wip.spec.ts
+new file mode 100644
+index 00000000..de8b103e
+--- /dev/null
++++ b/packages/experimental/agent-team/tests/archive-bypass-wip.spec.ts
+@@ -0,0 +1,69 @@
++import { afterEach, expect, it } from 'vitest'
++import { mkdtempSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { Context } from '@deepseek-ai/cordis'
++import AgentLoop from '@deepseek-ai/dsh-agent-loop'
++import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
++import { SessionId } from '@deepseek-ai/dsh-session'
++import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
++import SubagentService from '@deepseek-ai/dsh-subagent'
++import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
++import { queueHostSubagentPrompt, steerHostSubagentPrompt } from '@deepseek-ai/dsh-subagent/internal'
++import Storage from '../../../storage/storage/src/index.ts'
++import { DomainFacility } from '../../../storage/storage-domain/src/index.ts'
++import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
++import WorkspaceRegistry from '../../../workspace/workspace/src/index.ts'
++import { ArchivedSessionGate } from '../../../api/session-controller/src/archived-session-gate.ts'
++import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
++import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
++import TeamService from '../src/index.ts'
++import { TestSessionQuery } from './test-session-query.ts'
++
++const roots:string[]=[]; const contexts:Context[]=[]
++afterEach(async()=>{for(const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose();for(const root of roots.splice(0)) rmSync(root,{recursive:true,force:true})})
++async function setup(){
++  const ctx=new Context();contexts.push(ctx)
++  await mountAgentLoopTestDependencies(ctx);await mountWorkingDirectoryFixture(ctx)
++  const root=mkdtempSync(join(tmpdir(),'team-archive-wip-'));roots.push(root)
++  await ctx.plugin(JsonlSessionPersistence,{root});await ctx.plugin(TestSessionQuery)
++  await ctx.plugin(Storage);const pool=new MemoryMediaPool();ctx.storage.backend.register('memory',new MemoryStorageBackend(pool))
++  const domain=new DomainFacility(ctx,{backend:'memory',routes:{}});ctx.storage.mount('domain',domain);ctx.provide('storageDomain',domain)
++  const workspaceFiber=await ctx.plugin(WorkspaceRegistry);await ctx.plugin(ArchivedSessionGate)
++  await ctx.plugin(AgentLoop,{agents:[]});await ctx.plugin(SubagentService)
++  await ctx.plugin(SubagentSpawn,{providerName:'spawn'});await ctx.plugin(TeamService)
++  const adapter=new MockAdapter([textResponse('first'),textResponse('second')]);ctx.llm.registerAdapter(['mock'],adapter)
++  const lead=await ctx.agentLoop.create(SessionId('synthetic-lead'),{provider:'mock',model:'mock'})
++  return {ctx,lead,adapter,pool,workspaceFiber}
++}
++const prompt=(text:string)=>[{type:'text' as const,text}]
++it('documents Team message accepted after actual Workspace archive',async()=>{
++  const {ctx,lead,workspaceFiber}=await setup();const signal=new AbortController().signal
++  const worker=await ctx.agentTeams.spawnTeammate(lead,{name:'worker',description:'synthetic',prompt:prompt('first'),context:'fresh',provider:'spawn',signal})
++  await ctx.workspaceRegistry.archiveSession(worker.member.id,{stopActivity:true})
++  expect(ctx.workspaceRegistry.archivedSessionIds).toContain(worker.member.id)
++  await workspaceFiber.dispose()
++  await ctx.plugin(WorkspaceRegistry)
++  expect(ctx.workspaceRegistry.archivedSessionIds).toContain(worker.member.id)
++  await ctx.subagents.drainChildren(lead,[worker.member.id])
++  expect(ctx.agents.get(worker.member.id)).toBeUndefined()
++  const result=await ctx.agentTeams.sendMessage(lead,{target:'worker',content:prompt('should be rejected'),signal})
++  expect(result.messageId).toBeDefined()
++  const resumed=ctx.agents.get(worker.member.id)
++  expect(resumed).toBeDefined()
++  const step=await ctx.waterfall('agent/pre-step',{agent:resumed!,messages:[],turn:1,step:1,signal},()=>Promise.resolve({kind:'enter' as const,messages:[]}))
++  expect(step).toEqual({kind:'reject'})
++  const direct=await ctx.subagents.sendMessage(lead,worker.member.id,prompt('direct'),{signal})
++  expect(direct).toBeDefined()
++  const source={kind:'agent-message' as const,form:'relay' as const,senderSessionId:lead.id}
++  expect(await queueHostSubagentPrompt(ctx.subagents,lead,worker.member.id,prompt('queued'),source,signal)).toBeDefined()
++  expect(await steerHostSubagentPrompt(ctx.subagents,lead,worker.member.id,prompt('steered'),source,signal)).toBeDefined()
++})
++
++it.fails('R5 desired contract: sending to an archived teammate rejects before acceptance',async()=>{
++  const {ctx,lead}=await setup();const signal=new AbortController().signal
++  const worker=await ctx.agentTeams.spawnTeammate(lead,{name:'worker',description:'synthetic',prompt:prompt('first'),context:'fresh',provider:'spawn',signal})
++  await ctx.workspaceRegistry.archiveSession(worker.member.id,{stopActivity:true})
++  await ctx.subagents.drainChildren(lead,[worker.member.id])
++  await expect(ctx.agentTeams.sendMessage(lead,{target:'worker',content:prompt('not accepted'),signal})).rejects.toThrow()
++})
