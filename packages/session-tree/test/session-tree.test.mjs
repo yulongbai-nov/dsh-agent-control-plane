@@ -1796,6 +1796,15 @@ test('component wires real DTO-shaped rows to keyboard and true navigation addre
   assert.deepEqual([root.props.tabIndex, a.props.tabIndex, b.props.tabIndex], [0, -1, -1]);
   states[7].current = { querySelectorAll: () => elements }; // TreePanel's useRef
   const key = (row, code) => row.props.onKeyDown({ key: code, target: 1, currentTarget: 1, preventDefault() {} });
+  let prevented = false;
+  root.props.onKeyDown({ key: 'ArrowUp', target: 1, currentTarget: 1, preventDefault() { prevented = true; } });
+  assert.equal(prevented, true, 'tree owns ArrowUp even at its first row');
+  prevented = false;
+  b.props.onKeyDown({ key: 'ArrowRight', target: 1, currentTarget: 1, preventDefault() { prevented = true; } });
+  assert.equal(prevented, true, 'tree owns ArrowRight on a leaf');
+  prevented = false;
+  root.props.onKeyDown({ key: 'ArrowUp', target: 2, currentTarget: 1, preventDefault() { prevented = true; } });
+  assert.equal(prevented, false, 'row controls retain their own keyboard behavior');
   key(root, 'ArrowRight'); assert.deepEqual(calls.at(-1), ['focus', 'a']);
   tree = flatten(render()); assert.equal(findRow('a').props.tabIndex, 0);
   key(findRow('b'), 'ArrowLeft'); assert.deepEqual(calls.at(-1), ['focus', 'a']);

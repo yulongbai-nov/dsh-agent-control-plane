@@ -164,6 +164,7 @@ window.__ModuleLoader__.load({
       const [notice, setNotice] = React.useState(null);
       const [focusKey, setFocusKey] = React.useState(null);
       const treeRef = React.useRef(null);
+      const removedFocus = React.useRef(null);
       const [brokenImages, setBrokenImages] = React.useState({});
       const lifecycle = React.useRef({ active: false, generation: 0 });
       const refreshIntents = React.useRef(new Map());
@@ -179,6 +180,16 @@ window.__ModuleLoader__.load({
       }, []);
       const rows = buildRows(list, expanded, new Set(archivedIds ?? []), statuses);
       const tabStop = rows.some(item => item.rowKey === focusKey) ? focusKey : rows[0]?.rowKey;
+      React.useLayoutEffect(() => {
+        const snapshot = removedFocus.current;
+        removedFocus.current = null;
+        if (!snapshot || snapshot.node.isConnected || document.activeElement !== document.body) return;
+        const matches = snapshot.unambiguous ? rows.filter(row => row.id === snapshot.id && !row.ambiguous) : [];
+        const target = matches.length === 1 ? matches[0] : snapshot.ancestors.map(key => rows.find(row => row.rowKey === key && !row.ambiguous)).find(Boolean);
+        if (!target) return;
+        const node = [...(treeRef.current?.querySelectorAll('[role="treeitem"]') ?? [])].find(element => element.dataset.rowKey === target.rowKey && element.isConnected);
+        if (node) { setFocusKey(target.rowKey); node.focus(); }
+      });
 
       function clearFailures(ids) {
         setFailures(current => { const next = { ...current }; for (const id of ids) delete next[id]; return next; });
@@ -294,8 +305,9 @@ window.__ModuleLoader__.load({
       function treeKeys(event, row) {
         if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate(row); return; }
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) event.preventDefault();
         if (event.key === 'ArrowRight' && row.expandable && !row.expanded || event.key === 'ArrowLeft' && row.expanded) {
-          event.preventDefault(); toggle(row); return;
+          toggle(row); return;
         }
         const index = rows.findIndex(item => item.rowKey === row.rowKey);
         let next;
@@ -306,13 +318,13 @@ window.__ModuleLoader__.load({
         if (event.key === 'Home') next = 0;
         if (event.key === 'End') next = rows.length - 1;
         if (next !== undefined && next >= 0) {
-          event.preventDefault();
           const target = rows[Math.min(rows.length - 1, next)];
           setFocusKey(target.rowKey);
           [...(treeRef.current?.querySelectorAll('[role="treeitem"]') ?? [])].find(element => element.dataset.rowKey === target.rowKey)?.focus();
         }
       }
       function renderRow(row) {
+        let focusNode;
         const type = avatarType(row, prefs);
         const customImage = images[type], imageRevision = imageOperations.current.revisions.get(type) ?? 0;
         const showCustom = Boolean(customImage) && brokenImages[type] !== imageRevision;
@@ -324,6 +336,19 @@ window.__ModuleLoader__.load({
           : row.catalogState === 'unavailable' ? h('div', { className: 'branch-note', style: { marginLeft: `${row.level * 20}px` } }, t('catalogUnavailable'))
           : row.catalogState === 'loading' || row.catalogState === 'unloaded' || row.catalogState === 'unknown' ? h('div', { className: 'branch-note', role: 'status', style: { marginLeft: `${row.level * 20}px` } }, t(row.catalogState === 'unknown' ? 'catalogUnknown' : 'catalogLoading'), h('button', { type: 'button', onClick: () => retry(row.id) }, t('retry'))) : null);
         return h(React.Fragment, { key: row.rowKey }, h('div', {
+          ref: node => {
+            if (node) { focusNode = node; return; }
+            if (!focusNode || document.activeElement !== focusNode) return;
+            const ancestors = [];
+            let key = row.parentKey;
+            while (key !== null) {
+              ancestors.push(key);
+              const parent = rows.find(candidate => candidate.rowKey === key);
+              if (!parent) break;
+              key = parent.parentKey;
+            }
+            removedFocus.current = { node: focusNode, id: row.id, unambiguous: !row.ambiguous, ancestors };
+          },
           className: `row ${row.level === 1 ? 'root-row' : ''}`,
           style: { marginLeft: `${(row.level - 1) * 20}px` }, role: 'treeitem',
           tabIndex: tabStop === row.rowKey ? 0 : -1,
