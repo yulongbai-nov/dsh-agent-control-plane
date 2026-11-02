@@ -1,0 +1,90 @@
+diff --git a/packages/experimental/agent-team/src/lineage-candidate.ts b/packages/experimental/agent-team/src/lineage-candidate.ts
+new file mode 100644
+index 00000000..24657678
+--- /dev/null
++++ b/packages/experimental/agent-team/src/lineage-candidate.ts
+@@ -0,0 +1,52 @@
++/**
++ * Shape-only V1 Team lineage research. This does not authenticate a journal,
++ * migrate sessions or admit any child. It deliberately never returns ALLOW.
++ */
++import { types as nodeTypes } from 'node:util'
++
++type RecordV1 = {
++  version: 1; nodeId: string; rootId: string; parentId: string | null;
++  level: number; override: number | null; policyRevision: number;
++}
++export type CandidateInspection = { readonly status: 'INVALID' | 'UNVERIFIED'; readonly reason: string }
++
++/** Parse only bounded plain data records, then check a complete candidate tree. */
++export function inspectLineageCandidate(input: unknown): CandidateInspection {
++  const invalid = (reason: string): CandidateInspection => ({ status: 'INVALID', reason })
++  if (nodeTypes.isProxy(input) || !Array.isArray(input) || input.length === 0 || input.length > 1024) return invalid('invalid collection')
++  if (Object.getOwnPropertySymbols(input).length) return invalid('invalid collection')
++  const entries = Object.getOwnPropertyDescriptors(input)
++  if (Object.keys(entries).length !== input.length + 1) return invalid('invalid collection')
++  const records: RecordV1[] = []
++  for (let index = 0; index < input.length; index++) {
++    const entry = entries[String(index)]
++    if (!entry || !('value' in entry)) return invalid('invalid collection')
++    const item: unknown = entry.value
++    if (item === null || typeof item !== 'object' || nodeTypes.isProxy(item) ||
++      ![Object.prototype, null].includes(Object.getPrototypeOf(item)) || Object.getOwnPropertySymbols(item).length) return invalid('invalid record')
++    const fields = Object.getOwnPropertyDescriptors(item)
++    const keys = ['version', 'nodeId', 'rootId', 'parentId', 'level', 'override', 'policyRevision']
++    if (Object.keys(fields).length !== keys.length || keys.some(key => !Object.hasOwn(fields, key)) ||
++      Object.values(fields).some(field => !('value' in field))) return invalid('invalid fields')
++    const values = Object.fromEntries(keys.map(key => [key, fields[key]!.value]))
++    const validId = (value: unknown): value is string => typeof value === 'string' && value.length > 0 && value.length <= 200
++    const uint = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && !Object.is(value, -0)
++    if (values.version !== 1 || !validId(values.nodeId) || !validId(values.rootId) ||
++      !(values.parentId === null || validId(values.parentId)) || !uint(values.level) || values.level > 3 ||
++      !(values.override === null || (uint(values.override) && values.override <= 3)) || !uint(values.policyRevision) || values.policyRevision < 1) return invalid('invalid value')
++    records.push(values as RecordV1)
++  }
++  const nodes = new Map<string, RecordV1>()
++  for (const item of records) {
++    if (nodes.has(item.nodeId)) return invalid('duplicate node')
++    if (item.parentId === null) {
++      if (item.nodeId !== item.rootId || item.level !== 0 || nodes.size !== 0) return invalid('invalid root')
++    } else {
++      const parent = nodes.get(item.parentId)
++      if (!parent || parent.rootId !== item.rootId || item.level !== parent.level + 1) return invalid('invalid ancestry')
++    }
++    nodes.set(item.nodeId, item)
++  }
++  // Shape consistency cannot establish source identity, completeness or authority.
++  return { status: 'UNVERIFIED', reason: 'no authenticated durable source' }
++}
+diff --git a/packages/experimental/agent-team/tests/lineage-candidate.spec.ts b/packages/experimental/agent-team/tests/lineage-candidate.spec.ts
+new file mode 100644
+index 00000000..07091610
+--- /dev/null
++++ b/packages/experimental/agent-team/tests/lineage-candidate.spec.ts
+@@ -0,0 +1,26 @@
++import { describe, expect, it } from 'vitest'
++import { inspectLineageCandidate } from '../src/lineage-candidate.ts'
++
++const node = (nodeId: string, parentId: string | null, level: number, extra = {}) => ({version:1,nodeId,rootId:'root',parentId,level,override:null,policyRevision:1,...extra})
++describe('untrusted lineage candidate shape', () => {
++  it('can validate root plus three levels but never authorizes it', () => {
++    expect(inspectLineageCandidate([node('root',null,0),node('a','root',1),node('b','a',2),node('c','b',3)]).status).toBe('UNVERIFIED')
++  })
++  it('rejects fourth levels, missing parents, duplicate nodes, mismatched roots and invalid policy revisions', () => {
++    const root=node('root',null,0), a=node('a','root',1), b=node('b','a',2), c=node('c','b',3)
++    for (const value of [[root,a,b,c,node('d','c',4)], [root,node('x','missing',1)], [root,a,a], [root,node('x','root',1,{rootId:'other'})], [root,node('x','root',1,{policyRevision:0})], [root,node('x','root',1,{override:4})]]) {
++      expect(inspectLineageCandidate(value).status).toBe('INVALID')
++    }
++  })
++  it('rejects accessors, proxies and revoked proxies without invoking their traps', () => {
++    let calls=0
++    const accessor=Object.defineProperty(node('root',null,0),'nodeId',{get(){calls++;throw Error('getter')}})
++    const proxy=new Proxy(node('root',null,0),{ownKeys(){calls++;throw Error('trap')}})
++    const revoked=Proxy.revocable(node('root',null,0),{});revoked.revoke()
++    for(const value of [accessor,proxy,revoked.proxy]) expect(inspectLineageCandidate([value]).status).toBe('INVALID')
++    const array=[node('root',null,0)]
++    Object.defineProperty(array,'0',{get(){calls++;throw Error('array getter')}})
++    expect(inspectLineageCandidate(array).status).toBe('INVALID')
++    expect(calls).toBe(0)
++  })
++})

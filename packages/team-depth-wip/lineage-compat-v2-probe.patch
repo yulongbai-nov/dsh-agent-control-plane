@@ -1,0 +1,34 @@
+diff --git a/packages/experimental/agent-team/tests/lineage-compat-wip.spec.ts b/packages/experimental/agent-team/tests/lineage-compat-wip.spec.ts
+new file mode 100644
+index 00000000..7b340711
+--- /dev/null
++++ b/packages/experimental/agent-team/tests/lineage-compat-wip.spec.ts
+@@ -0,0 +1,28 @@
++import { describe, expect, it } from 'vitest'
++import { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
++import { teamProjectionDefinition } from '../src/projection.ts'
++
++const header = {version:4 as const,id:SessionId('synthetic-lead'),createdAt:1,isSeeded:false,delegationDepth:0}
++const member = {id:SessionId('synthetic-child'),name:'worker',description:'synthetic',provider:'spawn',context:'fresh',phase:'provisioning'}
++const event = (data: unknown) => ({type:'team/member',seq:SessionSeq(0),time:2,data}) as never
++
++describe('released Team projection versus candidate durable lineage', () => {
++  it('accepts a released v2 member snapshot', () => {
++    const before=teamProjectionDefinition.init(header)
++    const after=teamProjectionDefinition.apply(before,event({version:2,teamId:header.id,member}))
++    expect(after.failure).toBeUndefined()
++    expect(after.members).toHaveLength(1)
++  })
++  it('fails closed on a future member-event version', () => {
++    const before=teamProjectionDefinition.init(header)
++    const after=teamProjectionDefinition.apply(before,event({version:3,teamId:header.id,member}))
++    expect(after.failure).toMatch(/unsupported Agent Teams event version 3/)
++    expect(after.members).toHaveLength(0)
++  })
++  it('fails closed when nested identity metadata is inserted into a v2 member', () => {
++    const before=teamProjectionDefinition.init(header)
++    const after=teamProjectionDefinition.apply(before,event({version:2,teamId:header.id,member:{...member,rootId:header.id,relativeDepth:1}}))
++    expect(after.failure).toMatch(/persisted Agent Teams team\/member payload is invalid/)
++    expect(after.members).toHaveLength(0)
++  })
++})
