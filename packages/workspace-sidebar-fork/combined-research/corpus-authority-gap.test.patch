@@ -1,0 +1,35 @@
+diff --git a/packages/session-query/session-query/tests/session-query.spec.ts b/packages/session-query/session-query/tests/session-query.spec.ts
+index bca5ea3b..bd6fc5a0 100644
+--- a/packages/session-query/session-query/tests/session-query.spec.ts
++++ b/packages/session-query/session-query/tests/session-query.spec.ts
+@@ -1140,0 +1141,30 @@ describe('session-query exact reads', () => {
++  it('observes a persisted-only create without any live session-created notification', async () => {
++    TestPersistence.reset()
++    const ctx = await liveContext()
++    const fiber = await ctx.plugin(TestPersistence)
++    const created = vi.fn()
++    ctx.on('session/created', created)
++    const cold = header('synthetic-cold-only', 1)
++    expect(await ctx.sessionQuery.listSessions()).toEqual([])
++    const handle = await ctx.sessionPersistence.create(cold)
++    expect((await ctx.sessionQuery.listSessions()).map(record => record.header.id)).toEqual([cold.id])
++    expect(created).not.toHaveBeenCalled()
++    await handle.close()
++    await fiber.dispose()
++  })
++
++  it('can return a mixed persisted/live list which never coexisted', async () => {
++    const old = header('synthetic-old', 1)
++    TestPersistence.reset([{ meta: old, events: [] }])
++    const ctx = await liveContext()
++    const fiber = await ctx.plugin(TestPersistence)
++    TestPersistence.afterList = () => {
++      TestPersistence.entries.delete(old.id)
++      ctx.sessions.create(SessionId('synthetic-new'), { meta: { createdAt: 2, cwd: '/synthetic' } })
++    }
++    const records = await ctx.sessionQuery.listSessions()
++    expect(records.map(record => record.header.id).sort()).toEqual([old.id, SessionId('synthetic-new')].sort())
++    expect(TestPersistence.entries.has(old.id)).toBe(false)
++    await fiber.dispose()
++  })
++
