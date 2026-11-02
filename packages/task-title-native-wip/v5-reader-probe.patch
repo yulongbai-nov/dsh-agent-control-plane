@@ -1,0 +1,31 @@
+diff --git a/packages/session/session-persistence-jsonl/tests/task-v5-probe.spec.ts b/packages/session/session-persistence-jsonl/tests/task-v5-probe.spec.ts
+new file mode 100644
+index 00000000..d573ca54
+--- /dev/null
++++ b/packages/session/session-persistence-jsonl/tests/task-v5-probe.spec.ts
+@@ -0,0 +1,25 @@
++import { Context } from '@deepseek-ai/cordis'
++import { SessionId } from '@deepseek-ai/dsh-session'
++import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
++import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
++import { dirname, join } from 'node:path'
++import { tmpdir } from 'node:os'
++import { expect, it } from 'vitest'
++import { generationLogPath } from '../src/format.ts'
++
++it('released V4 reader refuses a synthetic V5 generation for read and write without mutation', async () => {
++  const root=await mkdtemp(join(tmpdir(),'synthetic-v5-'))
++  const ctx=new Context()
++  try {
++    await ctx.plugin(JsonlSessionPersistence,{root,compression:'none'})
++    const id=SessionId('future-synthetic-v5')
++    const path=generationLogPath(root,'/synthetic',id,5,'none')
++    await mkdir(dirname(path),{recursive:true})
++    const content=Buffer.from(`${JSON.stringify({type:'session',version:5,id,createdAt:1,cwd:'/synthetic',delegationDepth:0})}\n`)
++    await writeFile(path,content)
++    for(const mode of ['read','write'] as const) {
++      await expect(ctx.sessionPersistence.open(id,mode)).rejects.toMatchObject({name:'SessionFormatUnsupportedError'})
++      expect(await readFile(path)).toEqual(content)
++    }
++  } finally { await ctx.fiber.dispose(); await rm(root,{recursive:true,force:true}) }
++})
