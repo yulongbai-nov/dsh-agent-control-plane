@@ -1,8 +1,10 @@
 // Embed local PNGs and the shared lineage source because DSH's external client
 // loader serves one JS module, not arbitrary package assets or local imports.
-import { readFile, writeFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { readFile, writeFile, realpath } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { Script } from 'node:vm';
 
 const EXPORTS = 'export { catalogOf, buildRows, navigationTarget };';
 
@@ -19,6 +21,9 @@ function replaceUniqueMarked(template, start, end, replacement) {
 // The module uses one fixed trailing export statement; everything before it is
 // the same code consumed by ESM importers, wrapped to keep helpers private.
 export function renderClient(template, images, lineage) {
+  // Do not execute either script. Parsing the original also catches broken code
+  // in placeholder regions that the substitution would otherwise erase.
+  new Script(template, { filename: 'session-tree-template.js' });
   const avatarStart = '/* AVATAR_DATA */', avatarEnd = '/* END_AVATAR_DATA */';
   const lineageStart = '/* LINEAGE_SOURCE */', lineageEnd = '/* END_LINEAGE_SOURCE */';
   // Validate both pairs against the original template before either replacement.
@@ -36,11 +41,15 @@ export function renderClient(template, images, lineage) {
   const body = trimmed.slice(0, -EXPORTS.length);
   const embedded = `const { catalogOf, buildRows, navigationTarget } = (() => {\n${body}\nreturn { catalogOf, buildRows, navigationTarget };\n})();`;
   const withImages = replaceUniqueMarked(template, avatarStart, avatarEnd, JSON.stringify(images));
-  return replaceUniqueMarked(withImages, lineageStart, lineageEnd, embedded);
+  const output = replaceUniqueMarked(withImages, lineageStart, lineageEnd, embedded);
+  // Parse as a browser script without executing it before either --check or write.
+  new Script(output, { filename: 'session-tree-client.js' });
+  return output;
 }
 
 async function main() {
-  const root = new URL('.', import.meta.url);
+  // Resolve the actual package directory even with --preserve-symlinks-main.
+  const root = new URL('.', pathToFileURL(await realpath(fileURLToPath(import.meta.url))));
   const names = ['lead', 'research', 'code', 'write', 'data', 'qa'];
   const images = {};
   for (const name of names) {
@@ -57,4 +66,20 @@ async function main() {
     await writeFile(target, output);
   }
 }
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
+// Use the runtime's entry flag when available. Older supported Node builds
+// use a canonical-path fallback, including symlinks in file or parent paths.
+// Loading and invoking a module as main must use one path consistently.
+function isMainFallback() {
+  if (!process.argv[1]) return false;
+  const modulePath = fileURLToPath(import.meta.url);
+  // An exact entry is definitely a direct invocation even if it disappears
+  // before we inspect it; main() then fails loudly rather than silently skips.
+  if (resolve(process.argv[1]) === modulePath) return true;
+  try { return realpathSync(process.argv[1]) === realpathSync(modulePath); }
+  catch (error) {
+    // `node -e` / stdin / external import can supply a non-path argument.
+    if (['ENOENT', 'ENOTDIR', 'EINVAL'].includes(error?.code)) return false;
+    throw error;
+  }
+}
+if (import.meta.main ?? isMainFallback()) await main();

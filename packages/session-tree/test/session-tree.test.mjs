@@ -1875,6 +1875,28 @@ test('browser generation rejects missing, repeated or reversed source markers', 
   assert.throws(() => renderClient(template, {}, lineage + '\nexport const extra = 1;\n'));
 });
 
+test('browser generation rejects invalid script without executing it', async () => {
+  const { renderClient } = await import('../build.mjs');
+  const template = await readFile(new URL('../client.template.js', import.meta.url), 'utf8');
+  const lineage = await readFile(new URL('../lineage.mjs', import.meta.url), 'utf8');
+  assert.doesNotThrow(() => renderClient(template, {}, lineage));
+  const brokenLineages = [
+    'export const accidental=1;\n' + lineage,
+    'import x from "not-installed";\n' + lineage,
+    'export async function tooMany(){}\n' + lineage,
+    'function broken( {\n' + lineage,
+    lineage + '\nexport const extra=1;',
+  ];
+  for (const broken of brokenLineages) assert.throws(() => renderClient(template, {}, broken));
+  assert.throws(() => renderClient('export const accidental=1;\n' + template, {}, lineage));
+  assert.throws(() => renderClient('import x from "not-installed";\n' + template, {}, lineage));
+  assert.throws(() => renderClient('function broken( {\n' + template, {}, lineage));
+  const sentinel = Symbol('script execution probe');
+  globalThis.__lineageScriptExecuted = sentinel;
+  assert.doesNotThrow(() => renderClient('globalThis.__lineageScriptExecuted = true;\n' + template, {}, lineage));
+  assert.equal(globalThis.__lineageScriptExecuted, sentinel);
+});
+
 test('generated browser entry matches its source and six PNG assets', () => {
   execFileSync(process.execPath, [fileURLToPath(new URL('../build.mjs', import.meta.url)), '--check']);
 });
