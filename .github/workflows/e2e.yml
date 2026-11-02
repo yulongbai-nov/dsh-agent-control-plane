@@ -70,8 +70,9 @@ jobs:
     timeout-minutes: 25
     needs: [static]
     env:
-      DSH_E2E_HOME: ${{ runner.temp }}/dsh-home
-      DSH_E2E_ROOT: ${{ runner.temp }}/dsh-e2e
+      # `runner.*` is not available in job-level env; github.workspace is.
+      DSH_E2E_HOME: ${{ github.workspace }}/.e2e-home
+      DSH_E2E_ROOT: ${{ github.workspace }}/.e2e-root
       DSH_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@v4

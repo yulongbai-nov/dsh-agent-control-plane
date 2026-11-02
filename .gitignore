@@ -9,3 +9,5 @@ dist/
 .e2e-state/
 artifacts/
 *.tgz
+.e2e-home/
+.e2e-root/
