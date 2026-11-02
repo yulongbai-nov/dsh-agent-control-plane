@@ -1,9 +1,9 @@
 diff --git a/packages/experimental/agent-team/tests/direct-selection-bypass-wip.spec.ts b/packages/experimental/agent-team/tests/direct-selection-bypass-wip.spec.ts
 new file mode 100644
-index 00000000..e00feaca
+index 00000000..9f59d831
 --- /dev/null
 +++ b/packages/experimental/agent-team/tests/direct-selection-bypass-wip.spec.ts
-@@ -0,0 +1,56 @@
+@@ -0,0 +1,70 @@
 +import { Context } from '@deepseek-ai/cordis'
 +import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 +import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
@@ -58,5 +58,19 @@ index 00000000..e00feaca
 +    expect(()=>ctx.teamSelectionAuthority.authorize(lead,{provider:'mock',model:'member-model'})).not.toThrow()
 +    const replacement=new TeamSelectionAuthority(ctx)
 +    expect(()=>replacement.authorize(lead,{provider:'mock',model:'member-model'})).toThrow(/unauthorized/)
++  } finally {await close()}
++})
++
++it('documents that ordinary roots are already implicit Team leads without Team identity records',async()=>{
++  const {ctx,lead,close}=await fixture()
++  try {
++    const ordinary=await ctx.agentLoop.create(SessionId('ordinary-independent-root'),{provider:'mock',model:'mock'})
++    expect(ctx.agentTeams.membership(lead).role).toBe('lead')
++    expect(ctx.agentTeams.membership(ordinary).role).toBe('lead')
++    for(const agent of [lead,ordinary]) {
++      expect(agent.session.header.parentSession).toBeUndefined()
++      expect(agent.session.header.origin).toBeUndefined()
++      expect(agent.session.snapshotEvents().some(event=>event.type==='team/member')).toBe(false)
++    }
 +  } finally {await close()}
 +})
