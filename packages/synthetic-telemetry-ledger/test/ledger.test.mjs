@@ -69,3 +69,109 @@ test('rejects a same-version schema that omits identity constraints', () => {
  raw.close(); chmodSync(path,0o600);
  assert.throws(()=>openSyntheticLedger(dir),errorCode('UNSUPPORTED_SCHEMA'));
 });
+
+test('batch conflict rolls back all snapshots and cursors', () => {
+ const db=openSyntheticLedger(createDir()), second='d'.repeat(64);
+ try {
+  db.ingest(row());
+  assert.throws(()=>db.ingestBatch([{...row(1,7),sessionKey:second},row(1,9)]),errorCode('SEQUENCE_CONFLICT'));
+  assert.deepEqual(db.get({sessionKey:second,sourceEpoch:epoch}),{status:'unknown'});
+  assert.equal(db.get(id()).outputTokens,4);
+  assert.deepEqual(db.ingestBatch([{...row(1,7),sessionKey:second},row(2,9)]),['stored','stored']);
+ } finally { db.close(); }
+});
+
+test('v1 migration restores observed cursor only, never durable-source proof', () => {
+ const dir=createDir(), path=join(dir,'ledger.sqlite');
+ const raw=new DatabaseSync(path);
+ raw.exec('CREATE TABLE snapshots (session_key TEXT PRIMARY KEY, source_epoch TEXT NOT NULL, seq INTEGER NOT NULL, output_tokens INTEGER); CREATE TABLE tombstones (session_key TEXT PRIMARY KEY, source_epoch TEXT NOT NULL, seq INTEGER NOT NULL); PRAGMA user_version=1');
+ raw.prepare('INSERT INTO snapshots VALUES (?,?,?,?)').run(key,epoch,3,8); raw.close(); chmodSync(path,0o600);
+ const db=openSyntheticLedger(dir);
+ try { assert.deepEqual(db.get(id()),{status:'observed',asOfSeq:3,outputTokens:8,durable:'unknown'}); } finally { db.close(); }
+ const inspect=new DatabaseSync(path); try { assert.equal(inspect.prepare('PRAGMA user_version').get().user_version,2); assert.equal(inspect.prepare('SELECT seq FROM source_cursors').get().seq,3); } finally { inspect.close(); }
+});
+
+test('reopen fails closed if stored cursor and snapshot disagree', () => {
+ const dir=createDir(); let db=openSyntheticLedger(dir); db.ingest(row()); db.close();
+ const raw=new DatabaseSync(join(dir,'ledger.sqlite')); raw.prepare('UPDATE source_cursors SET seq=2 WHERE session_key=?').run(key); raw.close();
+ assert.throws(()=>openSyntheticLedger(dir),errorCode('CURSOR_INCONSISTENT'));
+});
+
+test('SQLite transaction interrupted before commit rolls back on reopen', async () => {
+ const { spawnSync }=await import('node:child_process');
+ const dir=createDir(); let db=openSyntheticLedger(dir); db.ingest(row()); db.close();
+ const code=`const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync(process.argv[1]);db.exec('BEGIN IMMEDIATE');db.prepare('UPDATE snapshots SET seq=2, output_tokens=9').run();process.exit(73)`;
+ const child=spawnSync(process.execPath,['-e',code,join(dir,'ledger.sqlite')],{timeout:5000,encoding:'utf8'});
+ assert.equal(child.status,73,child.stderr); db=openSyntheticLedger(dir);
+ try { assert.equal(db.get(id()).asOfSeq,1); assert.equal(db.get(id()).outputTokens,4); } finally { db.close(); }
+});
+
+test('two instances racing the same sequence cannot overwrite each other', async () => {
+ const { Worker }=await import('node:worker_threads');
+ const dir=createDir(); const initial=openSyntheticLedger(dir); initial.close();
+ const workers=[3,7].map(n=>new Worker(new URL('./ledger-worker.mjs',import.meta.url),{workerData:{directory:dir,record:row(1,n)}}));
+ try {
+  const ready=workers.map(worker=>new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>reject(Error('worker ready timeout')),5000);
+   worker.once('error',reject); worker.once('message',m=>{clearTimeout(timer); m.ready ? resolve() : reject(Error(m.openError ?? 'worker failed'));});
+  }));
+  await Promise.all(ready);
+  const results=workers.map(worker=>new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>reject(Error('worker result timeout')),5000);
+   worker.once('error',reject); worker.once('message',m=>{clearTimeout(timer);resolve(m);});
+  }));
+  for(const worker of workers) worker.postMessage('go');
+  const out=await Promise.all(results); assert.equal(out.filter(x=>x.result==='stored').length,1); assert.equal(out.filter(x=>x.error==='SEQUENCE_CONFLICT').length,1);
+  const db=openSyntheticLedger(dir); try { assert.ok([3,7].includes(db.get(id()).outputTokens)); } finally { db.close(); }
+ } finally { await Promise.all(workers.map(worker=>worker.terminate())); }
+});
+
+test('v1 migration rejects contradictory tombstone without modifying schema', () => {
+ const dir=createDir(), path=join(dir,'ledger.sqlite'), raw=new DatabaseSync(path);
+ raw.exec('CREATE TABLE snapshots (session_key TEXT PRIMARY KEY, source_epoch TEXT NOT NULL, seq INTEGER NOT NULL, output_tokens INTEGER); CREATE TABLE tombstones (session_key TEXT PRIMARY KEY, source_epoch TEXT NOT NULL, seq INTEGER NOT NULL); PRAGMA user_version=1');
+ raw.prepare('INSERT INTO snapshots VALUES (?,?,?,?)').run(key,epoch,1,5); raw.prepare('INSERT INTO tombstones VALUES (?,?,?)').run(key,epoch,1); raw.close(); chmodSync(path,0o600);
+ assert.throws(()=>openSyntheticLedger(dir),errorCode('CURSOR_INCONSISTENT'));
+ const inspect=new DatabaseSync(path); try { assert.equal(inspect.prepare('PRAGMA user_version').get().user_version,1); assert.equal(inspect.prepare("SELECT 1 FROM sqlite_master WHERE name='source_cursors'").get(),undefined); } finally { inspect.close(); }
+});
+
+test('batch validation rejects sparse or accessor arrays before any write', () => {
+ const db=openSyntheticLedger(createDir()); let invoked=false;
+ try {
+  const input=[row(),row(2,5)]; Object.defineProperty(input,'1',{get(){invoked=true;return row(2,5);}});
+  assert.throws(()=>db.ingestBatch(input),errorCode('INVALID_INPUT')); assert.equal(invoked,false); assert.equal(db.get(id()).status,'unknown');
+  assert.throws(()=>db.ingestBatch(Array(1)),errorCode('INVALID_INPUT'));
+  assert.throws(()=>db.ingest(row(-0,5)),errorCode('INVALID_INPUT')); assert.throws(()=>db.ingest(row(1,-0)),errorCode('INVALID_INPUT'));
+ } finally { db.close(); }
+});
+
+test('revoked proxy array is rejected without leaking a TypeError', () => {
+ const db=openSyntheticLedger(createDir()); const proxy=Proxy.revocable([row()],{}); proxy.revoke();
+ try { assert.throws(()=>db.ingestBatch(proxy.proxy),errorCode('INVALID_INPUT')); } finally { db.close(); }
+});
+
+test('sqlite-like name is an unexpected table, not a reserved sqlite_ name', () => {
+ const dir=createDir(); let db=openSyntheticLedger(dir); db.close(); const path=join(dir,'ledger.sqlite');
+ const raw=new DatabaseSync(path); raw.exec('CREATE TABLE sqliteXbad(x)'); raw.close();
+ assert.throws(()=>openSyntheticLedger(dir),errorCode('UNSUPPORTED_SCHEMA'));
+});
+
+test('two workers can concurrently open and migrate the same v1 database', async () => {
+ const { Worker }=await import('node:worker_threads');
+ const dir=createDir(), path=join(dir,'ledger.sqlite'), raw=new DatabaseSync(path);
+ raw.exec('CREATE TABLE snapshots (session_key TEXT PRIMARY KEY, source_epoch TEXT NOT NULL, seq INTEGER NOT NULL, output_tokens INTEGER); CREATE TABLE tombstones (session_key TEXT PRIMARY KEY, source_epoch TEXT NOT NULL, seq INTEGER NOT NULL); PRAGMA user_version=1'); raw.close(); chmodSync(path,0o600);
+ const workers=[3,7].map((n,i)=>new Worker(new URL('./ledger-worker.mjs',import.meta.url),{workerData:{directory:dir,record:{...row(1,n),sessionKey:(i?'d':'e').repeat(64)}}}));
+ try {
+  const ready=workers.map(worker=>new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>reject(Error('worker ready timeout')),5000);
+   worker.once('error',reject); worker.once('message',m=>{clearTimeout(timer);m.ready ? resolve() : reject(Error(m.openError ?? 'worker failed'));});
+  }));
+  await Promise.all(ready);
+  const results=workers.map(worker=>new Promise((resolve,reject)=>{
+   const timer=setTimeout(()=>reject(Error('worker result timeout')),5000);
+   worker.once('error',reject); worker.once('message',m=>{clearTimeout(timer);resolve(m);});
+  }));
+  for(const worker of workers) worker.postMessage('go');
+  assert.deepEqual(await Promise.all(results),[{result:'stored'},{result:'stored'}]);
+  const db=openSyntheticLedger(dir); db.close();
+ } finally { await Promise.all(workers.map(worker=>worker.terminate())); }
+});
