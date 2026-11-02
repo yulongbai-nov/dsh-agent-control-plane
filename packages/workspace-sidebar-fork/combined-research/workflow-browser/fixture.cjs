@@ -1,0 +1,21 @@
+// Synthetic script and workflow records. No code here is executed as workflow.
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
+const base=process.env.R7_PROJECT,up=process.env.R7_UPSTREAM;if(!base||!up)throw Error('missing paths');
+const sha=p=>crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
+assert.equal(sha(path.join(base,'packages/workflow-topology/index.cjs')),'628b11587888b6ea0f467d773fdc6ddf1b5978292d6e3ddefcc97c8f0dec8313');
+assert.equal(sha(path.join(base,'packages/workflow-board-projection/index.cjs')),'b37bb9f08efd971f3ba153873e541dde3ca0da29151a72755dac14fa346c20ed');
+const {extractTopology,layoutTopology}=require(path.join(base,'packages/workflow-topology/index.cjs'));
+const {projectWorkflow}=require(path.join(base,'packages/workflow-board-projection/index.cjs'));
+const {parse}=require(path.join(up,'node_modules/.pnpm/acorn@8.18.0/node_modules/acorn'));
+const script="phase('Research'); await agent('alpha prompt',{label:'Alpha',model:'luna'}); phase('Review'); await parallel([()=>agent('beta prompt',{label:'Beta',model:'terra'}),()=>agent('gamma prompt',{label:'Gamma',model:'luna'})]);";
+const extract=()=>extractTopology(script,{}, {parse});const topology=extract(),layout=layoutTopology(topology);
+assert.deepEqual(topology,extract());assert.deepEqual(layout,layoutTopology(extract()));assert.equal(topology.complete,true);
+const event=(type,seq,data)=>({type:`tool-workflow/${type}`,seq,time:100+seq,data:{runId:'synthetic-run',...data}});
+const events=[event('run-start',1,{name:'Synthetic workflow'}),event('agent-start',2,{seq:1,label:'Alpha',phase:'Research',childId:'synthetic-child'}),event('agent-end',3,{seq:1,outcome:'completed'})];
+const project=(events,verified)=>projectWorkflow({runId:'synthetic-run',parentSessionId:'synthetic-parent',topology,layout,events,...verified?{sourceBinding:{status:'verified',runId:'synthetic-run',toolCallId:'synthetic-call'}}:{}});
+const pipeline=extractTopology("await pipeline(['a','b'],(prev,item)=>agent('research',{label:'research'}),(prev,item)=>agent('review',{label:'review'}));",{}, {parse});
+const dynamic=extractTopology("await pipeline(args.items,(prev,item)=>agent(item.prompt,{label:item.label}));",{}, {parse});
+assert.equal(pipeline.groups[0].expansion,'expanded');assert.equal(pipeline.edges.length,2);assert.equal(dynamic.complete,false);assert.deepEqual(dynamic.edges,[]);
+const data={topology,layout,pipeline,dynamic,unverified:project(events,false),verified:project(events,true),conflict:project([...events,event('agent-start',4,{seq:2,label:'Alpha',phase:'Research',childId:'other'})],true),outOfOrder:project([events[0],events[2],events[1]],true),missingStart:project([events[0],events[2]],true),empty:project([],true)};
+assert.equal(data.unverified.sourceStatus,'unverified');assert.equal(Object.keys(data.unverified.statusByNode).length,0);assert.equal(Object.keys(data.verified.statusByNode).length,1);assert.equal(Object.keys(data.conflict.statusByNode).length,0);assert.equal(Object.keys(data.outOfOrder.statusByNode).length,0);assert.equal(Object.keys(data.missingStart.statusByNode).length,0);
+fs.writeFileSync(path.join(__dirname,'fixture.json'),JSON.stringify(data));console.log('synthetic topology:',topology.nodes.length,'nodes',topology.edges.length,'edges; deterministic and conservative status checks pass');
