@@ -1,16 +1,16 @@
 diff --git a/packages/session/session-persistence-jsonl/tests/r7-corpus-visibility.spec.ts b/packages/session/session-persistence-jsonl/tests/r7-corpus-visibility.spec.ts
 new file mode 100644
-index 00000000..7dcead9d
+index 00000000..e4999e76
 --- /dev/null
 +++ b/packages/session/session-persistence-jsonl/tests/r7-corpus-visibility.spec.ts
-@@ -0,0 +1,99 @@
+@@ -0,0 +1,109 @@
 +/** Synthetic shared-root JSONL contract probe; no user profile or service. */
 +import { mkdtemp, rm } from 'node:fs/promises'
 +import { tmpdir } from 'node:os'
 +import { join } from 'node:path'
 +import { Context } from '@deepseek-ai/cordis'
 +import { SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
-+import { expect, it } from 'vitest'
++import { expect, it, vi } from 'vitest'
 +import * as JsonlSessionPersistence from '../src/index.ts'
 +
 +it('keeps two pending writers local until each materializes', async () => {
@@ -44,11 +44,13 @@ index 00000000..7dcead9d
 +  const { setTimeout: delay } = await import('node:timers/promises')
 +  const root = await mkdtemp(join(tmpdir(), 'r7-jsonl-process-'))
 +  const ctx = new Context()
-+  const child = spawn(process.execPath, [join(process.cwd(), 'node_modules/vitest/vitest.mjs'), 'run', 'packages/session/session-persistence-jsonl/tests/r7-corpus-child.spec.ts', '--maxWorkers=1', '--no-file-parallelism', '--reporter=dot'], {
-+    cwd: process.cwd(), env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME!, TMPDIR: process.env.TMPDIR!, CI: 'true', R7_SYNTHETIC_ROOT: root }, detached: true, stdio: ['ignore', 'pipe', 'pipe'],
++  const child = spawn(process.execPath, [join(process.cwd(), 'node_modules/vitest/vitest.mjs'), 'run', 'packages/session/session-persistence-jsonl/tests/r7-corpus-child.spec.ts', '--pool=threads', '--maxWorkers=1', '--no-file-parallelism', '--reporter=dot'], {
++    cwd: process.cwd(), env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME!, TMPDIR: process.env.TMPDIR!, CI: 'true', R7_SYNTHETIC_ROOT: root }, stdio: ['ignore', 'pipe', 'pipe'],
 +  })
++  const signalChild = vi.spyOn(child, 'kill')
 +  let output = ''; child.stdout.on('data', data => { output += String(data) }); child.stderr.on('data', data => { output += String(data) })
-+  const exit = new Promise<{code: number | null, signal: NodeJS.Signals | null}>(resolve => child.once('exit', (code, signal) => resolve({code, signal})))
++  const exit = new Promise<{code: number | null, signal: NodeJS.Signals | null}>((resolve, reject) => { child.once('exit', (code, signal) => resolve({code, signal})); child.once('error', reject) })
++  const boundedExit = () => Promise.race([exit, delay(3000).then(() => { throw Error('child exit timed out') })])
 +  const waitFor = async (file: string) => { for (let i=0; i<500; i++) { try { await access(join(root,file)); return } catch { if (child.exitCode !== null) throw Error(`child exited: ${output}`); await delay(20) } } throw Error(`child barrier timed out: ${output}`) }
 +  try {
 +    await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'store'), compression: 'none' })
@@ -60,52 +62,60 @@ index 00000000..7dcead9d
 +    try {
 +      await tryLockExclusive(corpusLock.fd)
 +      await expect(tryLockExclusive(contender.fd)).rejects.toMatchObject({ syscall: 'flock' })
-+    expect(JSON.parse(await readFile(join(root, 'pending'), 'utf8'))).toEqual(['synthetic-child'])
++    expect(JSON.parse(await readFile(join(root, 'pending'), 'utf8'))).toEqual({ids:['synthetic-child'],pid:child.pid})
 +    expect((await ctx.sessionPersistence.list()).map(item => item.header.id)).toEqual([SessionId('synthetic-parent')])
 +    await writeFile(join(root, 'release'), 'go')
 +    await waitFor('flushed')
 +    expect((await ctx.sessionPersistence.list()).map(item => item.header.id)).toContain(SessionId('synthetic-child'))
-+    expect(await exit).toEqual({code: 0, signal: null})
++    expect(await boundedExit()).toEqual({code: 0, signal: null})
 +    } finally { await contender.close(); await corpusLock.close() }
 +    await own.close()
 +  } finally {
-+    if (child.exitCode === null && child.signalCode === null) { if (child.pid !== undefined) process.kill(-child.pid, 'SIGKILL'); await exit }
-+    if (child.pid !== undefined) { try { process.kill(-child.pid, 'SIGKILL') } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error } }
++    if (child.exitCode === null && child.signalCode === null) {
++      child.kill('SIGKILL')
++      await boundedExit()
++    }
 +    await ctx.fiber.dispose()
 +    await rm(root, { recursive: true, force: true })
 +  }
++  expect(signalChild).not.toHaveBeenCalled()
 +}, 30000)
 +
 +it('loses a separate process unmaterialized create on crash', async () => {
 +  const { spawn } = await import('node:child_process')
-+  const { access } = await import('node:fs/promises')
++  const { access, readFile } = await import('node:fs/promises')
 +  const { setTimeout: delay } = await import('node:timers/promises')
 +  const root = await mkdtemp(join(tmpdir(), 'r7-jsonl-crash-'))
 +  const ctx = new Context()
-+  const child = spawn(process.execPath, [join(process.cwd(), 'node_modules/vitest/vitest.mjs'), 'run', 'packages/session/session-persistence-jsonl/tests/r7-corpus-child.spec.ts', '--maxWorkers=1', '--no-file-parallelism', '--reporter=dot'], {
-+    cwd: process.cwd(), env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME!, TMPDIR: process.env.TMPDIR!, CI: 'true', R7_SYNTHETIC_ROOT: root }, detached: true, stdio: ['ignore', 'ignore', 'ignore'],
++  const child = spawn(process.execPath, [join(process.cwd(), 'node_modules/vitest/vitest.mjs'), 'run', 'packages/session/session-persistence-jsonl/tests/r7-corpus-child.spec.ts', '--pool=threads', '--maxWorkers=1', '--no-file-parallelism', '--reporter=dot'], {
++    cwd: process.cwd(), env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME!, TMPDIR: process.env.TMPDIR!, CI: 'true', R7_SYNTHETIC_ROOT: root }, stdio: ['ignore', 'ignore', 'ignore'],
 +  })
-+  const exit = new Promise<{code: number | null, signal: NodeJS.Signals | null}>(resolve => child.once('exit', (code, signal) => resolve({code, signal})))
++  const signalChild = vi.spyOn(child, 'kill')
++  const exit = new Promise<{code: number | null, signal: NodeJS.Signals | null}>((resolve, reject) => { child.once('exit', (code, signal) => resolve({code, signal})); child.once('error', reject) })
++  const boundedExit = () => Promise.race([exit, delay(3000).then(() => { throw Error('child exit timed out') })])
 +  try {
 +    await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'store'), compression: 'none' })
 +    let ready = false
 +    for (let i=0; i<500; i++) { try { await access(join(root,'pending')); ready = true; break } catch { if (child.exitCode !== null) throw Error('child exited before pending'); await delay(20) } }
 +    expect(ready).toBe(true)
++    expect(JSON.parse(await readFile(join(root, 'pending'), 'utf8')).pid).toBe(child.pid)
 +    expect((await ctx.sessionPersistence.list()).map(item => item.header.id)).not.toContain(SessionId('synthetic-child'))
-+    if (child.pid === undefined) throw Error('child has no pid')
-+    process.kill(-child.pid, 'SIGKILL')
-+    expect(await exit).toEqual({code: null, signal: 'SIGKILL'})
++    expect(child.kill('SIGKILL')).toBe(true)
++    expect(await boundedExit()).toEqual({code: null, signal: 'SIGKILL'})
 +    expect((await ctx.sessionPersistence.list()).map(item => item.header.id)).not.toContain(SessionId('synthetic-child'))
 +  } finally {
-+    if (child.exitCode === null && child.signalCode === null) { if (child.pid !== undefined) process.kill(-child.pid, 'SIGKILL'); await exit }
-+    if (child.pid !== undefined) { try { process.kill(-child.pid, 'SIGKILL') } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error } }
++    if (child.exitCode === null && child.signalCode === null) {
++      child.kill('SIGKILL')
++      await boundedExit()
++    }
 +    await ctx.fiber.dispose()
 +    await rm(root, { recursive: true, force: true })
 +  }
++  expect(signalChild).toHaveBeenCalledTimes(1)
 +}, 30000)
 diff --git a/packages/session/session-persistence-jsonl/tests/r7-corpus-child.spec.ts b/packages/session/session-persistence-jsonl/tests/r7-corpus-child.spec.ts
 new file mode 100644
-index 00000000..64ecbc9f
+index 00000000..b66efc6d
 --- /dev/null
 +++ b/packages/session/session-persistence-jsonl/tests/r7-corpus-child.spec.ts
 @@ -0,0 +1,25 @@
@@ -125,7 +135,7 @@ index 00000000..64ecbc9f
 +    await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'store'), compression: 'none' })
 +    const handle = await ctx.sessionPersistence.create({ version: SESSION_FORMAT_VERSION, id: SessionId('synthetic-child'), createdAt: 1, cwd: '/synthetic', isSeeded: false })
 +    const own = (await ctx.sessionPersistence.list()).map(item => item.header.id).sort()
-+    await writeFile(join(root, 'pending'), JSON.stringify(own))
++    await writeFile(join(root, 'pending'), JSON.stringify({ ids: own, pid: process.pid }))
 +    let released = false
 +    for (let i = 0; i < 500; i++) { try { await access(join(root, 'release')); released = true; break } catch { await delay(20) } }
 +    if (!released) throw Error('parent barrier timed out')
