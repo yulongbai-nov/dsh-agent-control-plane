@@ -1,0 +1,107 @@
+diff --git a/packages/session/session-persistence-jsonl/tests/r7-corpus-visibility.spec.ts b/packages/session/session-persistence-jsonl/tests/r7-corpus-visibility.spec.ts
+new file mode 100644
+index 00000000..c349d08d
+--- /dev/null
++++ b/packages/session/session-persistence-jsonl/tests/r7-corpus-visibility.spec.ts
+@@ -0,0 +1,70 @@
++/** Synthetic shared-root JSONL contract probe; no user profile or service. */
++import { mkdtemp, rm } from 'node:fs/promises'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { Context } from '@deepseek-ai/cordis'
++import { SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
++import { expect, it } from 'vitest'
++import * as JsonlSessionPersistence from '../src/index.ts'
++
++it('keeps two pending writers local until each materializes', async () => {
++  const root = await mkdtemp(join(tmpdir(), 'r7-jsonl-corpus-'))
++  const a = new Context(), b = new Context()
++  try {
++    await a.plugin(JsonlSessionPersistence, { root, compression: 'none' })
++    await b.plugin(JsonlSessionPersistence, { root, compression: 'none' })
++    const header = (id: string) => ({ version: SESSION_FORMAT_VERSION, id: SessionId(id), createdAt: 1, cwd: '/synthetic', isSeeded: false })
++    const first = await a.sessionPersistence.create(header('synthetic-a'))
++    const second = await b.sessionPersistence.create(header('synthetic-b'))
++    const ids = async (ctx: Context) => (await ctx.sessionPersistence.list()).map(item => item.header.id).sort()
++    expect(await ids(a)).toEqual(['synthetic-a'])
++    expect(await ids(b)).toEqual(['synthetic-b'])
++    await first.flush()
++    expect(await ids(b)).toEqual(['synthetic-a', 'synthetic-b'])
++    expect(await ids(a)).toEqual(['synthetic-a'])
++    await second.flush()
++    expect(await ids(a)).toEqual(['synthetic-a', 'synthetic-b'])
++    await first.close(); await second.close()
++  } finally {
++    await Promise.all([a.fiber.dispose(), b.fiber.dispose()])
++    await rm(root, { recursive: true, force: true })
++  }
++})
++
++it('observes a separate process pending create only after materialization', async () => {
++  const { spawn } = await import('node:child_process')
++  const { access, open, readFile, writeFile } = await import('node:fs/promises')
++  const { tryLockExclusive } = await import('@deepseek-ai/node-addon-system/flock')
++  const { setTimeout: delay } = await import('node:timers/promises')
++  const root = await mkdtemp(join(tmpdir(), 'r7-jsonl-process-'))
++  const ctx = new Context()
++  const child = spawn(process.execPath, [join(process.cwd(), 'node_modules/vitest/vitest.mjs'), 'run', 'packages/session/session-persistence-jsonl/tests/r7-corpus-child.spec.ts', '--maxWorkers=1', '--no-file-parallelism', '--reporter=dot'], {
++    cwd: process.cwd(), env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME!, TMPDIR: process.env.TMPDIR!, CI: 'true', R7_SYNTHETIC_ROOT: root }, stdio: ['ignore', 'pipe', 'pipe'],
++  })
++  let output = ''; child.stdout.on('data', data => { output += String(data) }); child.stderr.on('data', data => { output += String(data) })
++  const exit = new Promise<{code: number | null, signal: NodeJS.Signals | null}>(resolve => child.once('exit', (code, signal) => resolve({code, signal})))
++  const waitFor = async (file: string) => { for (let i=0; i<500; i++) { try { await access(join(root,file)); return } catch { if (child.exitCode !== null) throw Error(`child exited: ${output}`); await delay(20) } } throw Error(`child barrier timed out: ${output}`) }
++  try {
++    await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'store'), compression: 'none' })
++    const own = await ctx.sessionPersistence.create({ version: SESSION_FORMAT_VERSION, id: SessionId('synthetic-parent'), createdAt: 1, cwd: '/synthetic', isSeeded: false })
++    await waitFor('pending')
++    // A proposed cooperative corpus lock cannot fence unmodified writers.
++    const corpusLock = await open(join(root, 'candidate-corpus.lock'), 'w')
++    const contender = await open(join(root, 'candidate-corpus.lock'), 'r+')
++    try {
++      await tryLockExclusive(corpusLock.fd)
++      await expect(tryLockExclusive(contender.fd)).rejects.toMatchObject({ syscall: 'flock' })
++    expect(JSON.parse(await readFile(join(root, 'pending'), 'utf8'))).toEqual(['synthetic-child'])
++    expect((await ctx.sessionPersistence.list()).map(item => item.header.id)).toEqual([SessionId('synthetic-parent')])
++    await writeFile(join(root, 'release'), 'go')
++    await waitFor('flushed')
++    expect((await ctx.sessionPersistence.list()).map(item => item.header.id)).toContain(SessionId('synthetic-child'))
++    expect(await exit).toEqual({code: 0, signal: null})
++    } finally { await contender.close(); await corpusLock.close() }
++    await own.close()
++  } finally {
++    if (child.exitCode === null && child.signalCode === null) { child.kill('SIGKILL'); await exit }
++    await ctx.fiber.dispose()
++    await rm(root, { recursive: true, force: true })
++  }
++}, 30000)
+diff --git a/packages/session/session-persistence-jsonl/tests/r7-corpus-child.spec.ts b/packages/session/session-persistence-jsonl/tests/r7-corpus-child.spec.ts
+new file mode 100644
+index 00000000..64ecbc9f
+--- /dev/null
++++ b/packages/session/session-persistence-jsonl/tests/r7-corpus-child.spec.ts
+@@ -0,0 +1,25 @@
++/** Isolated child worker used only when the synthetic parent supplies a root. */
++import { access, writeFile } from 'node:fs/promises'
++import { join } from 'node:path'
++import { setTimeout as delay } from 'node:timers/promises'
++import { Context } from '@deepseek-ai/cordis'
++import { SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
++import { it } from 'vitest'
++import * as JsonlSessionPersistence from '../src/index.ts'
++const root = process.env.R7_SYNTHETIC_ROOT
++it.skipIf(root === undefined)('publishes a pending JSONL session only after the parent barrier', async () => {
++  if (root === undefined) throw Error('missing synthetic root')
++  const ctx = new Context()
++  try {
++    await ctx.plugin(JsonlSessionPersistence, { root: join(root, 'store'), compression: 'none' })
++    const handle = await ctx.sessionPersistence.create({ version: SESSION_FORMAT_VERSION, id: SessionId('synthetic-child'), createdAt: 1, cwd: '/synthetic', isSeeded: false })
++    const own = (await ctx.sessionPersistence.list()).map(item => item.header.id).sort()
++    await writeFile(join(root, 'pending'), JSON.stringify(own))
++    let released = false
++    for (let i = 0; i < 500; i++) { try { await access(join(root, 'release')); released = true; break } catch { await delay(20) } }
++    if (!released) throw Error('parent barrier timed out')
++    await handle.flush()
++    await writeFile(join(root, 'flushed'), 'ready')
++    await handle.close()
++  } finally { await ctx.fiber.dispose() }
++}, 15000)
