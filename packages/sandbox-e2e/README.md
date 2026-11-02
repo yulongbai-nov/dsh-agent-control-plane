@@ -66,3 +66,13 @@ NODE
 5. **验收及证据：**使用同一隔离浏览器真实加载 server 提供的地址，验证页面、插件加载、树展开、模拟 fixture 导航、locale、键盘和浅/深色（R17）；输出不含 token、用户路径/隐私的日志和截图。现有 app 窗口与 profile 保持不变。只有这些实际完成才可称 GUI 端到端；具体 R7 仍需对照其侧栏位置要求。
 
 当前这五项均未被证明，不运行服务或浏览器。已有的 [`sandbox-smoke`](../sandbox-smoke/README.md) 是真实 rc.5 服务与模拟客户端环境的内存集成，不应冒充上述验收。
+
+## Synthetic file canary（窄范围，不授予启动权限）
+
+`file-canary.mjs` 在调用者指定的绝对目录下新建并保留合成文件，用子进程单独检查允许文件、拒绝文件、符号链接及继承子进程。用法：`node packages/sandbox-e2e/file-canary.mjs /absolute/existing/test-directory`。它不会读取个人文件，也不会启动服务、浏览器或模型；为便于审计，合成目录不会自动清理。命令只输出状态、测试目录、检查结果和退出状态；窄范围检查通过退出 0，检查未通过或阻断退出 1，准备失败退出 2。测试结果里的 `PASS_NARROW_FILE_PROBE` 仅覆盖上述几个文件读取操作，`e2eReady` 永远为 false。
+
+该探针的 `(allow default)` 策略**不是**应用隔离策略；它没有测试 Keychain、IPC、网络、真实应用、浏览器或所有后代进程，也不证明合成测试的拒绝适用于用户数据。任一启动失败、输出不可解析、错误或对照不符均报告 `BLOCKED_OR_FAILED`。例如受限环境可能不允许再嵌套 `sandbox-exec`；不能用该失败推断策略已生效，也不得通过降级外围安全边界绕过。真实 E2E 仍以原有全部隔离门槛为准。
+
+## Synthetic network canary（窄范围）
+
+`network-canary.mjs` 在调用它的候选策略下依次创建并关闭临时 IPv4 loopback 和 wildcard 监听，不连接任何现有服务。仅当 loopback 成功而 wildcard 因权限被拒绝时报告 `PASS`；wildcard 成功报告 `FAIL`，其他未知情况报告 `BLOCKED`，`ready` 始终为 false。它不验证出站、IPv6、子进程、IPC 或真实服务，不能作为完整隔离证明。本机重新验证的 `localhost:*` 示例允许 wildcard，因而报告 `FAIL`。
