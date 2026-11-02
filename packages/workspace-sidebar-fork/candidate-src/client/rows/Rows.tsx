@@ -543,7 +543,7 @@ export function SearchResultItem({ result, currentId, onOpen, onUnarchive, t }: 
  * @returns the session row.
  */
 export function SessionNodeItem({
-  node, currentId, now, onOpen, onRenameRequest, renderSlot, onReveal, drag, t, lineageToggle,
+  node, currentId, now, onOpen, onRenameRequest, renderSlot, onReveal, drag, t, lineageToggle, lineageExpanded, lineageGroupId,
 }: {
   node: SessionNode
   currentId: string | undefined
@@ -557,6 +557,9 @@ export function SessionNodeItem({
   drag?: RowDragProps | undefined
   /** Experimental lineage control inserted without replacing native row actions. */
   lineageToggle?: ReactNode
+  /** Accessibility ownership of the independently laid-out lineage group. */
+  lineageExpanded?: boolean | undefined
+  lineageGroupId?: string | undefined
   t: RowTranslate
 } & PropsRenderSlots<
   | 'sidebar.workspaces.session.menu.item'
@@ -597,6 +600,8 @@ export function SessionNodeItem({
       )}
       role="treeitem"
       aria-selected={selected}
+      aria-expanded={lineageExpanded}
+      aria-owns={lineageExpanded ? lineageGroupId : undefined}
       aria-description={row.archived ? t('toast.archivedNotOpenable') : undefined}
       onClick={() => { onOpen(node.id) }}
       onPointerEnter={marquee.enter}

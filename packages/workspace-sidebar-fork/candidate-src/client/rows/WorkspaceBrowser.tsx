@@ -622,7 +622,7 @@ function SessionTree({
             },
           }
           return (
-            <LineageGraft key={node.id} root={node} scopeRootIds={group.sessions.map(session => session.id)} list={list} statuses={statuses} rowState={rowState} t={t} refreshLineage={refreshLineage} openLineage={openLineage} renderNative={lineageToggle => <SessionNodeItem
+            <LineageGraft key={node.id} root={node} scopeRootIds={group.sessions.map(session => session.id)} list={list} statuses={statuses} rowState={rowState} t={t} refreshLineage={refreshLineage} openLineage={openLineage} renderNative={(lineageToggle,lineageExpanded,lineageGroupId) => <SessionNodeItem
               node={node}
               currentId={current}
               now={now}
@@ -634,6 +634,8 @@ function SessionTree({
                 : undefined}
               drag={dragProps}
               lineageToggle={lineageToggle}
+              lineageExpanded={lineageExpanded}
+              lineageGroupId={lineageGroupId}
               t={t}
             />} />
           )
@@ -749,7 +751,7 @@ function FlatList({
           const normalizeHalf = (half: 'before' | 'after'): 'before' | 'after' =>
             node.blank ? 'after' : half
           return (
-            <LineageGraft key={node.id} root={node} scopeRootIds={rows.map(row => row.id)} list={list} statuses={statuses} rowState={rowState} t={t} refreshLineage={refreshLineage} openLineage={openLineage} renderNative={lineageToggle => <SessionNodeItem
+            <LineageGraft key={node.id} root={node} scopeRootIds={rows.map(row => row.id)} list={list} statuses={statuses} rowState={rowState} t={t} refreshLineage={refreshLineage} openLineage={openLineage} renderNative={(lineageToggle,lineageExpanded,lineageGroupId) => <SessionNodeItem
               node={node}
               currentId={currentId}
               now={now}
@@ -781,6 +783,8 @@ function FlatList({
                 },
               }}
               lineageToggle={lineageToggle}
+              lineageExpanded={lineageExpanded}
+              lineageGroupId={lineageGroupId}
               t={t}
             />} />
           )

@@ -1,33 +1,33 @@
 diff --git a/packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx b/packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx
-index 4b62826c..de7646aa 100644
+index 4b62826..48fc980 100644
 --- a/packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx
 +++ b/packages/client/ui-workspace/tests/workspace-browser.client.spec.tsx
-@@ -127,6 +127,8 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
-     actions: store.actions,
-     startSession: vi.fn(),
-     open: vi.fn(),
+@@ -129,0 +130,2 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
 +    refreshLineage: vi.fn(async () => {}),
 +    openLineage: vi.fn(),
-     searchSessions: vi.fn(async () => ({ items: [], hasMore: false })),
-     searchResultLimit: 20,
-     notifyArchivedNotOpenable: vi.fn(),
-@@ -1260,7 +1262,7 @@ describe('WorkspaceBrowser', () => {
-     expect(unarchiveSession).toHaveBeenCalledWith(sid('gone'))
-   })
- 
+@@ -171 +173 @@ describe('WorkspaceBrowser', () => {
+-      .filter(row => row.getAttribute('aria-expanded') === null)
++      .filter(row => row.getAttribute('data-row-key')?.startsWith('session:') === true)
+@@ -203 +205 @@ describe('WorkspaceBrowser', () => {
+-    const names = () => screen.getAllByRole('treeitem').filter(row => row.getAttribute('aria-expanded') === null)
++    const names = () => screen.getAllByRole('treeitem').filter(row => row.getAttribute('data-row-key')?.startsWith('session:') === true)
+@@ -243 +245 @@ describe('WorkspaceBrowser', () => {
+-    const rows = () => screen.getAllByRole('treeitem').filter(row => row.getAttribute('aria-expanded') === null)
++    const rows = () => screen.getAllByRole('treeitem').filter(row => row.getAttribute('data-row-key')?.startsWith('session:') === true)
+@@ -335 +337 @@ describe('WorkspaceBrowser', () => {
+-      .filter(row => row.getAttribute('aria-expanded') === null)
++      .filter(row => row.getAttribute('data-row-key')?.startsWith('session:') === true)
+@@ -1150 +1152 @@ describe('WorkspaceBrowser', () => {
+-        .filter(row => row.getAttribute('aria-expanded') === null)
++        .filter(row => row.getAttribute('data-row-key')?.startsWith('session:') === true)
+@@ -1263 +1265 @@ describe('WorkspaceBrowser', () => {
 -  it('renders a fork child as a top-level row without a session twist', () => {
 +  it('keeps a fork child as a draggable top-level row while adding a separate subagent control', () => {
-     const parent = summary('parent-s', 2)
-     const child = { ...summary('child-s', 1), parentId: parent.id }
-     mount({
-@@ -1269,8 +1271,44 @@ describe('WorkspaceBrowser', () => {
-     })
-     fireEvent.click(screen.getByText('alpha'))
-     expect(screen.getByText('child-s')).toBeTruthy()
+@@ -1272,2 +1274,38 @@ describe('WorkspaceBrowser', () => {
 -    expect(screen.queryByRole('button', { name: /展开|收起/ })).toBeNull()
 -    expect(screen.getByText('child-s').closest('[role="treeitem"]')?.getAttribute('draggable')).toBe('true')
 +    const childRow = screen.getByText('child-s').closest('[role="treeitem"]')
-+    expect(childRow?.getAttribute('aria-expanded')).toBeNull()
++    expect(childRow?.getAttribute('aria-expanded')).toBe('false')
 +    expect(childRow?.getAttribute('draggable')).toBe('true')
 +    expect(within(childRow as HTMLElement).getByRole('button', { name: '展开 child-s 的子代理' })).toBeTruthy()
 +  })
@@ -64,6 +64,6 @@ index 4b62826c..de7646aa 100644
 +    expect(screen.queryByText('deep')).toBeNull()
 +    fireEvent.click(screen.getByRole('button', { name: '展开 root 的子代理' }))
 +    expect(screen.queryByText('deep')).toBeNull()
-   })
- 
-   it('expands the target group before starting a session from its ＋', () => {
+@@ -1363 +1401 @@ describe('WorkspaceBrowser', () => {
+-    const names = () => screen.getAllByRole('treeitem').filter(row => row.getAttribute('aria-expanded') === null)
++    const names = () => screen.getAllByRole('treeitem').filter(row => row.getAttribute('data-row-key')?.startsWith('session:') === true)
