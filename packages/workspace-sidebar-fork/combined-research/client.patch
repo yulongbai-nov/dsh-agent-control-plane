@@ -1,0 +1,126 @@
+diff --git a/packages/api/session-controller/src/client/sessions/manager.ts b/packages/api/session-controller/src/client/sessions/manager.ts
+index b8bec9be..4a35a6c5 100644
+--- a/packages/api/session-controller/src/client/sessions/manager.ts
++++ b/packages/api/session-controller/src/client/sessions/manager.ts
+@@ -648,0 +649,23 @@ export class SessionManager {
++    if (frame.type === 'access-reset') {
++      // Access changes are not Session events: reset existing values and cuts
++      // rather than fabricating a higher seq, and fence outstanding reads.
++      // Session list replies have no cancellation parameter; invalidate their
++      // mutation token so an old principal's response cannot repopulate rows.
++      this.listMutations = null
++      this.listInflight = null
++      this.summaries = []
++      this.listPhase = 'pending'
++      this.listState = 'idle'
++      this.listError = null
++      this.engagedSessions.clear()
++      this.addresses.clear()
++      this.entryCache.clear()
++      this.itemsCache = []
++      for (const { controller } of this.projectionInflight.values()) controller.abort()
++      this.projectionInflight.clear()
++      this.projectionLoads.clear()
++      for (const store of this.projectionStores.values()) store.clear()
++      this.projectionStores.clear()
++      this.replaceControlBaseline(frame.value)
++      return
++    }
+diff --git a/packages/api/session-controller/src/client/sessions/service.ts b/packages/api/session-controller/src/client/sessions/service.ts
+index 8511b882..0405e68c 100644
+--- a/packages/api/session-controller/src/client/sessions/service.ts
++++ b/packages/api/session-controller/src/client/sessions/service.ts
+@@ -65,0 +66,2 @@ export interface SessionListState {
++  /** Monotone count of access resets in this Client instance, omitted before the first. */
++  accessResetRevision?: number
+@@ -249,0 +252 @@ export class ClientSessions implements ISessions {
++  private accessResetRevision = 0
+@@ -379,0 +383,17 @@ export class ClientSessions implements ISessions {
++    if (frame.type !== 'access-reset') return
++    this.accessResetRevision++
++    // No access-reset frame carries a complete list or an authorization proof
++    // for previously retained scopes. Withdraw all prior-generation references
++    // synchronously; callers can reopen allowed sessions after the fresh list.
++    const scopes = [...this.scopes]
++    this.scopes.clear()
++    for (const [id, record] of scopes) {
++      record.live = false
++      record.session.unbindScope()
++      this.startScopeDrop(id, record)
++    }
++    this.projectList()
++    for (const [id] of scopes) this.publishRetention(id)
++    // The old list pull is fenced in SessionManager; obtain a new one without
++    // exposing the old metadata while the request is pending or has failed.
++    void this.manager.refreshList().catch(() => {})
+@@ -691 +711,2 @@ export class ClientSessions implements ISessions {
+-    this.list.set({ ids, byId, phase, projectionsBySession })
++    this.list.set({ ids, byId, phase, projectionsBySession,
++      ...(this.accessResetRevision === 0 ? {} : { accessResetRevision: this.accessResetRevision }) })
+diff --git a/packages/api/session-controller/src/client/transport.ts b/packages/api/session-controller/src/client/transport.ts
+index fc2a11a0..d395dad3 100644
+--- a/packages/api/session-controller/src/client/transport.ts
++++ b/packages/api/session-controller/src/client/transport.ts
+@@ -121 +121 @@ export function createSessionControlStream(
+-    open: signal => remote.session.control(signal),
++    open: signal => remote.session.controlV2(signal),
+diff --git a/packages/api/session-controller/tests/client-apply.client.spec.ts b/packages/api/session-controller/tests/client-apply.client.spec.ts
+index 11c98407..ebf247a5 100644
+--- a/packages/api/session-controller/tests/client-apply.client.spec.ts
++++ b/packages/api/session-controller/tests/client-apply.client.spec.ts
+@@ -20 +20 @@ const EVENTS = '$events'
+-const CONTROL = 'session/control'
++const CONTROL = 'session/controlV2'
+diff --git a/packages/api/session-controller/tests/r7-access-reset.client.spec.ts b/packages/api/session-controller/tests/r7-access-reset.client.spec.ts
+new file mode 100644
+index 00000000..c23ba0e9
+--- /dev/null
++++ b/packages/api/session-controller/tests/r7-access-reset.client.spec.ts
+@@ -0,0 +1,47 @@
++import { describe, expect, it } from 'vitest'
++import type { SessionId } from '@deepseek-ai/dsh-session/types'
++import { SessionManager } from '../src/client/sessions/manager.ts'
++const parent='synthetic-parent' as SessionId, removed='synthetic-removed' as SessionId
++
++describe('WIP access reset',()=>{
++ it('clears omitted projections and replaces a catalog at an unchanged source sequence',async()=>{
++  const manager=new SessionManager({} as never)
++  try {
++   manager.handleControlFrame({type:'baseline',value:{projections:{
++    [parent]:{asOfSeq:4,values:{subagentCatalog:[{id:'synthetic-child',mode:'one-shot'}]}},
++    [removed]:{asOfSeq:4,values:{title:'synthetic-private'}}
++   }}} as never)
++   expect(manager.projectionValues(parent)?.subagentCatalog).toHaveLength(1)
++   manager.handleControlFrame({type:'access-reset',value:{projections:{[parent]:{asOfSeq:4,values:{subagentCatalog:[]}}}}} as never)
++   expect(manager.projectionValues(parent)?.subagentCatalog).toEqual([])
++   expect(manager.projectionValues(removed)).toBeUndefined()
++  } finally {await manager.dispose()}
++ })
++ it('aborts an in-flight projection response so it cannot reinsert stale catalog',async()=>{
++  let resolve!: (value:unknown)=>void
++  const remote={session:{projections:()=>new Promise(done=>{resolve=done})}}
++  const manager=new SessionManager(remote as never)
++  try {
++   const pending=manager.refreshProjections(parent)
++   manager.handleControlFrame({type:'access-reset',value:{projections:{[parent]:{asOfSeq:4,values:{subagentCatalog:[]}}}}} as never)
++   resolve({ok:true,value:{kind:'sequenced',asOfSeq:4,values:{subagentCatalog:[{id:'synthetic-child',mode:'one-shot'}]}}})
++   await pending
++   expect(manager.projectionValues(parent)?.subagentCatalog).toEqual([])
++  } finally {await manager.dispose()}
++ })
++})
++
++describe('WIP control protocol compatibility',()=>{
++ it('new client does not silently fall back when old Host lacks controlV2',async()=>{
++  const {createSessionControlStream}=await import('../src/client/transport.ts')
++  let open: ((signal:AbortSignal)=>unknown) | undefined, legacyCalls=0
++  const remote={
++   session:{control(){legacyCalls++}},
++   $stream(options:{open:(signal:AbortSignal)=>unknown}){open=options.open;return {}}
++  }
++  createSessionControlStream(remote as never,{accept(){},failed(){}})
++  expect(open).toBeTypeOf('function')
++  expect(()=>open?.(new AbortController().signal)).toThrow()
++  expect(legacyCalls).toBe(0)
++ })
++})
