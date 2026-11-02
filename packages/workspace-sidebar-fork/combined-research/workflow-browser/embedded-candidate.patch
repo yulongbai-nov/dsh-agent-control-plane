@@ -1,0 +1,253 @@
+diff --git a/packages/client/ui-workflow-run/src/client/WorkflowRunPanel.tsx b/packages/client/ui-workflow-run/src/client/WorkflowRunPanel.tsx
+index 059cf803..097584e2 100644
+--- a/packages/client/ui-workflow-run/src/client/WorkflowRunPanel.tsx
++++ b/packages/client/ui-workflow-run/src/client/WorkflowRunPanel.tsx
+@@ -0,0 +1,2 @@
++import * as React from 'react'
++import { createWorkflowBoard } from './research-workflow-board.mjs'
+@@ -22,0 +25,2 @@ export interface WorkflowRunInjected {
++  /** Test-only supplied topology; no native Host adapter or authenticated source exists. */
++  readonly researchBoard?: unknown
+@@ -349,0 +354,2 @@ function PhaseSection({
++const ResearchBoard = createWorkflowBoard(React)
++
+@@ -351 +357 @@ function PhaseSection({
+-export function WorkflowRunPanel({ node, sessionId, useSessions, useSessionStatus, openSession, t }: WorkflowRunPanelProps) {
++export function WorkflowRunPanel({ node, sessionId, useSessions, useSessionStatus, openSession, t, researchBoard }: WorkflowRunPanelProps) {
+@@ -486,0 +493,3 @@ export function WorkflowRunPanel({ node, sessionId, useSessions, useSessionStatu
++      {researchBoard !== null && typeof researchBoard === 'object'
++        ? <ResearchBoard locale="en" board={{ ...researchBoard, sourceStatus: 'unverified', run: { status: 'unknown' }, statusByNode: {}, events: [], unmatched: [] }} />
++        : null}
+diff --git a/packages/client/ui-workflow-run/src/client/research-workflow-board.mjs b/packages/client/ui-workflow-run/src/client/research-workflow-board.mjs
+new file mode 100644
+index 00000000..6641ac25
+--- /dev/null
++++ b/packages/client/ui-workflow-run/src/client/research-workflow-board.mjs
+@@ -0,0 +1,219 @@
++// Pure view factory; the caller supplies React, the projection and host services.
++const WORDS = {
++  zh: {
++    running: '运行中', completed: '已完成', failed: '失败', cancelled: '已取消', unknown: '未知',
++    invalid: '工作流投影不可用或版本不受支持。', workflow: '工作流', source: '来源未验证：不能将运行事件可靠绑定到静态节点。',
++    graphLabel: '工作流静态拓扑图，节点可用键盘选择', group: '组', unnamed: '未命名节点', phase: '阶段', model: '模型',
++    template: '模板', noNodes: '暂无静态节点。', statusFilter: '按状态筛选', phaseFilter: '按阶段筛选', modelFilter: '按模型筛选',
++    allStatuses: '全部状态', allPhases: '全部阶段', allModels: '全部模型', roster: '节点看板', node: '节点', status: '状态',
++    noRows: '没有符合条件的节点。', selected: '所选节点', open: '打开子会话',
++    gated: '仅可打开已验证直接父级、身份及运行状态的子会话。', choose: '选择图中节点或看板行查看详情。',
++    run: '运行', staticNodes: '静态节点', incomplete: '静态拓扑不完整；未显示的节点不代表不会执行。',
++    missingLayout: '部分节点缺少有效静态坐标，无法显示在图中。', diagnostics: '投影诊断', diagnostic: '诊断',
++    unmatched: '未匹配调用', reasonUnknown: '原因未知', events: '事件流', eventsLabel: '工作流事件流', noEvents: '暂无事件。',
++    event: '事件', time: '时间', invocation: '调用', boardLabel: '工作流拓扑与看板', openError: '打开失败',
++    predecessors: '直接前驱', successors: '直接后继', none: '无', uncertain: '未能确定', links: '静态边'
++  },
++  en: {
++    running: 'Running', completed: 'Completed', failed: 'Failed', cancelled: 'Cancelled', unknown: 'Unknown',
++    invalid: 'Workflow projection unavailable or unsupported version.', workflow: 'Workflow', source: 'Source not verified: runtime events cannot safely bind to static nodes.',
++    graphLabel: 'Static workflow graph; nodes are keyboard selectable', group: 'Group', unnamed: 'Unnamed node', phase: 'Phase', model: 'Model',
++    template: 'Template', noNodes: 'No static nodes.', statusFilter: 'Filter by status', phaseFilter: 'Filter by phase', modelFilter: 'Filter by model',
++    allStatuses: 'All statuses', allPhases: 'All phases', allModels: 'All models', roster: 'Node roster', node: 'Node', status: 'Status',
++    noRows: 'No matching nodes.', selected: 'Selected node', open: 'Open child session',
++    gated: 'Opening requires verified direct parent, identity and live status.', choose: 'Select a graph node or roster row for details.',
++    run: 'Run', staticNodes: 'Static nodes', incomplete: 'Static topology is incomplete; omitted nodes may still execute.',
++    missingLayout: 'Some nodes lack valid static coordinates and cannot be displayed.', diagnostics: 'Projection diagnostics', diagnostic: 'Diagnostic',
++    unmatched: 'Unmatched invocations', reasonUnknown: 'Unknown reason', events: 'Events', eventsLabel: 'Workflow event stream', noEvents: 'No events.',
++    event: 'Event', time: 'Time', invocation: 'Invocation', boardLabel: 'Workflow topology and roster', openError: 'Open failed',
++    predecessors: 'Predecessors', successors: 'Successors', none: 'None', uncertain: 'Not determined', links: 'Static edges'
++  }
++};
++const stateOf = member => ['running', 'completed', 'failed', 'cancelled', 'unknown'].includes(member?.status) ? member.status : 'unknown';
++const validId = id => typeof id === 'string' && id.length > 0;
++
++// Match rc.5 workflow-run's conservative live-only child navigation.
++export function navigationTarget(board, member, sessions, statuses) {
++  const parent = board?.parentSessionId, id = member?.childId;
++  if (!validId(board?.runId) || board?.sourceStatus !== 'verified' || board?.topology?.complete !== true || !validId(parent) || !validId(id) || stateOf(member) !== 'running') return null;
++  const child = sessions?.byId?.[id];
++  const identity = sessions?.projectionsBySession?.[id]?.values?.subagent;
++  if (child?.parentId !== parent || !(statuses?.get?.(id)?.running ?? child?.running)) return null;
++  if (identity?.mode !== 'one-shot' && identity?.mode !== 'continuable') return null;
++  return { parentSessionId: parent, childSessionId: id, mode: identity.mode };
++}
++
++const CSS = `
++.wbc{color:var(--dsw-alias-label-primary);font:13px/1.5 system-ui,sans-serif;min-width:0}.wbc *{box-sizing:border-box}.wbc h2,.wbc h3{margin:.5em 0}.wbc button,.wbc select{font:inherit;color:inherit}.wbc button{cursor:pointer}.wbc button:disabled{cursor:not-allowed;opacity:.55}.wbc :focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}.wbc .subtle,.wbc .muted{color:var(--dsw-alias-label-tertiary)}.wbc .warn{color:var(--dsw-alias-state-warn-label)}.wbc .panels{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,38%);gap:12px}.wbc .graph{overflow:auto;border:1px solid var(--dsw-alias-border-l3);border-radius:8px}.wbc svg{display:block;min-width:100%;background:var(--dsw-alias-bg-layer-1)}.wbc svg .edge{fill:none;stroke:var(--dsw-alias-border-l1);stroke-width:1.5}.wbc svg .group{fill:none;stroke:var(--dsw-alias-border-l2);stroke-dasharray:5 4}.wbc svg .group-label{fill:var(--dsw-alias-label-tertiary);font-size:11px}.wbc svg .node{fill:var(--dsw-alias-bg-layer-1);stroke:var(--dsw-alias-border-l2);stroke-width:1.5}.wbc svg g[aria-pressed=true] .node{stroke:var(--dsw-alias-brand-primary);stroke-width:3}.wbc svg .label{fill:var(--dsw-alias-label-primary);font-size:13px}.wbc svg .meta{fill:var(--dsw-alias-label-tertiary);font-size:11px}.wbc .dot{fill:var(--dsw-alias-label-tertiary)}.wbc .dot.running{fill:var(--dsw-alias-state-business-primary)}.wbc .dot.completed{fill:var(--dsw-alias-state-success-primary)}.wbc .dot.failed{fill:var(--dsw-alias-state-error-primary)}.wbc .dot.cancelled{fill:var(--dsw-alias-state-warn-label)}.wbc .filters{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}.wbc select{max-width:135px}.wbc table{border-collapse:collapse;width:100%;text-align:left;font-size:12px}.wbc th,.wbc td{border-bottom:1px solid var(--dsw-alias-border-l3);padding:5px}.wbc .row-select{width:100%;border:0;background:transparent;text-align:left;padding:3px}.wbc tr[data-selected=true]{background:var(--dsw-alias-interactive-bg-hover)}.wbc .detail,.wbc .events{margin-top:12px}.wbc .events ol{padding-left:22px}.wbc .events li{overflow-wrap:anywhere}.wbc .diagnostics{margin:8px 0}.wbc .empty{padding:12px;color:var(--dsw-alias-label-tertiary)}@media(max-width:760px){.wbc .panels{grid-template-columns:minmax(0,1fr)}}
++`;
++
++export function createWorkflowBoard(React) {
++  const h = React.createElement;
++  function WorkflowBoard({ board, sessions, statuses, openSession, locale = 'zh' }) {
++    const words = typeof locale === 'string' && locale.toLowerCase().startsWith('en') ? WORDS.en : WORDS.zh;
++    const [selection, setSelection] = React.useState(null);
++    const [filters, setFilters] = React.useState(null);
++    const [openError, setOpenError] = React.useState(null);
++    const request = React.useRef({ active: false, generation: 0 });
++    const clipPrefix = React.useId();
++    React.useLayoutEffect(() => {
++      request.current.active = true;
++      request.current.generation++;
++      setOpenError(null);
++      return () => { request.current.active = false; request.current.generation++; };
++    }, [board?.runId, board?.parentSessionId, selection?.id]);
++    React.useLayoutEffect(() => {
++      if (!filters || filters.runId !== board?.runId || filters.parentSessionId !== board?.parentSessionId || !Array.isArray(board?.topology?.nodes)) return;
++      const phases = board.topology.nodes.map(node => node?.phase);
++      const models = board.topology.nodes.map(node => node?.model);
++      const phase = filters.phase && !phases.includes(filters.phase) ? '' : filters.phase;
++      const model = filters.model && !models.includes(filters.model) ? '' : filters.model;
++      if (phase !== filters.phase || model !== filters.model) setFilters({ ...filters, phase, model });
++    }, [board?.runId, board?.parentSessionId, board?.topology?.nodes, filters]);
++    if (!board || board.version !== 1 || !board.topology || !board.layout || !Array.isArray(board.topology.nodes) || !Array.isArray(board.layout.nodes) || board.topology.nodes.some(node => !node || !validId(node.id)) || board.layout.nodes.some(node => !node || !validId(node.id))) {
++      return h('section', { className: 'wbc', role: 'status' }, h('style', null, CSS), words.invalid);
++    }
++    const topology = board.topology, layout = board.layout;
++    const selected = selection?.runId === board.runId && selection?.parentSessionId === board.parentSessionId ? selection.id : null;
++    const setSelected = id => {
++      request.current.generation++;
++      setOpenError(null);
++      setSelection({ id, runId: board.runId, parentSessionId: board.parentSessionId });
++    };
++    const positions = new Map(layout.nodes.map(pos => [pos.id, pos]));
++    const staticNodes = new Map(topology.nodes.map(node => [node.id, node]));
++    const counts = new Map();
++    for (const node of topology.nodes) counts.set(node.id, (counts.get(node.id) ?? 0) + 1);
++    const members = Object.create(null);
++    if (board.sourceStatus === 'verified' && topology.complete === true) {
++      for (const node of topology.nodes) {
++        if (node.occurrence === 'single' && counts.get(node.id) === 1 && Object.hasOwn(board.statusByNode ?? {}, node.id)) {
++          Object.defineProperty(members, node.id, { value: board.statusByNode[node.id], enumerable: true });
++        }
++      }
++    }
++    const graphNodes = topology.nodes.flatMap(node => {
++      const pos = positions.get(node.id);
++      if (!pos || ![pos.x, pos.y, pos.width, pos.height].every(Number.isFinite) || pos.width <= 0 || pos.height <= 0) return [];
++      return [{ node, pos }];
++    });
++    const displayedPositions = new Map(graphNodes.map(({ node, pos }) => [node.id, pos]));
++    const coords = graphNodes.map(({ pos }) => pos);
++    const groups = (Array.isArray(layout.groups) ? layout.groups : []).flatMap(group => {
++      const bounds = group?.bounds;
++      return bounds && [bounds.x, bounds.y, bounds.width, bounds.height].every(Number.isFinite) && bounds.width > 0 && bounds.height > 0 ? [group] : [];
++    });
++    const left = Math.min(0, ...coords.map(pos => pos.x), ...groups.map(group => group.bounds.x));
++    const top = Math.min(0, ...coords.map(pos => pos.y), ...groups.map(group => group.bounds.y));
++    const right = Math.max(400, ...coords.map(pos => pos.x + pos.width), ...groups.map(group => group.bounds.x + group.bounds.width));
++    const bottom = Math.max(180, ...coords.map(pos => pos.y + pos.height), ...groups.map(group => group.bounds.y + group.bounds.height));
++    const links = new Map(topology.nodes.map(node => [node.id, { before: [], after: [] }]));
++    const topologyEdges = Array.isArray(topology.edges) ? topology.edges : [];
++    for (const edge of topologyEdges) {
++      if (!edge || !links.has(edge.from) || !links.has(edge.to)) continue;
++      const after = links.get(edge.from).after, before = links.get(edge.to).before;
++      if (!after.includes(edge.to)) after.push(edge.to);
++      if (!before.includes(edge.from)) before.push(edge.from);
++    }
++    function linkText(id) {
++      const link = links.get(id) ?? { before: [], after: [] };
++      const names = ids => ids.length ? ids.map(target => staticNodes.get(target)?.label || words.unnamed).join(', ') : topology.complete === true ? words.none : words.uncertain;
++      return `${words.links} — ${words.predecessors}: ${names(link.before)}; ${words.successors}: ${names(link.after)}`;
++    }
++    const edges = topologyEdges.flatMap((edge, index) => {
++      if (!edge || typeof edge !== 'object') return [];
++      const a = displayedPositions.get(edge.from), b = displayedPositions.get(edge.to);
++      if (!staticNodes.has(edge.from) || !staticNodes.has(edge.to) || !a || !b || ![a.x, a.y, a.width, a.height, b.x, b.y, b.width, b.height].every(Number.isFinite) || a.width <= 0 || a.height <= 0 || b.width <= 0 || b.height <= 0) return [];
++      const x1 = a.x + a.width, y1 = a.y + a.height / 2, x2 = b.x, y2 = b.y + b.height / 2;
++      const center = (x1 + x2) / 2;
++      return [h('path', { key: `${edge.from}:${edge.to}:${index}`, className: 'edge', d: `M ${x1} ${y1} C ${center} ${y1}, ${center} ${y2}, ${x2} ${y2}`, 'data-edge': `${edge.from}:${edge.to}`, 'aria-hidden': true })];
++    });
++    const phases = [...new Set(topology.nodes.map(node => node.phase).filter(validId))];
++    const models = [...new Set(topology.nodes.map(node => node.model).filter(validId))];
++    const sameRun = filters?.runId === board.runId && filters?.parentSessionId === board.parentSessionId;
++    const statusFilter = sameRun ? filters.status : '';
++    const phaseFilter = sameRun && phases.includes(filters.phase) ? filters.phase : '';
++    const modelFilter = sameRun && models.includes(filters.model) ? filters.model : '';
++    const changeFilter = (key, value) => setFilters({ runId: board.runId, parentSessionId: board.parentSessionId, status: statusFilter, phase: phaseFilter, model: modelFilter, [key]: value });
++    const roster = topology.nodes.filter(node => (!statusFilter || stateOf(members[node.id]) === statusFilter) && (!phaseFilter || node.phase === phaseFilter) && (!modelFilter || node.model === modelFilter));
++    const selectedNode = staticNodes.get(selected);
++    const member = members[selected];
++    const target = selectedNode ? navigationTarget(board, member, sessions, statuses) : null;
++    function openChild() {
++      if (!target || typeof openSession !== 'function') return;
++      const generation = ++request.current.generation;
++      setOpenError(null);
++      const report = error => {
++        if (request.current.active && request.current.generation === generation) {
++          setOpenError({ runId: board.runId, parentSessionId: board.parentSessionId, nodeId: selected, message: `${words.openError}: ${error?.message ?? String(error)}` });
++        }
++      };
++      try { Promise.resolve(openSession(target)).catch(report); } catch (error) { report(error); }
++    }
++    const groupNames = new Map((Array.isArray(topology.groups) ? topology.groups : []).filter(group => group && validId(group.id)).map(group => [group.id, group.kind]));
++    const graph = h('div', { className: 'graph' }, graphNodes.length ? h('svg', {
++      role: 'group', 'aria-label': words.graphLabel,
++      viewBox: `${left - 20} ${top - 20} ${right - left + 40} ${bottom - top + 40}`,
++      width: right - left + 40, height: bottom - top + 40
++    }, groups.map(group => h('g', { key: group.id, 'data-group-id': group.id, 'aria-hidden': true },
++      h('rect', { className: 'group', ...group.bounds, rx: 10 }),
++      h('text', { className: 'group-label', x: group.bounds.x + 8, y: group.bounds.y + 15 }, groupNames.get(group.id) ?? words.group))),
++    edges,
++    graphNodes.map(({ node, pos }, index) => {
++      const status = stateOf(members[node.id]);
++      const title = node.label || words.unnamed;
++      const clipId = `${clipPrefix}-node-${index}`;
++      const choose = () => setSelected(node.id);
++      return h('g', { key: node.id, role: 'button', tabIndex: 0, 'data-node-id': node.id, transform: `translate(${pos.x} ${pos.y})`,
++        'aria-label': `${title}, ${words[status]}, ${words.phase} ${node.phase || words.unknown}, ${words.model} ${node.model || words.unknown}. ${linkText(node.id)}`,
++        'aria-pressed': selected === node.id, onClick: choose,
++        onKeyDown: event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(); } }
++      }, h('rect', { className: 'node', width: pos.width, height: pos.height, rx: 9 }),
++      h('circle', { className: `dot ${status}`, cx: pos.width - 16, cy: 17, r: 5 }),
++      h('clipPath', { id: clipId }, h('rect', { x: 8, y: 0, width: Math.max(0, pos.width - 34), height: pos.height })),
++      h('g', { clipPath: `url(#${clipId})` },
++        h('text', { className: 'label', x: 10, y: 23 }, title),
++        h('text', { className: 'meta', x: 10, y: 45 }, `${node.phase || `${words.phase}: ${words.unknown}`} · ${node.model || `${words.model}: ${words.unknown}`}`),
++        h('text', { className: 'meta', x: 10, y: 62 }, `${words[status]}${node.occurrence === 'template' ? ` · ${words.template}` : ''}`)));
++    })) : h('div', { className: 'empty' }, words.noNodes));
++    const select = (label, all, value, change, options) => h('select', { 'aria-label': label, value, onChange: event => change(event.target.value) },
++      h('option', { value: '' }, all), options.map(option => h('option', { key: option[0], value: option[0] }, option[1])));
++    const table = h('section', { 'aria-label': words.roster }, h('h3', null, words.roster),
++      h('div', { className: 'filters' }, select(words.statusFilter, words.allStatuses, statusFilter, value => changeFilter('status', value), ['running', 'completed', 'failed', 'cancelled', 'unknown'].map(status => [status, words[status]])),
++        select(words.phaseFilter, words.allPhases, phaseFilter, value => changeFilter('phase', value), phases.map(phase => [phase, phase])),
++        select(words.modelFilter, words.allModels, modelFilter, value => changeFilter('model', value), models.map(model => [model, model]))),
++      h('table', null, h('thead', null, h('tr', null, [words.node, words.phase, words.model, words.status].map(label => h('th', { scope: 'col', key: label }, label)))),
++        h('tbody', null, roster.map(node => h('tr', { key: node.id, 'data-roster-id': node.id, 'data-selected': selected === node.id, onClick: () => setSelected(node.id) },
++          h('th', { scope: 'row' }, h('button', { type: 'button', className: 'row-select', 'aria-pressed': selected === node.id, onClick: () => setSelected(node.id) }, node.label || words.unnamed)),
++          h('td', null, node.phase || words.unknown), h('td', null, node.model || words.unknown), h('td', null, words[stateOf(members[node.id])]))))),
++      !roster.length ? h('p', { className: 'empty' }, words.noRows) : null,
++      selectedNode ? h('div', { className: 'detail', role: 'region', 'aria-label': words.selected }, h('strong', null, selectedNode.label || words.unnamed),
++        h('div', { className: 'muted' }, `${words[stateOf(member)]} · ${selectedNode.phase || `${words.phase}: ${words.unknown}`} · ${selectedNode.model || `${words.model}: ${words.unknown}`}`),
++        h('p', null, linkText(selectedNode.id)),
++        h('button', { type: 'button', disabled: !target || typeof openSession !== 'function', onClick: openChild }, words.open),
++        !target ? h('p', { className: 'muted' }, words.gated) : null,
++        openError && openError.runId === board.runId && openError.parentSessionId === board.parentSessionId && openError.nodeId === selected ? h('p', { role: 'alert' }, openError.message) : null) : h('p', { className: 'muted' }, words.choose));
++    const events = Array.isArray(board.events) ? board.events : [];
++    const unmatched = Array.isArray(board.unmatched) ? board.unmatched : [];
++    const diagnostics = Array.isArray(board.diagnostics) ? board.diagnostics : [];
++    const validDiagnostics = diagnostics.filter(item => item && typeof item === 'object');
++    const validUnmatched = unmatched.filter(item => item && typeof item === 'object');
++    const validEvents = events.filter(item => item && typeof item === 'object');
++    return h('section', { className: 'wbc', 'aria-label': words.boardLabel }, h('style', null, CSS),
++      h('h2', null, board.run?.name || words.workflow),
++      h('div', { className: 'subtle' }, `${words.run} ${board.runId ?? words.unknown} · ${words[stateOf(board.run)]} · ${words.staticNodes} ${topology.nodes.length}`),
++      board.sourceStatus !== 'verified' ? h('p', { className: 'warn', role: 'status' }, words.source) : null,
++      topology.complete === false ? h('p', { className: 'warn', role: 'status' }, words.incomplete) : null,
++      graphNodes.length !== topology.nodes.length ? h('p', { className: 'warn', role: 'status' }, words.missingLayout) : null,
++      validDiagnostics.length ? h('ul', { className: 'diagnostics warn', 'aria-label': words.diagnostics }, validDiagnostics.map((item, index) => h('li', { key: index }, `${item.code ?? words.diagnostic}: ${item.message ?? ''}`))) : null,
++      h('div', { className: 'panels' }, graph, table),
++      validUnmatched.length ? h('section', { 'aria-label': words.unmatched }, h('h3', null, words.unmatched), h('ul', null,
++        validUnmatched.map((item, index) => h('li', { key: index }, [item.label || words.unnamed, item.seq !== undefined ? `${words.invocation} #${item.seq}` : '', item.phase, item.childId,
++          words[stateOf(item)], item.reason || words.reasonUnknown].filter(Boolean).join(' · '))))) : null,
++      h('section', { className: 'events', 'aria-label': words.eventsLabel }, h('h3', null, words.events), validEvents.length ? h('ol', null, validEvents.map((event, index) => h('li', {
++        key: `${event.eventSeq ?? 'event'}:${index}`, 'data-event-index': index, 'data-event-seq': event.eventSeq
++      }, [event.type, event.eventSeq !== undefined ? `${words.event} #${event.eventSeq}` : '', event.time !== undefined ? `${words.time} ${event.time}` : '',
++        event.seq !== undefined ? `${words.invocation} #${event.seq}` : '', event.label, event.phase, event.outcome, event.stopReason].filter(value => value !== undefined && value !== '').join(' · ')))) : h('p', { className: 'empty' }, words.noEvents)));
++  }
++  return WorkflowBoard;
++}
+diff --git a/packages/client/ui-workflow-run/src/client/research-workflow-board.d.mts b/packages/client/ui-workflow-run/src/client/research-workflow-board.d.mts
+new file mode 100644
+index 00000000..ce712959
+--- /dev/null
++++ b/packages/client/ui-workflow-run/src/client/research-workflow-board.d.mts
+@@ -0,0 +1,2 @@
++import type * as React from 'react'
++export function createWorkflowBoard(react: typeof React): React.ComponentType<{ board: unknown, locale?: string }>
