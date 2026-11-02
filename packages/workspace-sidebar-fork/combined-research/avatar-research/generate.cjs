@@ -1,0 +1,6 @@
+// Deterministically embed the six previously supplied PNG assets; test/build only.
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
+const src=process.env.R7_PROJECT,out=process.env.R7_OUTPUT;if(!src||!out)throw Error('R7_PROJECT and R7_OUTPUT required');
+const expected={lead:'61044895dc602a0a2fce9ec08f9f3499769d3032dd50bbc45ca1d2924b8f7e99',research:'dfb3ae639544d7ecb49923a61f0c8b23ab75933f1e6c0507be2a0b6ed4508333',code:'aba1d496fd09dc78ae1ee09043cbc47a69846607b996019977b8172811209230',write:'8775718769661a2cdbad36c72f3a7125d15aa3c3465b267bd4078752f018eefb',data:'69274abaedc51a5e5143aa21595b9d8fbc1f6566cf1e31dcd4bb5eaeb98dfcee',qa:'9613b57641ae0808cbd066a03d0ac8857f9937e18af55161a6d713b88f8514d2'};
+const images={};for(const [key,digest] of Object.entries(expected)){const bytes=fs.readFileSync(path.join(src,'packages/session-tree/avatars',`${key}.png`));if(crypto.createHash('sha256').update(bytes).digest('hex')!==digest)throw Error(`asset mismatch: ${key}`);images[key]='data:image/png;base64,'+bytes.toString('base64')}
+fs.writeFileSync(out,`// Generated from pinned avatar PNGs; run generate.cjs.\nexport const avatarImages = Object.freeze(${JSON.stringify(images)});\n`,{flag:'wx'});
