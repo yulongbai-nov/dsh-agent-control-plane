@@ -1,0 +1,38 @@
+name: Bug report
+description: 报告一个可复现的问题（E2E/插件/安装）
+title: "[bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先跑 `node e2e/run-e2e.mjs --mock-model`，并附上失败取证（`artifacts/latest/failures/` 里的截图/GIF/trace）。
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 实际行为 vs 期望行为
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. node delivery/install.mjs --profile e2e
+        2. cd e2e && node run-e2e.mjs --mock-model
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 环境
+      placeholder: "DSH 0.2.1-rc.5 / macOS 26.x / Node 24.x / 插件版本/commit"
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 证据
+      description: 截图/GIF/trace 路径、`last-run.json`、console 错误（不要贴 token/密钥）

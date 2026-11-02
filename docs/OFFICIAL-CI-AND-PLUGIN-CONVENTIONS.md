@@ -312,7 +312,7 @@ Playwright 安装：`pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright
 2. **job `static`**（1–2 分钟）：
    - `node third_party/dsh-session-tree/scripts/build.mjs --check`
    - `node --check` 覆盖 `third_party/dsh-session-tree/{index.js,client.js}`、`e2e/run-e2e.mjs`、`e2e/mock-provider/*.mjs`
-   - `node e2e/mock-provider/self-test.mjs`（mock 的 HTTP 层自测）
+   - `node e2e/run-e2e.mjs --mock-model`（官方 Messages mock；静态 job 只做语法/构建/契约）
    - （新增）`node --test third_party/dsh-session-tree/tests/*.test.mjs`（manifest 契约，见 5.2）
 3. **job `unit`**（先绿后严）：
    - 新增 `npm run test:gate`：跑除 `packages/synthetic-telemetry-ledger` 外的所有 `node --test`（当前 27 红集中在该研究包）；红项单独立 issue，修一个并入一个。

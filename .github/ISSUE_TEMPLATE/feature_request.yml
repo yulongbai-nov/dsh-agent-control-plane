@@ -1,0 +1,45 @@
+name: Feature request
+description: 提议一个新能力或需求（R1–R18 之一）
+title: "[feat] "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 要解决的问题
+      description: 谁在什么场景下遇到什么问题
+    validations:
+      required: true
+  - type: dropdown
+    id: requirement
+    attributes:
+      label: 对应需求
+      options:
+        - R1 递归团队
+        - R2 团队级深度
+        - R3 手动建队
+        - R4 自动建队
+        - R5 归档与唤醒
+        - R6 Agent Spec
+        - R7 侧栏会话树
+        - R8 头像
+        - R9 任务驱动标题
+        - R10 workflow 图
+        - R11 节点看板
+        - R12 缓存友好
+        - R13 安装/升级
+        - R14 权限默认
+        - R15 workflow 统计
+        - R16 utility 库
+        - R17 视觉/无障碍
+        - R18 本地遥测
+        - 其他
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 方案建议
+      description: 官方/现成实现优先；说明需要新增哪些插件/测试/文档
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收标准（行为级 E2E 怎么写）

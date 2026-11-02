@@ -5,3 +5,7 @@ coverage/
 
 # Locally downloaded VM installers and disk images are not project source.
 /vm-setup/
+dist/
+.e2e-state/
+artifacts/
+*.tgz

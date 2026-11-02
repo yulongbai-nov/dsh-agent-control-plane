@@ -1,7 +1,7 @@
 import { test, expect } from 'playwright/test'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { ART, boot } from './helpers.mjs'
+import { ART, boot, newSession } from './helpers.mjs'
 
 test.describe.configure({ mode: 'serial' })
 
@@ -12,6 +12,7 @@ test.describe('控制面 E2E · 确定性 mock 模型层', () => {
 
   test('发送消息后收到 mock provider 的确定性回复，且零真实模型调用', async ({ page }) => {
     await boot(page)
+    await newSession(page)
     const composer = page.locator('[role=textbox]').first()
     await composer.click()
     await page.keyboard.type('请只回复一段固定文本，不要调用工具：MOCK_DETERMINISTIC_OK')

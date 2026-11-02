@@ -1,9 +1,9 @@
 {
   "name": "dsh-agent-control-plane",
-  "version": "0.1.0-dev",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "External, test-driven Agent control-plane extensions for DeepSeek Harness",
+  "description": "External Agent control plane for DeepSeek Harness: sidebar session tree, six task avatars, teams, workflow map, telemetry, plugin market",
   "engines": {
     "node": ">=24"
   },
@@ -14,9 +14,19 @@
     "e2e": "node e2e/run-e2e.mjs",
     "e2e:real": "node e2e/run-e2e.mjs --real-model",
     "pack:delivery": "node delivery/pack.mjs",
-    "install:control-plane": "node delivery/install.mjs"
+    "install:control-plane": "node delivery/install.mjs",
+    "e2e:mock": "node e2e/run-e2e.mjs --mock-model"
   },
   "devDependencies": {
     "acorn": "8.19.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yulongbai-nov/dsh-agent-control-plane.git"
+  },
+  "homepage": "https://github.com/yulongbai-nov/dsh-agent-control-plane#readme",
+  "bugs": {
+    "url": "https://github.com/yulongbai-nov/dsh-agent-control-plane/issues"
   }
 }

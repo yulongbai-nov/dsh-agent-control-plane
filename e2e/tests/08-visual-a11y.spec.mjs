@@ -21,8 +21,22 @@ test.describe.configure({ mode: 'serial' })
 const DEFAULTS = { theme: /^(Light|浅色)$/, language: /^(English|英文)$/ }
 
 async function openSettingsGeneral(page) {
-  await page.keyboard.press('Meta+Alt+Comma')
+  // Shortcut differs by host platform; fall back to the account menu when it does
+  // not fire (Linux CI, or a remapped shortcut).
+  const shortcut = process.platform === 'darwin' ? 'Meta+Alt+Comma' : 'Control+Alt+Comma'
+  await page.keyboard.press(shortcut)
+  await page.waitForTimeout(1200)
   const dialog = page.getByRole('dialog')
+  if ((await dialog.count()) === 0 || !(await dialog.first().isVisible().catch(() => false))) {
+    await page.getByRole('button', { name: /Account menu/i }).first().click()
+    const settingsItem = page.getByRole('menuitem', { name: /^(Settings|设置|Preferences|偏好)$/ }).first()
+    if (await settingsItem.count()) {
+      await settingsItem.click()
+    } else {
+      await page.keyboard.press('Escape')
+      throw new Error('settings dialog did not open via shortcut or account menu')
+    }
+  }
   await expect(dialog).toBeVisible({ timeout: 20_000 })
   const general = dialog.getByRole('button', { name: /^(General|通用设置|通用|常规)$/ })
   if (await general.count()) await general.first().click()

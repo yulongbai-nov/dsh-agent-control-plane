@@ -35,9 +35,8 @@ const RESET_STATE = args.includes('--reset-state')
 const REAL_MODEL = args.includes('--real-model')
 const NO_INSTALL = args.includes('--no-install')
 const MOCK_MODEL = args.includes('--mock-model')
-const MOCK_SIMPLE = args.includes('--mock-model-simple')
-// Default mock layer: the official Messages mock server (production protocol).
-const MOCK_PROVIDER = MOCK_MODEL ? (MOCK_SIMPLE ? 'simple' : 'official') : null
+// One mock layer, aligned with the official test support: the Messages mock server.
+const MOCK_PROVIDER = MOCK_MODEL ? 'official' : null
 
 const requiredBundles = [
   'dsh-control-plane-session-tree',
@@ -136,29 +135,28 @@ if (RESET_STATE) {
 mkdirSync(WORKSPACE, { recursive: true })
 
 // --- optional deterministic model layer -------------------------------------------------
-// Default: the OFFICIAL Messages mock server (@deepseek-ai/dsh-llm-mock-server), pointed at
-// by $DEEPSEEK_BASE_URL so the production DeepSeek adapter speaks its real protocol.
-// `--mock-model-simple` keeps our dependency-free OpenAI-compatible mock via a pi-ai route.
+// The official test-support server (@deepseek-ai/dsh-llm-mock-server) speaks the
+// production Messages protocol; $DEEPSEEK_BASE_URL points the real DeepSeek adapter at it.
 let mockProvider = null
 let mockPatchPath = null
 let originalProfilePatch = null
 let mockRecordPath = null
 let officialMockUrl = null
+let mockControlUrl = null
 if (MOCK_PROVIDER) {
   mockRecordPath = join(STATE, 'mock-provider', 'requests.jsonl')
   mkdirSync(dirname(mockRecordPath), { recursive: true })
-  const script =
-    MOCK_PROVIDER === 'official'
-      ? join(HARNESS, 'mock-provider/official-server.mjs')
-      : join(HARNESS, 'mock-provider/server.mjs')
-  mockProvider = spawn(process.execPath, [script, '--record', mockRecordPath], {
+  mockProvider = spawn(process.execPath, [join(HARNESS, 'mock-provider/official-server.mjs'), '--record', mockRecordPath], {
     stdio: ['ignore', 'pipe', 'inherit'],
   })
+  let controlUrl = ''
   const mockUrl = await new Promise((resolveMock, rejectMock) => {
     let out = ''
     const timer = setTimeout(() => rejectMock(new Error('mock provider start timeout')), 15_000)
     mockProvider.stdout.on('data', (d) => {
       out += d
+      const control = out.match(/MOCK_CONTROL_URL=(\S+)/)
+      if (control) controlUrl = control[1]
       const m = out.match(/MOCK_PROVIDER_URL=(\S+)/)
       if (m) {
         clearTimeout(timer)
@@ -166,24 +164,9 @@ if (MOCK_PROVIDER) {
       }
     })
   })
-  log(`mock model provider (${MOCK_PROVIDER}):`, mockUrl)
-  if (MOCK_PROVIDER === 'simple') {
-    mockPatchPath = join(profileDir, 'cordis.patch.yml')
-    originalProfilePatch = readFileSync(mockPatchPath, 'utf8')
-    appendFileSync(
-      mockPatchPath,
-      '\n# --- mock model (transient, restored after the run) ---\n' +
-        '- id: llm-pi-ai\n  name: "@deepseek-ai/dsh-llm-pi-ai"\n  config:\n    providers:\n      e2e-mock:\n' +
-        `        api: openai-completions\n        baseURL: ${mockUrl}\n        apiKeyEnv: E2E_MOCK_KEY\n` +
-        '        models:\n          - id: mock-echo\n            contextWindow: 32768\n            maxTokens: 2048\n' +
-        '            reasoningEfforts: false\n' +
-        '- id: agent-default-model\n  name: "@deepseek-ai/dsh-agent-default-model"\n  config:\n' +
-        '    provider: e2e-mock\n    model: mock-echo\n',
-    )
-    log('default model switched to e2e-mock/mock-echo for this run')
-  } else {
-    officialMockUrl = mockUrl
-  }
+  log(`mock model provider (${MOCK_PROVIDER}):`, mockUrl, controlUrl ? `control ${controlUrl}` : '')
+  mockControlUrl = controlUrl
+  officialMockUrl = mockUrl
 }
 
 // --- pre-run isolation snapshot of the user's real DSH home ---
@@ -193,7 +176,6 @@ const userSessionsBefore = listSessionsDirs()
 
 // --- boot the instance ---
 const env = { ...process.env }
-if (MOCK_PROVIDER === 'simple') env.E2E_MOCK_KEY = 'dsh-e2e-mock'
 if (MOCK_PROVIDER === 'official' && officialMockUrl) {
   // The production adapter resolves its endpoint from this env var; the mock accepts any key.
   env.DEEPSEEK_BASE_URL = officialMockUrl
@@ -268,6 +250,7 @@ try {
         DSH_E2E_RUN_ID: runId,
         DSH_E2E_MOCK_MODEL: MOCK_MODEL ? '1' : '0',
         DSH_E2E_MOCK_PROVIDER: MOCK_PROVIDER || '',
+        DSH_E2E_MOCK_CONTROL: mockControlUrl || '',
         DSH_E2E_MOCK_RECORD: mockRecordPath || '',
       },
       stdio: ['ignore', 'pipe', 'pipe'],

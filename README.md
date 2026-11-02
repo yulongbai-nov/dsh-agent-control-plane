@@ -1,48 +1,95 @@
-# DSH Agent 控制面
+# DSH Agent 控制面（dsh-agent-control-plane）
 
-> **交付状态（2026-11-02）**：控制面已组装完成并通过真机 E2E（14/14，含真实模型调用），
-> 安装/回滚/打包见 [DELIVERY.md](DELIVERY.md)，E2E 套件见 [e2e/README.md](e2e/README.md)。
-> 以下内容保留为历史调研记录；`docs/status.md` 是交付前的状态。
+[![ci-smoke](https://github.com/yulongbai-nov/dsh-agent-control-plane/actions/workflows/e2e.yml/badge.svg)](https://github.com/yulongbai-nov/dsh-agent-control-plane/actions/workflows/e2e.yml)
 
+给 **DeepSeek Harness** 加一套 Agent 控制面：常驻侧栏会话树 + 六类任务头像 + 团队/嵌套 + workflow 地图 + 本地遥测 + 插件市场，**不改签名应用、不碰 app.asar**，全部以外部 profile 插件交付。
 
-独立开发仓库，目标是在不修改签名应用的前提下实现会话树、动态团队和可视化工作流。
+> English summary at the bottom.
 
-**2026-11-02 现状**：控制面 v0.1 已交付——5 个外部插件组件装入独立 `e2e` profile，真机 GUI E2E 14/14 通过
-（含 2 次真实模型调用），安装/回滚/打包闭环已实测，用户 `desktop` profile 与会话未被触碰。
-安装与回滚见 [DELIVERY.md](DELIVERY.md)，测试见 [e2e/README.md](e2e/README.md)。
-R2/R4/R9/R12/R16 仍未实现，方案见 [docs/REMAINING-REQUIREMENTS-PLAN.md](docs/REMAINING-REQUIREMENTS-PLAN.md)。
+| | |
+|---|---|
+| 宿主 | DeepSeek Harness **0.2.1-rc.5**（桌面 / web） |
+| 形态 | 外部 profile 插件套件（bundle + client 插件） |
+| E2E | 真实 DSH + 真实 Chromium，**28 条**行为用例，官方 Messages mock 驱动，零模型成本 |
+| CI | GitHub Actions 无头流水线（Linux，core + Web GUI；桌面壳 macOS 本地验收） |
+| 许可 | MIT |
 
-## 当前进度
+## 能力与状态
 
-- [会话树实验包](packages/session-tree/README.md)：独立主面板，支持逐层加载、导航、六种头像和键盘操作；不是聊天时常驻的侧边栏树。另有[侧栏候选冲突研究](packages/workspace-sidebar-spike/README.md)和[公开源码基线调查](docs/workspace-upstream-baseline.md)；它们不是可安装 fork，R7/R8 尚未验收。
-- [标题 provider 原型](packages/task-title/README.md)：只在现有的人类消息调度下读取团队任务，不能仅因任务变化刷新标题；与原 provider 互斥，不建议安装。[任务标题调度模型](packages/task-title-service-spike/README.md)仅是合成内存研究，不写原生日志，R9 未完成。
-- [团队控制研究](packages/team-control-spike/README.md)只测试原生服务的合成替身装配和独立门禁模型，未接入真正的创建、归档或消息入口；团队相关要求尚未实现。
-- [工作流拓扑核心](packages/workflow-topology/README.md)：保守静态分析并生成确定性布局，不执行脚本；[字面量编辑原型](packages/workflow-literal-editor/README.md) 只预览受限脚本的单处 diff；[运行事件投影](packages/workflow-board-projection/README.md) 只在来源有独立证明时匹配，歧义保留 unmatched；[工作流看板组件](packages/workflow-board-client/README.md) 可渲染静态图、节点表与事件。[来源候选观察器](packages/workflow-source-observer/README.md) 的结果始终未经认证；[合成来源关系模型](packages/workflow-provenance-model/README.md)也不提供认证或生产桥；[工具 fork 研究](packages/workflow-tool-spike/README.md)在真实 rc.5 合成实体中不能产生候选，不可部署；[内存 companion](packages/workflow-records-memory/README.md)不代表持久化或授权。它们尚未接入实时宿主/GUI，R10/R11 未完成。
-- [Agent Spec 静态预检原型](packages/agent-spec/README.md) 只筛选已知字段与后端能力；不证明运行时路由、权限或递归预算，R6 未完成。
-- [本地遥测内存原型](packages/personal-telemetry/README.md) 仅对合成数据验证 SQLite 数值快照与幂等事务；没有磁盘数据库、真实数据接入或报表，R18 未完成。[晋升建议原型](packages/workflow-recommendation/README.md) 只在调用方断言完整的合成聚合上给条件性建议，不执行晋升，不代表 R15/R16 已完成。
-- [rc.5 隔离内存冒烟](packages/sandbox-smoke/README.md) 加载安装版 Cordis、模块加载器、slot 与会话投影，使用测试替身而非真实 GUI；[GUI 隔离前置检查](packages/sandbox-e2e/README.md) 尚未满足安全门槛。两者及只读版本/标记检查均不能代替端到端验收；团队功能尚未实现。
+| 需求 | 交付 | 状态 |
+|---|---|---|
+| R7 常驻侧栏会话树 | `third_party/dsh-session-tree`（vendor + 头像层） | ✅ 真机 E2E |
+| R8 六类任务头像 | 同上（推断 / 手动覆盖 / localStorage 持久） | ✅ 真机 E2E |
+| R1/R3/R5/R6 团队 | `dsh-agent-teams-model-override`（pinned） | ✅ 工具可见性实测；完整嵌套链路待深化 |
+| R10/R11 workflow | `dsh-workflow-map` | 🟡 入口与安全打开已验证 |
+| R13 安装/升级/回滚 | `delivery/` + `dshmarket` | ✅ 安装→回滚闭环实测 |
+| R17 视觉/无障碍 | 深浅色 / locale / 键盘 | ✅ 基础版（真机 E2E） |
+| R18 本地遥测 | `dsh-local-telemetry` | ✅ 基础版（导出/purge/重建，真机 E2E） |
+| R2/R4/R9/R12/R16 | — | 🔴 路线见 [docs/REMAINING-REQUIREMENTS-PLAN.md](docs/REMAINING-REQUIREMENTS-PLAN.md)；R9 已 Hold |
 
-逐条进展见 [R1–R18 状态表](docs/status.md)，关键实现假设修正在 [设计决策](docs/architecture-decisions.md)。原始规格、mock 与调研在相邻目录 `../dsh-mocks/`；[全提交回归与真实 E2E 交接计划](docs/E2E-HANDOFF-PLAN.md)、[安装验收](docs/install-and-acceptance.md)与[升级回退](docs/upgrade-smoke.md)目前只是未经演练的未来清单。
+完整覆盖矩阵与证据：[DELIVERY.md](DELIVERY.md)。
 
-## 检查
+## 快速开始
 
-需要 Node.js 24；不需要安装依赖即可运行基础检查（含侧栏候选、标题调度、团队门禁、Agent Spec、拓扑布局、编辑预览、运行投影、看板、来源候选、companion 内存记录、晋升建议、遥测内存原型及隔离测试的纯测试；不包括完整解析器和 Electron 集成测试）。缺少 Acorn 时，编辑器解析用例及跨包解析互操作用例会显式跳过：
+### 装到某个 profile
 
-```bash
-npm test
-npm run compat -- '/Applications/DeepSeek Harness.app/Contents/Resources/app.asar'
+```sh
+node delivery/install.mjs --profile <profile>      # 普通 profile；缺失时用官方 --from-default-profile 创建
+node delivery/uninstall.mjs --profile <profile>    # 回滚（快照在 $DSH_HOME/backups/control-plane/）
 ```
 
-完整拓扑解析及编辑预览测试需要 Acorn 8；在此机器上可仅为进程引用已存在的模块，无需安装：
+`desktop` profile 由 Electron 独占管理，推荐用应用内 **Settings → Plugins**，或在应用完全退出后
+`node delivery/install.mjs --profile desktop --yes`。
 
-```bash
-NODE_PATH="$HOME/.dsh/profiles/desktop/node_modules" npm run test:workflow
+### 跑真机 E2E
+
+```sh
+cd e2e && npm ci
+node run-e2e.mjs --mock-model      # 官方 Messages mock，零成本（CI 用这个）
+node run-e2e.mjs                   # 纯离线（不触发模型）
+node run-e2e.mjs --real-model      # 可选：2 次真实模型调用
+DSH_E2E_MOCK_FAULTS=1 node run-e2e.mjs --mock-model   # opt-in：模型故障边界
 ```
 
-使用已安装 Electron 只读加载真实 rc.5 会话标题服务的可选集成测试，见 [标题原型测试说明](packages/task-title/README.md#构建测试与未来集成)。
+需要本机安装 DSH 0.2.1-rc.5；测试用独立 `e2e` profile（sessions/storages/telemetry 都重定向到临时目录），
+脚本会审计用户 `~/.dsh` 未被改动。
 
-版本与标记检查只读取本机文件，不修改 profile 或 app.asar。后续真正安装、替换标题 provider 或修改用户配置之前，须先征得用户同意；现有 GUI 的只读检查不需要改配置。未经验证的功能不会标为完成。
+## 仓库结构
 
-## 缓存与复用
+```
+third_party/dsh-session-tree/   vendored 侧栏树 + 六类头像（MIT，保留上游版权）
+delivery/                       安装 / 回滚 / 打包（npm pack → dist/）
+e2e/                            真机行为 E2E（Playwright + 官方 Messages mock + 失败取证）
+docs/                           交付说明、架构、测试基建、一致性审计、剩余需求路线
+packages/                       历史研究包（交付前的原型/调研，不参与交付）
+dist/                           pack.mjs 生成的可发布产物（gitignored，CI 里作为 artifact）
+```
 
-跟进同一任务时优先复用 teammate 的现有会话；独立短任务可新建。复用时保持 provider、model、effort、preset 和工具集稳定，避免前缀失效；缓存命中与保留时间由服务商决定，不能保证。普通 session 归档不等于成员级归档，子会话被归档后不能假设消息会正常唤醒。
+## 设计原则
+
+1. **官方为准，一个选择**：能复用官方/社区实现就不自研；mock、安装、profile 管理都只留一条官方路径。
+2. **真机 E2E 优先**：行为级用例跑在真实 DSH + 真实 Chromium 上；只有 regression 才补单测。
+3. **零成本 CI**：官方 Messages mock + 隔离 profile，PR 门禁不花模型钱。
+4. **不改宿主**：不修改签名应用、不触碰用户 profile/会话；所有写入都要有快照/回滚。
+5. **人类与 agent 都能贡献**：见 [AGENTS.md](AGENTS.md) 与 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 文档
+
+- [DELIVERY.md](DELIVERY.md) — 交付物、覆盖矩阵、安装/回滚/打包、已知缺口
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — 组件、插件模型、测试分层
+- [docs/TEST-INFRA.md](docs/TEST-INFRA.md) — mock 模型 / 回放 / CI / 失败取证
+- [docs/OFFICIAL-CI-AND-PLUGIN-CONVENTIONS.md](docs/OFFICIAL-CI-AND-PLUGIN-CONVENTIONS.md) — 官方与同类项目约定
+- [docs/CONSISTENCY-AUDIT-2026-11-02.md](docs/CONSISTENCY-AUDIT-2026-11-02.md) — 文档与现状一致性审计
+- [docs/HISTORY.md](docs/HISTORY.md) — 交付前的探索记录
+
+## License
+
+MIT。vendored 组件保留其上游 MIT 版权与许可（见各包 `LICENSE`）。
+
+---
+
+**English summary.** External plug-in suite for DeepSeek Harness `0.2.1-rc.5` that adds a persistent sidebar
+session tree with six task avatars, team model overrides, a workflow map, local telemetry and a plugin market —
+without patching the signed app. Behavior E2E runs against a real DSH host and real Chromium, driven by the
+official Messages mock server (zero model cost). CI is a headless Linux pipeline for the core + Web UI;
+the signed Electron shell is validated locally on macOS. MIT licensed.

@@ -20,9 +20,19 @@ on:
         description: '额外跑 2 次真实模型冒烟（需要 DEEPSEEK_API_KEY secret）'
         type: boolean
         default: false
-  # push:
-  #   branches: [main]
-  # pull_request:
+  push:
+    branches: [main]
+    paths:
+      - 'e2e/**'
+      - 'delivery/**'
+      - 'third_party/**'
+      - '.github/workflows/e2e.yml'
+  pull_request:
+    paths:
+      - 'e2e/**'
+      - 'delivery/**'
+      - 'third_party/**'
+      - '.github/workflows/e2e.yml'
 
 concurrency:
   group: ci-smoke-${{ github.ref }}
@@ -42,8 +52,8 @@ jobs:
           cache-dependency-path: e2e/package-lock.json
       - name: Syntax check (Node scripts)
         run: |
-          for f in e2e/run-e2e.mjs e2e/mock-provider/server.mjs e2e/mock-provider/official-server.mjs \
-                   e2e/mock-provider/self-test.mjs e2e/reporters/*.mjs delivery/*.mjs; do
+          for f in e2e/run-e2e.mjs e2e/mock-provider/official-server.mjs \
+                   e2e/reporters/*.mjs delivery/*.mjs; do
             node --check "$f"
           done
       - name: Vendored bundle is built from its template
@@ -53,8 +63,6 @@ jobs:
       - name: Install E2E dependencies
         working-directory: e2e
         run: npm ci
-      - name: Mock provider self-test (record/replay/fault injection)
-        run: node e2e/mock-provider/self-test.mjs
 
   mock-e2e:
     name: E2E (official Messages mock, headless)

@@ -13,6 +13,7 @@
  * `--record` after every accepted request and again on shutdown.
  */
 import { appendFileSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:http'
 import { startMockLlmServer } from '@deepseek-ai/dsh-llm-mock-server'
 
 const argv = process.argv.slice(2)
@@ -22,15 +23,27 @@ const flag = (name, fallback) => {
 }
 const PORT = Number(flag('--port', '0'))
 const RECORD = flag('--record', null)
+const INITIAL_SEQUENCE = flag('--sequence', 'success').split(',').map((s) => s.trim()).filter(Boolean)
 
-const server = await startMockLlmServer({
-  host: '127.0.0.1',
-  port: PORT,
-  // One deterministic success per request; repeat so retries never exhaust the script.
-  sequence: ['success'],
-  repeatLast: true,
-  successText: 'MOCK_OK:official mock provider',
-})
+const SUCCESS_TEXT = 'MOCK_OK:official mock provider'
+let currentServer = null
+const start = (sequence) =>
+  startMockLlmServer({
+    host: '127.0.0.1',
+    port: PORT,
+    // One deterministic behavior per request; repeat so scripted faults never exhaust.
+    sequence,
+    repeatLast: true,
+    successText: SUCCESS_TEXT,
+    onEvent: () => {
+      // Keep the capture fresh for assertions running while DSH is alive.
+      if (currentServer) flush()
+    },
+  })
+
+let server = await start(INITIAL_SEQUENCE.length ? INITIAL_SEQUENCE : ['success'])
+currentServer = server
+const mockPort = server.port
 
 let written = 0
 const flush = () => {
@@ -47,7 +60,61 @@ const flush = () => {
   } catch {}
 }
 
-console.log(`MOCK_PROVIDER_URL=${server.baseURL}/v1`)
+// --- control plane for per-test fault sequences (same port, swapped script) ---------------
+// A test can POST /sequence to change what the next accepted requests do without
+// restarting DSH (whose base URL is fixed at launch).
+let sequence = ['success']
+const restart = async (nextSequence) => {
+  flush()
+  await server.close()
+  let lastError
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      server = await start(nextSequence)
+      currentServer = server
+      sequence = nextSequence
+      return
+    } catch (error) {
+      lastError = error
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+  }
+  throw lastError
+}
+
+const control = createServer((req, res) => {
+  const url = new URL(req.url, 'http://127.0.0.1')
+  if (req.method === 'GET' && url.pathname === '/status') {
+    res.writeHead(200, { 'content-type': 'application/json' })
+    res.end(JSON.stringify({ sequence, requests: server.requests.length }))
+    return
+  }
+  if (req.method === 'POST' && url.pathname === '/sequence') {
+    let raw = ''
+    req.on('data', (d) => (raw += d))
+    req.on('end', async () => {
+      try {
+        const body = JSON.parse(raw || '{}')
+        const next = Array.isArray(body.sequence) && body.sequence.length ? body.sequence : ['success']
+        await restart(next)
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, sequence: next }))
+      } catch (error) {
+        res.writeHead(500, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, error: String(error?.message ?? error) }))
+      }
+    })
+    return
+  }
+  res.writeHead(404, { 'content-type': 'application/json' })
+  res.end(JSON.stringify({ ok: false, error: 'not found' }))
+})
+control.listen(0, '127.0.0.1', () => {
+  // Print both lines only after the control endpoint is live, so a caller that
+  // parses stdout never races the sequence API.
+  console.log(`MOCK_CONTROL_URL=http://127.0.0.1:${control.address().port}`)
+  console.log(`MOCK_PROVIDER_URL=${server.baseURL}/v1`)
+})
 
 // Keep the capture fresh enough for assertions that run while DSH is alive.
 const timer = setInterval(() => {
@@ -58,6 +125,9 @@ timer.unref()
 const shutdown = async () => {
   clearInterval(timer)
   flush()
+  try {
+    control.close()
+  } catch {}
   try {
     await server.close()
   } catch {}
