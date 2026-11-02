@@ -1,0 +1,24 @@
+diff --git a/packages/api/session-controller/tests/remote-access.host.spec.ts b/packages/api/session-controller/tests/remote-access.host.spec.ts
+index 617c0c67..44513e60 100644
+--- a/packages/api/session-controller/tests/remote-access.host.spec.ts
++++ b/packages/api/session-controller/tests/remote-access.host.spec.ts
+@@ -222,0 +223,19 @@ describe('Session Controller access', () => {
++
++
++describe('synthetic session adapter authorization characterization', () => {
++  it('denies local, unauthorized and revoked calls, closes synthetic read handles', async () => {
++    const {readSyntheticSessionCount} = await import('../../../../synthetic-telemetry-host-wip/session-adapter.ts')
++    const {ctx,as} = await harness()
++    let opened=0,closed=0,release: (() => void) | undefined
++    const source={open:async (_id:typeof SHARED, access:'read')=>{expect(access).toBe('read');opened++;return {read:async()=>{await new Promise<void>(r=>{release=r});return {events:[{kind:'synthetic'}]}},close:async()=>{closed++}}}}
++    const bindings=guestPolicy(ctx,READS_SHARED)
++    await expect(readSyntheticSessionCount(ctx,source,SHARED)).rejects.toThrow('DENIED')
++    await expect(readSyntheticSessionCount(as(GUEST,'projections'),source,PRIVATE)).rejects.toThrow('DENIED')
++    expect(opened).toBe(0)
++    const guest=readSyntheticSessionCount(as(GUEST,'projections'),source,SHARED)
++    await vi.waitFor(()=>expect(release).toBeDefined()); release!(); expect(await guest).toBe(1); expect(closed).toBe(1)
++    release=undefined;const pending=readSyntheticSessionCount(as(GUEST,'projections'),source,SHARED)
++    await vi.waitFor(()=>expect(release).toBeDefined());bindings.splice(0);release!()
++    await expect(pending).rejects.toThrow('DENIED');expect(closed).toBe(2)
++  })
++})
