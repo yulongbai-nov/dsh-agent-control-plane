@@ -1,0 +1,359 @@
+diff --git a/packages/api/session-controller/src/index.ts b/packages/api/session-controller/src/index.ts
+index 2362bce2..804c3982 100644
+--- a/packages/api/session-controller/src/index.ts
++++ b/packages/api/session-controller/src/index.ts
+@@ -32,6 +32,7 @@ import { installModelSelectionProjection } from './model-selection-projection.ts
+ import { SessionSkillCatalog } from './skill-catalog.ts'
+ import { SessionMediaReferences } from './media-references.ts'
+ import { ArchivedSessionGate } from './archived-session-gate.ts'
++import { filterCatalog, assertCatalogRecordsAccess, assertCatalogEventAccess } from './catalog-access.ts'
+ import type {
+   ModelCatalog,
+   SessionWorkspacePathApplication,
+@@ -522,8 +523,10 @@ export class SessionController extends TypertRemoteService {
+    * @returns one chronological page.
+    */
+   @Remote({ name: 'page', resources: { session: addressedSession } })
+-  page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage> {
+-    return this.history.page(request, signal)
++  async page(request: SessionPageRequest, signal: AbortSignal): Promise<SessionPage> {
++    const page = await this.history.page(request, signal)
++    assertCatalogRecordsAccess(this.ctx, page.records)
++    return page
+   }
+ 
+   /**
+@@ -534,8 +537,16 @@ export class SessionController extends TypertRemoteService {
+    *   frames and optional cursorless assistant-stream frames.
+    */
+   @Remote({ mode: 'stream', resources: { session: addressedSession } })
+-  follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame> {
+-    return this.history.follow(request, signal)
++  async *follow(request: SessionFollowRequest, signal: AbortSignal): AsyncIterable<SessionFollowFrame> {
++    for await (const frame of this.history.follow(request, signal)) {
++      if (frame.type === 'snapshot') {
++        assertCatalogRecordsAccess(this.ctx, frame.records)
++        yield { ...frame, projections: { ...frame.projections, values: filterCatalog(this.ctx, frame.projections.values) } }
++      } else if (frame.type === 'event') {
++        assertCatalogEventAccess(this.ctx, frame.event)
++        yield frame
++      } else yield frame
++    }
+   }
+ 
+   /**
+@@ -547,31 +558,32 @@ export class SessionController extends TypertRemoteService {
+   @Remote('projections')
+   async projections(request: SessionProjectionsRequest, signal: AbortSignal): Promise<SessionProjectionsValue> {
+     const { sessionId } = request
++    const visible = (value: SessionProjectionsValue): SessionProjectionsValue => value === null ? null : { ...value, values: filterCatalog(this.ctx, value.values) }
+     if (sessionId.length === 0) {
+       throw new RemoteError('gateway/bad-request', 'sessionId must not be empty', {})
+     }
+     try {
+       signal.throwIfAborted()
+       const live = this.liveProjections(sessionId)
+-      if (live !== undefined) return live
++      if (live !== undefined) return visible(live)
+       const stored = await this.ctx.get('sessionPersistence')?.stat(sessionId, { signal })
+       signal.throwIfAborted()
+       const attached = this.liveProjections(sessionId)
+-      if (attached !== undefined) return attached
++      if (attached !== undefined) return visible(attached)
+       if (stored === undefined) return null
+       if (stored.formatStatus === 'migration-required') {
+         const cached = this.ctx.get('sessionProjectionCache')?.cachedSnapshot(stored.header)
+-        return { kind: 'migration-required', values: { ...cached?.values } as SessionProjectionValues }
++        return visible({ kind: 'migration-required', values: { ...cached?.values } as SessionProjectionValues })
+       }
+       using observation = await this.ctx.sessionQuery.observeSession(sessionId, { signal })
+       const projections = observation.projections
+       if (projections === undefined) {
+         throw new RemoteError('session/projections-unavailable', 'Session projections are unavailable', {})
+       }
+-      return { kind: 'sequenced', asOfSeq: projections.asOfSeq, values: projections.values as SessionProjectionValues }
++      return visible({ kind: 'sequenced', asOfSeq: projections.asOfSeq, values: projections.values as SessionProjectionValues })
+     } catch (error: unknown) {
+       if (error instanceof SessionQueryError && error.code === 'SESSION_QUERY_SESSION_NOT_FOUND') {
+-        return this.liveProjections(sessionId) ?? null
++        return visible(this.liveProjections(sessionId) ?? null)
+       }
+       if (signal.aborted || (error instanceof SessionQueryError && error.code === 'SESSION_QUERY_ABORTED')) {
+         throw new RemoteError('gateway/cancelled', 'Session projection read was cancelled', {}, { cause: error })
+@@ -601,12 +613,18 @@ export class SessionController extends TypertRemoteService {
+       switch (frame.type) {
+         case 'baseline': {
+           const projections = Object.fromEntries(Object.entries(frame.value.projections)
+-            .filter(([sessionId]) => this.ctx.remoteAccess.allows({ kind: 'session', id: sessionId as SessionId })))
++            .filter(([sessionId]) => this.ctx.remoteAccess.allows({ kind: 'session', id: sessionId as SessionId }))
++            .map(([sessionId, block]) => [sessionId, { ...block, values: filterCatalog(this.ctx, block.values) }]))
+           yield { type: 'baseline', value: { ...frame.value, projections } }
+           break
+         }
+         case 'projection':
+-          if (this.ctx.remoteAccess.allows({ kind: 'session', id: frame.sessionId })) yield frame
++          if (this.ctx.remoteAccess.allows({ kind: 'session', id: frame.sessionId })) {
++            if (frame.key === 'subagentCatalog') {
++              const filtered = filterCatalog(this.ctx, { subagentCatalog: frame.value } as SessionProjectionValues)
++              yield { ...frame, value: (filtered as Record<string, typeof frame.value>).subagentCatalog as typeof frame.value }
++            } else yield frame
++          }
+           break
+         /* v8 ignore next -- closed control-frame union. */
+         default:
+diff --git a/packages/api/session-controller/tsconfig.host.json b/packages/api/session-controller/tsconfig.host.json
+index 8f90ca7a..1e0857f7 100644
+--- a/packages/api/session-controller/tsconfig.host.json
++++ b/packages/api/session-controller/tsconfig.host.json
+@@ -12,6 +12,7 @@
+     "src/agent.ts",
+     "src/assistant-stream.ts",
+     "src/catalog.ts",
++    "src/catalog-access.ts",
+     "src/commands.ts",
+     "src/control.ts",
+     "src/file-references.ts",
+diff --git a/packages/api/session-controller/src/catalog-access.ts b/packages/api/session-controller/src/catalog-access.ts
+new file mode 100644
+index 00000000..e7f88b3a
+--- /dev/null
++++ b/packages/api/session-controller/src/catalog-access.ts
+@@ -0,0 +1,48 @@
++/** WIP: scope parent-owned subagent catalog metadata for non-owner Remote calls.
++ * This covers only `subagentCatalog` and `subagent/catalog`, not other event
++ * types, plugin-defined projections, access-revocation cache invalidation, or
++ * arbitrary child identifiers inside message bodies. Not an installation-ready
++ * authorization boundary. */
++import type { Context } from '@deepseek-ai/cordis'
++import type { SessionId } from '@deepseek-ai/dsh-session'
++import { principalOf, RemoteError } from '@deepseek-ai/dsh-typert-protocol'
++import type { SessionHistoryRecord, SessionProjectionValues, SessionWireEvent } from './types.ts'
++
++function denied(ctx: Context): never {
++  const request=ctx.invocation?.request
++  throw new RemoteError('remote-access/denied', 'subagent catalog child is not available', {
++    action: request === undefined ? 'session/unknown' : `${request.namespace}/${request.method}`,
++    reason: 'catalog-child-denied',
++  })
++}
++
++function childAllowed(ctx: Context, value: unknown): boolean {
++  if (typeof value !== 'string' || value.length === 0) return false
++  return ctx.remoteAccess.allows({kind:'session',id:value as SessionId})
++}
++
++export function filterCatalog(ctx: Context, values: SessionProjectionValues): SessionProjectionValues {
++  // Owner and trusted in-process callers keep the existing unfiltered behavior.
++  if (principalOf(ctx.invocation) === undefined) return values
++  const catalog=(values as Record<string, unknown>).subagentCatalog
++  if (catalog === undefined) return values
++  if (!Array.isArray(catalog)) return denied(ctx)
++  const visible: unknown[]=[]
++  for(const entry of catalog) {
++    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) return denied(ctx)
++    const id=(entry as Record<string,unknown>).id
++    if (typeof id !== 'string' || id.length === 0) return denied(ctx)
++    if (childAllowed(ctx,id)) visible.push(entry)
++  }
++  return {...values,subagentCatalog:visible} as SessionProjectionValues
++}
++
++export function assertCatalogEventAccess(ctx: Context, event: SessionWireEvent): void {
++  if (principalOf(ctx.invocation) === undefined || event.type !== 'subagent/catalog') return
++  const data=event.data
++  if (data === null || typeof data !== 'object' || Array.isArray(data) || !childAllowed(ctx,(data as Record<string,unknown>).childId)) denied(ctx)
++}
++
++export function assertCatalogRecordsAccess(ctx: Context, records: readonly SessionHistoryRecord[]): void {
++  for(const record of records) assertCatalogEventAccess(ctx,record.event)
++}
+diff --git a/packages/api/session-controller/tests/r7-synthetic-catalog-mitigation.host.spec.ts b/packages/api/session-controller/tests/r7-synthetic-catalog-mitigation.host.spec.ts
+new file mode 100644
+index 00000000..1625a683
+--- /dev/null
++++ b/packages/api/session-controller/tests/r7-synthetic-catalog-mitigation.host.spec.ts
+@@ -0,0 +1,184 @@
++import { subagentIdentityProjectionDefinition } from '@deepseek-ai/dsh-subagent/src/projection.ts'
++import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
++import { subagentCatalogProjectionDefinition } from '@deepseek-ai/dsh-subagent/src/catalog.ts'
++/**
++ * Session Controller under non-owner callers: the Session resource kind it
++ * registers, the Session readers of `session/page` and `session/follow`,
++ * `session/list`, `session/search`, and `session/control` called through a
++ * `global` role and filtered per Session through `remoteAccess.allows()`, the caller recorded
++ * on prompt sources, and `session/projections` admitted per Session through
++ * the Gateway.
++ */
++
++import { Context } from '@deepseek-ai/cordis'
++import type { Agent } from '@deepseek-ai/dsh-agent'
++import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
++import TypertGatewayService from '@deepseek-ai/dsh-api-gateway'
++import type { RemoteAccessBinding, RemoteAccessRole } from '@deepseek-ai/dsh-api-remote-access'
++import { createUserMessage } from '@deepseek-ai/dsh-llm'
++import { SessionId } from '@deepseek-ai/dsh-session'
++import { remoteMethods, type PeerId, type PeerScope, type Principal, type RemoteInvocation } from '@deepseek-ai/dsh-typert-protocol'
++import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
++import { afterEach, describe, expect, it, vi } from 'vitest'
++import type SessionController from '../src/index.ts'
++import { ApiSessionList } from '../src/list.ts'
++import type { SessionControlFrame, SessionRequestId, SessionSearchValue } from '../src/types.ts'
++import { createSessionTestController } from './test-remote.ts'
++
++declare module '@deepseek-ai/dsh-typert-protocol' {
++  interface PrincipalMap {
++    /** Test-only non-owner caller shared by the access specs. */
++    'test-guest': { readonly kind: 'test-guest'; readonly guest: string }
++  }
++}
++
++const OWNER: Principal = { kind: 'owner' }
++const GUEST: Principal = { kind: 'test-guest', guest: 'session-controller' }
++const SHARED = SessionId('shared-session')
++const PRIVATE = SessionId('private-session')
++
++/** Calls the Session list and control methods; each item still needs a Session role. */
++const LISTER: RemoteAccessRole<'global'> = { name: 'test:session-lister', resource: 'global', actions: ['session/list', 'session/control'] }
++/** Reads one Session: its list row, its control projections, and its stored projections. */
++const READER: RemoteAccessRole<'session'> = {
++  name: 'test:session-reader', resource: 'session', actions: ['session/list', 'session/control', 'session/projections'],
++}
++const LIST_CALLS: RemoteAccessBinding = { role: LISTER, resource: { kind: 'global' } }
++const READS_SHARED: RemoteAccessBinding = { role: READER, resource: { kind: 'session', id: SHARED } }
++const SEARCH_CALLS: RemoteAccessBinding = {
++  role: { name: 'test:session-searcher', resource: 'global', actions: ['session/search'] },
++  resource: { kind: 'global' },
++}
++const SEARCHES_SHARED: RemoteAccessBinding = {
++  role: { name: 'test:session-search-reader', resource: 'session', actions: ['session/search'] },
++  resource: { kind: 'session', id: SHARED },
++}
++
++const owned = new Set<Context>()
++afterEach(async () => {
++  await Promise.all([...owned].map(ctx => ctx.fiber.dispose()))
++  owned.clear()
++})
++
++/**
++ * Register the guest policy.
++ * @returns the bindings the policy answers with; edits apply from the next Remote call.
++ */
++function guestPolicy(ctx: Context, ...bindings: RemoteAccessBinding[]): RemoteAccessBinding[] {
++  const held = [...bindings]
++  ctx.remoteAccess.registerPolicy('test-guest', { bindings: () => held })
++  return held
++}
++
++/** Invoke `session/<method>` as the guest through the Gateway. */
++function guestCall(ctx: Context, method: string, args: Readonly<Record<string, unknown>>): Promise<unknown> {
++  const peer: PeerScope = { id: 'session-access-peer' as PeerId, ctx, principal: GUEST, interactions: 'answer', signal: new AbortController().signal, dispose: async () => {} }
++  return ctx.typertGateway.invoke({ peer, namespace: 'session', method, args })
++}
++
++async function harness(): Promise<{
++  readonly ctx: Context
++  readonly controller: SessionController
++  readonly shared: Agent
++  readonly hidden: Agent
++  /** The Context a Gateway dispatch of `session/<method>` binds for `principal`. */
++  readonly as: (principal: Principal, method: string) => Context
++}> {
++  const ctx = new Context()
++  owned.add(ctx)
++  await ctx.plugin(TypertRegistry)
++  await mountAgentLoopTestDependencies(ctx)
++  const loop = await mountAgentLoopTestHarness(ctx)
++  const shared = await loop.create(SHARED, {}, { cwd: "/synthetic-probe" })
++  const hidden = await loop.create(PRIVATE, {}, { cwd: "/synthetic-probe" })
++  const controller = createSessionTestController(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
++  const as = (principal: Principal, method: string): Context => {
++    const invocation: RemoteInvocation = {
++      request: { namespace: 'session', method, args: {} },
++      service: 'sessionController',
++      peer: { id: 'session-access-peer' as PeerId, ctx, principal, interactions: 'answer', signal: new AbortController().signal, dispose: async () => {} },
++      signal: new AbortController().signal,
++      uplink: <In>(): AsyncIterable<In> => ({ [Symbol.asyncIterator]: () => ({ next: async () => ({ done: true, value: undefined }) }) }),
++    }
++    return ctx.extend({ invocation })
++  }
++  return { ctx, controller, shared, hidden, as }
++}
++
++function message(text: string) {
++  return createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } })
++}
++
++
++const CATALOG_READER: RemoteAccessRole<'session'>={name:'synthetic:catalog-reader',resource:'session',actions:['session/projections','session/control','session/page','session/follow']}
++const CATALOG_PARENT: RemoteAccessBinding={role:CATALOG_READER,resource:{kind:'session',id:SHARED}}
++const CATALOG_CHILD: RemoteAccessBinding={role:CATALOG_READER,resource:{kind:'session',id:PRIVATE}}
++const secretLabel='SYNTHETIC_PRIVATE_CHILD_LABEL'
++
++describe('Synthetic catalog access mitigation (WIP)',()=>{
++ async function fixture(){
++  const {ctx,shared,as}=await harness();
++  ctx.sessionProjections.register(subagentCatalogProjectionDefinition);
++  ctx.sessionProjections.register(subagentIdentityProjectionDefinition);
++  shared.session.append('subagent/catalog',{version:0,childId:PRIVATE,childCreatedAt:1,mode:'one-shot',label:secretLabel});
++  await ctx.plugin(TypertGatewayService);const held=guestPolicy(ctx,CATALOG_PARENT);
++  return {ctx,shared,as,held};
++ }
++ it('filters denied child metadata, denies missing parent grant, and preserves authorized duplicates and owner',async()=>{
++  const {ctx,shared,as,held}=await fixture();
++  const read=()=>guestCall(ctx,'projections',{request:{sessionId:SHARED}}) as Promise<{values:{subagentCatalog:unknown[]}}>;
++  expect((await read()).values.subagentCatalog).toEqual([]);
++  await expect(guestCall(ctx,'projections',{request:{sessionId:PRIVATE}})).rejects.toMatchObject({code:'remote-access/denied'});
++  const owner=await as(OWNER,'projections').sessionController.projections({sessionId:SHARED},new AbortController().signal);
++  expect(JSON.stringify(owner)).toContain(secretLabel);
++  held.push(CATALOG_CHILD);shared.session.append('subagent/catalog',{version:0,childId:PRIVATE,childCreatedAt:2,mode:'one-shot',label:secretLabel});
++  expect((await read()).values.subagentCatalog).toHaveLength(2);
++  held.splice(0,held.length);await expect(read()).rejects.toMatchObject({code:'remote-access/denied'});
++ });
++ it('filters catalog values in control baselines and live frames',async()=>{
++  const {ctx,shared,as}=await fixture();const abort=new AbortController();
++  const stream=as(GUEST,'control').sessionController.control(abort.signal)[Symbol.asyncIterator]();
++  try {
++   const first=await stream.next();if(first.done || first.value.type!=='baseline')throw Error('missing baseline');
++   expect(first.value.value.projections[SHARED]?.values.subagentCatalog).toEqual([]);
++   shared.session.append('subagent/catalog',{version:0,childId:PRIVATE,childCreatedAt:2,mode:'one-shot',label:secretLabel});
++   for(;;){const next=await stream.next();if(next.done)throw Error('stream ended');if(next.value.type==='projection'&&next.value.key==='subagentCatalog'){expect(next.value.value).toEqual([]);break}}
++  } finally {abort.abort();await stream.return?.()}
++ });
++ it('filters the control baseline through a real synthetic Gateway stream',async()=>{
++  const {ctx,held}=await fixture();held.push(LIST_CALLS);
++  const abort=new AbortController(), peer:PeerScope={id:'synthetic-gateway-peer' as PeerId,ctx,principal:GUEST,interactions:'answer',signal:abort.signal,dispose:async()=>{}};
++  const stream=(await ctx.typertGateway.wireStream.open('session/control',{args:{}},(async function*(){})(),peer,abort.signal))[Symbol.asyncIterator]();
++  try {const first=await stream.next();expect(first.done).toBe(false);expect(JSON.stringify(first.value)).not.toContain(secretLabel);}
++  finally {abort.abort();await stream.return?.()}
++ });
++ it('rejects denied child catalog records in parent history and preserves authorized history',async()=>{
++  const {ctx,shared,held}=await fixture();const req={address:{kind:'session',sessionId:SHARED},throughSeq:shared.session.seq-1};
++  await expect(guestCall(ctx,'page',{request:req})).rejects.toMatchObject({code:'remote-access/denied',details:{reason:'catalog-child-denied'}});
++  held.push(CATALOG_CHILD);const page=await guestCall(ctx,'page',{request:req});expect(JSON.stringify(page)).toContain(secretLabel);
++ });
++ it('gates opening and later follow records, preserving owner history',async()=>{
++  const {shared,as,held}=await fixture(), abort=new AbortController();
++  const address={kind:'session' as const,sessionId:SHARED};
++  const blocked=as(GUEST,'follow').sessionController.follow({address},abort.signal)[Symbol.asyncIterator]();
++  await expect(blocked.next()).rejects.toMatchObject({code:'remote-access/denied',details:{reason:'catalog-child-denied'}});
++  const owner=as(OWNER,'page').sessionController.page({address,throughSeq:shared.session.seq-1},abort.signal);
++  expect(JSON.stringify(await owner)).toContain(secretLabel);
++  held.push(CATALOG_CHILD);
++  const allowed=as(GUEST,'follow').sessionController.follow({address},abort.signal)[Symbol.asyncIterator]();
++  try {
++   const first=await allowed.next();expect(first.value?.type).toBe('snapshot');expect(JSON.stringify(first.value)).toContain(secretLabel);
++   held.pop();shared.session.append('subagent/catalog',{version:0,childId:PRIVATE,childCreatedAt:3,mode:'one-shot',label:secretLabel});
++   await expect(allowed.next()).rejects.toMatchObject({code:'remote-access/denied',details:{reason:'catalog-child-denied'}});
++  } finally {abort.abort();await allowed.return?.()}
++ });
++ it('continues to reject an incorrect direct parent for a separately authorized child',async()=>{
++  const {ctx,held}=await fixture(), childId=SessionId('synthetic-direct-child');
++  held.splice(0,held.length,{role:CATALOG_READER,resource:{kind:'session',id:childId}}); // Child grant alone; parent is not implicitly granted.
++  const child=ctx.sessions.create(childId,{meta:{cwd:'/synthetic-probe',origin:'subagent',parentSession:SHARED}});
++  child.append('subagent/descriptor',snapshotSubagentDescriptor({mode:'continuable',provider:'test',label:'child'}));
++  const request=(parentSessionId:SessionId)=>({address:{kind:'subagent',parentSessionId,childSessionId:childId,mode:'continuable'},throughSeq:0});
++  await expect(guestCall(ctx,'page',{request:request(SessionId('wrong-parent'))})).rejects.toMatchObject({code:'subagent/unauthorized'});
++  await expect(guestCall(ctx,'page',{request:request(SHARED)})).resolves.toMatchObject({hasMore:false});
++ });
++});
