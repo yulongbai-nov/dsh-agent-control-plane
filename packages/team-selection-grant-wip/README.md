@@ -1,0 +1,39 @@
+# Experimental per-Team route grant and local publication fence
+
+**Nondeployable research WIP; R3/R6 remain incomplete.** This patch targets pinned public source `b830ec950faba0a46dda564be3e2d854afed94f1`; installed rc.5 equivalence is not established. It includes the earlier Team selection WIP and conflicts with the separate fail-closed selection patch and Team-depth patch; do not apply them together. It does not modify or install the real app/profile.
+
+## What is tested
+
+The WIP adds an explicitly configured, **in-memory synthetic Host grant** keyed by the exact live Team root Session. The grant defaults to absent/deny, has a version and replace/revoke epoch, an exact provider/model allowlist and optional explicit maxTokens ceiling. Team Host checks native backend capability, calls the live LLM registry's route preflight, then rechecks grant/provider identity. Independent preset selection stays denied and model-facing `spawn_teammate` fields stay hidden. Existing `tool-subagent` is not wired to this authority and its sampled non-Team behavior is not changed.
+
+For local continuable backends, the experiment passes a synchronous `prePublish` callback to the native Subagent manager. It rechecks the exact grant/provider immediately before the synchronous initial-message admission. A synthetic Host test revokes during the asynchronous adapter preflight: rejection occurs before Team provisioning. Another pauses an actual local synthetic provider's preparation, revokes, resumes it and observes rejection before initial-message publication, no remaining live child, and a **failed** Team provisioning edge. A third tests a grant for one root cannot be used by another; another verifies a provider lacking route capability rejects without `prepareContinuable`. This exercises a last local synchronous boundary, not durable authorization or side-effect-free rollback: Team provisioning has already been flushed and child materialization/provider preparation may already have produced effects before the callback.
+
+External providers are rejected when this experimental callback is present because their start may already act before local admission. Non-Team starts without the callback follow the previous code path. The callback is optional and caller-supplied; direct `startActivation`, workflow or another caller can omit it, so it is **not** a shared central enforcement mechanism or a security boundary. Reentrant callbacks, poisoned host objects, persistence failures and all other publication paths are not proven safe.
+
+## Evidence and limits
+
+The isolated synthetic Host run reports **56 passed, 1 expected fail** across the Team suite and a scoped Team-tool-schema fixture. The expected failure is independent preset selection, which remains deliberately blocked; do not count it as a pass. Two targeted existing non-Team tests passed (one native continuation receipt and one sampled per-Session model-selection setting), while 171 other cases in those files were not run. These observations do not prove complete non-Team compatibility. The Team and Subagent source typechecks passed after regenerating the Subagent declarations in the disposable checkout; no production build or dependency closure was verified.
+
+Retained outputs: `work/team-grant-evidence/host-final.log`, SHA-256 `f3705b7c574019f4b335173dd4f4c0f0cfab5ef5fd0e8baf5fd4db0b621fb110`; `nonteam.log`, SHA-256 `3325170e429d18f7f4a68d99b9006cc62db97ef08b5713e5a01029bc36e38aaa`. Pre/post source/test/native-addon/patch manifests match; manifest SHA-256 `820be18d247955d0da5121ff5bffa348f8f894551361c18ab166d3ad8f15718a`. `upstream.patch` SHA-256 `ae7c469444737aed6b8a0aacdde03583de2d512adcb85553fcb8dc21835adbeb`, zero-context; `git apply --unidiff-zero --check` passed on the pinned base. Tests use a task-owned HOME/TMPDIR, synthetic JSONL and mock adapter, with fixture-owned cleanup. They did not intentionally access a user profile, real model, browser or external service; no OS egress proof is claimed.
+
+### Exact SHA-256 inputs
+
+| Path relative to pinned source | Pinned base | Tested WIP |
+| --- | --- | --- |
+| `packages/experimental/agent-team/src/roster.ts` | `29cd1662e69b00eba7175b2b6f0568e918af887992b732c9d2d7656b2ce6c60b` | `7ce3fd75095f510ce2703eee6f7ef1a254da7a5d3deeb812cd975a7c645cf636` |
+| `packages/experimental/agent-team/src/types.ts` | `0537a77c061605b878e5fd6520fc5f363a2f12ab570650ddce7084b5436fbbbd` | `c24ddf276ddd72fcd44c8a1a573bfab7a8920318cb3f3943e06be51336ff198e` |
+| `packages/experimental/agent-team/tests/team.spec.ts` | `9545cdd8935399208da208815b39dd2494eb4bf633d1bab8f61608e612843f96` | `4a6941b2709f1fb8af6bcbd535ac57f482a966eafd0114c44e62be16db6696d9` |
+| `packages/subagent/subagent/src/types.ts` | `9150cb7c1c7059843d932be465bd4ddf869b5df08cdfa099e01023f681865920` | `931ddbf89743cb6aed7c6093e6c66ad6209836de7f8cdc07d6b1c2e94c9febd6` |
+| `packages/subagent/subagent/src/index.ts` | `83fe0b12c038765037c2b6be66c51d6418073113b98fe1b9be8f872c352371da` | `61439e06037de597d5ecb1f7147b0614c00021bb26014c0a59a2fd471216a7c4` |
+| `packages/subagent/subagent/src/manager.ts` | `87298342da27dd567897bd23145fdec7d841e1f26a4e6b5dfa9a48b0b477d03e` | `426eafb2b206daf324071a94f07d417a37e175c1eb41bd1b2aad9f6e126e8877` |
+| `packages/experimental/agent-team/src/selection-authority-wip.ts` | absent | `ba9d8a57698dba5176fb38b74705b1f59ded9ef3bb18d426c4c0ec4b934ddc6a` |
+| `packages/experimental/tool-agent-team/tests/selection-schema-wip.spec.ts` | absent | `51aed2de99bb340de8e10053b8d7ea90260b2d85108318974fc5e2d604964233` |
+
+The locally built synthetic-test POSIX flock addon had SHA-256 `9534cde445a865250eb7bc8cfe5e231f3f91d0fda3f4aaa694e81f3531ad1130`. These hashes cover listed inputs, not all transitive dependencies or the installed application.
+
+## Blockers before any exposure
+
+1. Authenticate and authorize grant creation/revocation, bind it to a durable Team identity and user-approved per-Team policy, and define route, reasoning, maxTokens and exact preset/revision permissions. The test-only grant API is callable by trusted in-process code and validates no user identity; it is neither persistent nor safe against hostile grant objects. On restart its WeakMap has no grants, but restart/recovery was not tested.
+2. Establish a single Host-owned authority used by Team, existing subagent tool, direct Host, workflow and every relevant provider path. Do not treat the optional callback as enforcement; enforce cannot-be-omitted permits at the actual owner, with version fencing and clear semantics for already-published work. Account for non-Team `provider-managed` behavior. The existing `subagent/model-selection-policy` intentionally snapshots Session settings and does not implement live revocation; changing that legacy contract without a migration/decision would silently change non-Team behavior.
+3. Implement exact preset allowlist/revision binding and revalidate it after asynchronous work, support or explicitly reject each provider, and define cleanup/recovery for pre-publication provider/materialization side effects. Cross-process grants, durable journal/child atomicity, configuration races, restart and user revocation remain unproven.
+4. Keep model-facing selection fields hidden until the above gates and real isolated product/browser tests pass. R1/R2 depth, R5 archive admission and the other product requirements remain separate and unresolved.
