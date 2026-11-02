@@ -1,0 +1,179 @@
+diff --git a/packages/experimental/agent-team/src/index.ts b/packages/experimental/agent-team/src/index.ts
+index 2d359337..cfeb1c1d 100644
+--- a/packages/experimental/agent-team/src/index.ts
++++ b/packages/experimental/agent-team/src/index.ts
+@@ -240,3 +240,8 @@ export class TeamService extends Service {
+-      const input = createUserMessage({ content, source })
+-      root.steer(input)
+-      messageId = input.id
++      const registry = this.ctx.get('workspaceRegistry')
++      if (registry === undefined) throw new TeamError('archive admission authority unavailable', 'ARCHIVE_ADMISSION_UNKNOWN')
++      messageId = await registry.withDeliveryAdmission(root.id, async () => {
++        request.signal.throwIfAborted()
++        const input = createUserMessage({ content, source })
++        root.steer(input)
++        return input.id
++      })
+diff --git a/packages/subagent/subagent/src/manager.ts b/packages/subagent/subagent/src/manager.ts
+index b89732c2..bf97ad57 100644
+--- a/packages/subagent/subagent/src/manager.ts
++++ b/packages/subagent/subagent/src/manager.ts
+@@ -11,0 +12 @@ import type {} from '@deepseek-ai/dsh-working-directory'
++import type {} from '@deepseek-ai/dsh-workspace'
+@@ -562 +563,4 @@ export class SubagentManager {
+-      return this.sendToParent(senderActivation, sender, content)
++      return this.archiveAdmission(targetId, async () => {
++        options.signal.throwIfAborted()
++        return this.sendToParent(senderActivation, sender, content)
++      })
+@@ -1234,0 +1239,15 @@ export class SubagentManager {
++  ): Promise<MessageId> {
++    return this.archiveAdmission(childId, async () => this.deliverToChildAdmitted(parent, childId, content, options))
++  }
++
++  private async archiveAdmission<T>(targetId: SessionId, operation: () => Promise<T>): Promise<T> {
++    const registry = this.ctx.get('workspaceRegistry')
++    if (registry === undefined) throw new SubagentError('archive admission authority unavailable', 'ARCHIVE_ADMISSION_UNKNOWN')
++    return await registry.withDeliveryAdmission(targetId, operation)
++  }
++
++  private async deliverToChildAdmitted(
++    parent: Agent,
++    childId: SessionId,
++    content: ContentBlock[],
++    options: ChildDeliveryOptions,
+diff --git a/packages/workspace/workspace/src/index.ts b/packages/workspace/workspace/src/index.ts
+index 0f630500..5fd082d0 100644
+--- a/packages/workspace/workspace/src/index.ts
++++ b/packages/workspace/workspace/src/index.ts
+@@ -347,0 +348,18 @@ export class WorkspaceRegistry extends Service {
++  /** Experimental same-registry admission: not cross-process safe. */
++  withDeliveryAdmission<T>(sessionId: SessionId, operation: () => Promise<T>): Promise<T> {
++    return this.enqueueOperation(async () => {
++      let id = sessionId
++      const visited = new Set<SessionId>()
++      while (true) {
++        if (visited.has(id)) throw new Error('archive admission: ambiguous cyclic lineage')
++        visited.add(id)
++        if (this.requireState().archivedSessionIds.includes(id)) throw new Error('archive admission: session is archived')
++        const header = await this.readSessionHeader(id)
++        if (header.origin !== 'subagent') break
++        if (header.parentSession === undefined) throw new Error('archive admission: missing subagent parent')
++        id = header.parentSession
++      }
++      return await operation()
++    })
++  }
++
+diff --git a/packages/experimental/agent-team/tests/archive-bypass-wip.spec.ts b/packages/experimental/agent-team/tests/archive-bypass-wip.spec.ts
+new file mode 100644
+index 00000000..d28e466b
+--- /dev/null
++++ b/packages/experimental/agent-team/tests/archive-bypass-wip.spec.ts
+@@ -0,0 +1,106 @@
++import { afterEach, expect, it } from 'vitest'
++import { mkdtempSync, rmSync } from 'node:fs'
++import { tmpdir } from 'node:os'
++import { join } from 'node:path'
++import { Context } from '@deepseek-ai/cordis'
++import AgentLoop from '@deepseek-ai/dsh-agent-loop'
++import { createUserMessage } from '@deepseek-ai/dsh-llm'
++import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
++import { SessionId } from '@deepseek-ai/dsh-session'
++import * as JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
++import SubagentService from '@deepseek-ai/dsh-subagent'
++import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
++import { queueHostSubagentPrompt, steerHostSubagentPrompt } from '@deepseek-ai/dsh-subagent/internal'
++import Storage from '../../../storage/storage/src/index.ts'
++import { DomainFacility } from '../../../storage/storage-domain/src/index.ts'
++import { MemoryMediaPool, MemoryStorageBackend } from '../../../storage/storage-domain/tests/helpers/memory-backend.ts'
++import WorkspaceRegistry from '../../../workspace/workspace/src/index.ts'
++import { ArchivedSessionGate } from '../../../api/session-controller/src/archived-session-gate.ts'
++import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
++import { mountWorkingDirectoryFixture } from '../../../subagent/subagent/tests/working-directory-fixture.ts'
++import TeamService from '../src/index.ts'
++import { TestSessionQuery } from './test-session-query.ts'
++
++const roots:string[]=[]; const contexts:Context[]=[]
++afterEach(async()=>{for(const ctx of contexts.splice(0).reverse()) await ctx.fiber.dispose();for(const root of roots.splice(0)) rmSync(root,{recursive:true,force:true})})
++async function setup(){
++  const ctx=new Context();contexts.push(ctx)
++  await mountAgentLoopTestDependencies(ctx);await mountWorkingDirectoryFixture(ctx)
++  const root=mkdtempSync(join(tmpdir(),'team-archive-wip-'));roots.push(root)
++  await ctx.plugin(JsonlSessionPersistence,{root});await ctx.plugin(TestSessionQuery)
++  await ctx.plugin(Storage);const pool=new MemoryMediaPool();ctx.storage.backend.register('memory',new MemoryStorageBackend(pool))
++  const domain=new DomainFacility(ctx,{backend:'memory',routes:{}});ctx.storage.mount('domain',domain);ctx.provide('storageDomain',domain)
++  const workspaceFiber=await ctx.plugin(WorkspaceRegistry);await ctx.plugin(ArchivedSessionGate)
++  await ctx.plugin(AgentLoop,{agents:[]});await ctx.plugin(SubagentService)
++  await ctx.plugin(SubagentSpawn,{providerName:'spawn'});await ctx.plugin(TeamService)
++  const adapter=new MockAdapter([textResponse('first'),textResponse('second')]);ctx.llm.registerAdapter(['mock'],adapter)
++  const lead=await ctx.agentLoop.create(SessionId('synthetic-lead'),{provider:'mock',model:'mock'})
++  return {ctx,lead,adapter,pool,workspaceFiber}
++}
++const prompt=(text:string)=>[{type:'text' as const,text}]
++it('rejects archived child across Team, direct, queue and steer; restores same child after unarchive',async()=>{
++  const {ctx,lead,workspaceFiber}=await setup();const signal=new AbortController().signal
++  const worker=await ctx.agentTeams.spawnTeammate(lead,{name:'worker',description:'synthetic',prompt:prompt('first'),context:'fresh',provider:'spawn',signal})
++  await ctx.workspaceRegistry.archiveSession(worker.member.id,{stopActivity:true})
++  expect(ctx.workspaceRegistry.archivedSessionIds).toContain(worker.member.id)
++  await workspaceFiber.dispose()
++  await ctx.plugin(WorkspaceRegistry)
++  expect(ctx.workspaceRegistry.archivedSessionIds).toContain(worker.member.id)
++  await ctx.subagents.drainChildren(lead,[worker.member.id])
++  expect(ctx.agents.get(worker.member.id)).toBeUndefined()
++  await expect(ctx.agentTeams.sendMessage(lead,{target:'worker',content:prompt('not accepted'),signal})).rejects.toThrow(/archived/)
++  await expect(ctx.subagents.sendMessage(lead,worker.member.id,prompt('direct'),{signal})).rejects.toThrow(/archived/)
++  const source={kind:'agent-message' as const,form:'relay' as const,senderSessionId:lead.id}
++  await expect(queueHostSubagentPrompt(ctx.subagents,lead,worker.member.id,prompt('queued'),source,signal)).rejects.toThrow(/archived/)
++  await expect(steerHostSubagentPrompt(ctx.subagents,lead,worker.member.id,prompt('steered'),source,signal)).rejects.toThrow(/archived/)
++  expect(ctx.agents.get(worker.member.id)).toBeUndefined()
++  await ctx.workspaceRegistry.unarchiveSession(worker.member.id)
++  expect((await ctx.agentTeams.sendMessage(lead,{target:'worker',content:prompt('after restore'),signal})).messageId).toBeDefined()
++  expect(ctx.agents.get(worker.member.id)).toBeDefined()
++})
++
++it('rejects messages when archive authority is unavailable',async()=>{
++  const {ctx,lead,workspaceFiber}=await setup();const signal=new AbortController().signal
++  const worker=await ctx.agentTeams.spawnTeammate(lead,{name:'worker',description:'synthetic',prompt:prompt('first'),context:'fresh',provider:'spawn',signal})
++  await workspaceFiber.dispose()
++  await expect(ctx.agentTeams.sendMessage(lead,{target:'worker',content:prompt('not accepted'),signal})).rejects.toThrow(/authority unavailable/)
++})
++
++it('serializes archive after an already admitted operation and rejects later admission',async()=>{
++  const {ctx,lead}=await setup()
++  const entered=Promise.withResolvers<void>(), release=Promise.withResolvers<void>()
++  const pending=ctx.workspaceRegistry.withDeliveryAdmission(lead.id,async()=>{entered.resolve();await release.promise;return 'accepted'})
++  await entered.promise
++  const archive=ctx.workspaceRegistry.archiveSession(lead.id,{stopActivity:true})
++  let committed=false;void archive.then(()=>{committed=true})
++  await new Promise(resolve=>setTimeout(resolve,0));expect(committed).toBe(false)
++  release.resolve();expect(await pending).toBe('accepted');await archive
++  await expect(ctx.workspaceRegistry.withDeliveryAdmission(lead.id,async()=> 'late')).rejects.toThrow(/archived/)
++})
++
++it('orders a real Team send behind a pending archive using the shared owner',async()=>{
++  const {ctx,lead}=await setup();const signal=new AbortController().signal
++  const worker=await ctx.agentTeams.spawnTeammate(lead,{name:'worker',description:'synthetic',prompt:prompt('first'),context:'fresh',provider:'spawn',signal})
++  const entered=Promise.withResolvers<void>(),release=Promise.withResolvers<void>()
++  const hold=ctx.workspaceRegistry.withDeliveryAdmission(worker.member.id,async()=>{entered.resolve();await release.promise})
++  await entered.promise
++  const archive=ctx.workspaceRegistry.archiveSession(worker.member.id,{stopActivity:true})
++  const sending=ctx.agentTeams.sendMessage(lead,{target:'worker',content:prompt('late'),signal})
++  const rejected=expect(sending).rejects.toThrow(/archived/)
++  release.resolve();await hold;await archive;await rejected
++})
++
++it('fails closed when the target ancestry is missing or cyclic',async()=>{
++  const {ctx}=await setup()
++  const orphan=ctx.sessions.create(SessionId('synthetic-orphan'),{meta:{origin:'subagent',parentSession:SessionId('absent-parent')}})
++  await expect(ctx.workspaceRegistry.withDeliveryAdmission(orphan.id,async()=> 'unsafe')).rejects.toThrow(/no such session/)
++  const first=ctx.sessions.create(SessionId('cycle-a'),{meta:{origin:'subagent',parentSession:SessionId('cycle-b')}})
++  ctx.sessions.create(SessionId('cycle-b'),{meta:{origin:'subagent',parentSession:first.id}})
++  await expect(ctx.workspaceRegistry.withDeliveryAdmission(first.id,async()=> 'unsafe')).rejects.toThrow(/cyclic lineage/)
++})
++
++it.fails('unwired raw Agent.steer should reject an archived Lead before accepting input',async()=>{
++  const {ctx,lead}=await setup()
++  await ctx.workspaceRegistry.archiveSession(lead.id,{stopActivity:true})
++  expect(()=>lead.steer(createUserMessage({content:prompt('should be rejected'),source:{kind:'user'}}))).toThrow()
++})
