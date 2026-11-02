@@ -4,4 +4,4 @@ coverage/
 *.log
 
 # Locally downloaded VM installers and disk images are not project source.
-vm-setup/
+/vm-setup/
