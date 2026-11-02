@@ -20,12 +20,15 @@
    cd e2e && node run-e2e.mjs --mock-model
    ```
 5. 提 PR，填模板里的验证清单；CI（`ci-smoke`）必须绿。
+6. `pr-review` workflow 会自动评论 diff 摘要 + 审查清单（第一遍自动审查）；人类 reviewer 复核后合并。
+   **不要直接 push `main`**（agent 与人类都一样）。
 
 ## 测试策略
 
 - **真机 E2E 优先**：真实 DSH host + 真实 Chromium（Playwright），用例描述用户行为。
 - **mock 模型**：统一用官方 `@deepseek-ai/dsh-llm-mock-server`（Messages 协议），零费用、确定性。
 - **单测**：只在修复 regression 时补最小回归测试；不为覆盖率写单测。
+- **录像**：每个用例都有独立 webm 录像；`artifacts/latest/report/report.html` 是对应报告（含用例说明）。
 - **失败取证**：失败自动留截图/视频/GIF/trace（见 `docs/TEST-INFRA.md`）。
 
 ## 插件/组件变更

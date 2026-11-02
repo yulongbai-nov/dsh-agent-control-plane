@@ -15,7 +15,8 @@
     "e2e:real": "node e2e/run-e2e.mjs --real-model",
     "pack:delivery": "node delivery/pack.mjs",
     "install:control-plane": "node delivery/install.mjs",
-    "e2e:mock": "node e2e/run-e2e.mjs --mock-model"
+    "e2e:mock": "node e2e/run-e2e.mjs --mock-model",
+    "pack:report": "node delivery/pack-report.mjs"
   },
   "devDependencies": {
     "acorn": "8.19.0"

@@ -12,7 +12,16 @@
 
 历史状态（交付前）在 `docs/status.md` 文末；旧研究包在 `packages/`，不参与交付。
 
-## 2. 硬规则
+## 2. GitHub 工作流（所有 agent 必须遵守）
+
+- **不直接 push `main`。** 每个改动开分支 → push → 开 PR；`main` 只通过 PR 合并。
+- PR 标题/描述写清「改了什么 + 怎么验证 + 影响面」；关联 issue（如有）。
+- 等待 `ci-smoke / all-checks-passed` 绿；`pr-review` 会自动评论审查清单（第一遍，非最终批准）。
+- **人类 reviewer 合并**；agent 不自批、不 force-push 已 review 的分支。
+- 分支命名：`feat/<topic>`、`fix/<topic>`、`test/<topic>`、`release/<version>`。
+- 合并方式：squash merge，保留 PR 链接。
+
+## 3. 硬规则
 
 - **不修改宿主**：不要改 `/Applications/DeepSeek Harness.app`、`app.asar`、用户 `~/.dsh/profiles/desktop`。
 - **真机 E2E 优先**：新功能配行为用例（`e2e/tests/*.spec.mjs`）；只有修 regression 才补最小单测。
@@ -25,7 +34,7 @@
 - **不提交机密**：token、cookie、真实 API key 永不入库；录制文件不得含 Authorization。
 - **不删除研究包**：`packages/` 是历史资产，如需清理先开 issue。
 
-## 3. 常用命令
+## 4. 常用命令
 
 ```sh
 # 构建/校验 vendored bundle
@@ -43,7 +52,7 @@ node delivery/uninstall.mjs --profile e2e
 node delivery/pack.mjs   # -> dist/*.tgz + INSTALL.md + manifest.json
 ```
 
-## 4. 加一个 E2E 用例
+## 5. 加一个 E2E 用例
 
 1. 在 `e2e/tests/` 建 `NN-<主题>.spec.mjs`，用 `helpers.mjs` 的 `boot()`；
 2. 尽量用 mock 模型（`--mock-model`）而不是真实调用；
@@ -51,17 +60,18 @@ node delivery/pack.mjs   # -> dist/*.tgz + INSTALL.md + manifest.json
 4. 断言用户可见行为，别断言具体 DOM 层级；
 5. 跑 `node e2e/run-e2e.mjs --mock-model` 连跑两次稳定通过。
 
-## 5. 加/改一个插件组件
+## 6. 加/改一个插件组件
 
 - 包结构对齐官方：`dsh.bundle.patch`、客户端加 `dsh.client.platform/inject`、`files` 只放运行物、
   `engines.dsh` 声明已验证宿主版本、`tests/` 放 manifest 契约测试。
 - 版本/来源写进 `DELIVERY.md` 与 `delivery/install.mjs` 的 `COMPONENTS`；第三方必须 pin commit/版本。
 - 安装只走 `dsh plugin add`（自动登记 bundles），不要手写 `dsh.profile.bundles`。
 
-## 6. 提交前 checklist
+## 7. 提交前 checklist
 
 - [ ] `node third_party/dsh-session-tree/scripts/build.mjs --check`
 - [ ] `node --test third_party/dsh-session-tree/tests/*.test.mjs`
-- [ ] `node e2e/run-e2e.mjs --mock-model` 通过（两次稳定）
+- [ ] `node e2e/run-e2e.mjs --mock-model` 通过（两次稳定）；报告/录像生成在 `artifacts/latest/report/`
 - [ ] 没有真实模型调用、没有触碰 desktop profile / 用户会话
-- [ ] 文档同步（README/DELIVERY/CHANGELOG 中受影响的条目）
+- [ ] 文档同步（README/DELIVERY/CHANGELOG/E2E 用例说明 `e2e/test-cases.mjs`）
+- [ ] 走 PR 流程（分支 + PR + CI 绿 + 人类合并）

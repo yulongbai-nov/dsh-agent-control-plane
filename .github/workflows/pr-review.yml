@@ -1,0 +1,79 @@
+name: pr-review
+
+# Automated first-pass review for agent/human pull requests.
+# Posts a checklist comment with the diff summary so a human reviewer can skim
+# the branch quickly; the blocking gate is the `ci-smoke` workflow
+# (`all-checks-passed`). Requires: this workflow on the default branch.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('node:child_process')
+            const base = context.payload.pull_request.base.ref
+            const head = context.payload.pull_request.head.sha
+            execSync(`git fetch --no-tags --depth=1 origin ${base}`)
+            let stat = ''
+            let files = []
+            try {
+              stat = execSync(`git diff --stat origin/${base}...${head}`, { encoding: 'utf8' }).trim()
+              files = execSync(`git diff --name-only origin/${base}...${head}`, { encoding: 'utf8' })
+                .trim()
+                .split('\n')
+                .filter(Boolean)
+            } catch (error) {
+              stat = `diff unavailable: ${error.message}`
+            }
+
+            const touches = (prefix) => files.some((file) => file.startsWith(prefix))
+            const checks = [
+              [touches('e2e/'), 'E2E 变更：是否补了行为用例？失败是否有截图/GIF/trace？'],
+              [touches('third_party/dsh-session-tree/'), '插件包变更：`build.mjs --check` + manifest 契约测试必须过；`files` 只放运行物。'],
+              [touches('delivery/'), '安装/打包变更：本地跑 install → uninstall 回滚闭环，并更新 DELIVERY.md。'],
+              [touches('docs/') || touches('README.md') || touches('CHANGELOG.md'), '文档：README/AGENTS/DELIVERY/CHANGELOG 是否同步。'],
+              [true, '没有真实模型调用、没有触碰 desktop profile / 用户会话。'],
+              [true, '提交信息与 PR 描述写清“验证方式 + 影响面”。'],
+            ]
+            const checklist = checks.map(([hit, text]) => `- [${hit ? 'x' : ' '}] ${text}`).join('\n')
+
+            const body = [
+              '🤖 **自动审查（第一遍，非最终批准）**',
+              '',
+              `分支：\`${context.payload.pull_request.head.ref}\` → \`${base}\` ｜ 提交 \`${head.slice(0, 10)}\``,
+              '',
+              '### 变更摘要',
+              '```',
+              stat || '(empty)',
+              '```',
+              '',
+              '### 审查清单',
+              checklist,
+              '',
+              '### 必须满足',
+              '- `ci-smoke / all-checks-passed` 绿（static + mock E2E + package）。',
+              '- 人类 reviewer 复核本评论与 CI 证据后再合并；**agent 不得自行 push main**。',
+            ].join('\n')
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            })
+            console.log('auto-review comment posted')

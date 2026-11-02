@@ -104,7 +104,11 @@ jobs:
             exit 0
           fi
           node e2e/run-e2e.mjs --real-model
-      - name: Upload E2E evidence (screenshots, video/GIF, traces, isolation report)
+      - name: Package E2E report (HTML + per-case videos)
+        if: always()
+        run: node delivery/pack-report.mjs || echo "no report to package"
+
+      - name: Upload E2E evidence (screenshots, per-case videos, report, traces, isolation report)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -114,6 +118,8 @@ jobs:
           path: |
             ${{ env.DSH_E2E_ROOT }}/artifacts
             ${{ env.DSH_E2E_ROOT }}/runs
+            dist/e2e-report-*.zip
+            dist/e2e-report-*.md
 
   package:
     name: Package deliverable

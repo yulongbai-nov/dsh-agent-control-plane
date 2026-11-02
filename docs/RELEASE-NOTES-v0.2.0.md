@@ -39,6 +39,8 @@ node run-e2e.mjs --real-model     # 22 passed / 6 skipped（2 次真实调用）
 
 - `dsh-control-plane-session-tree-1.0.4-cp.2.tgz` — vendored 侧栏树 + 头像（MIT，运行物白名单）
 - `INSTALL.md` / `manifest.json` — 安装说明与组件清单
+- `e2e-report-0.2.0.zip` — E2E 报告（`report.html` 内嵌**每个用例的 webm 录像** + 用例说明 + summary）
+- `e2e-report-0.2.0.md` — 同一份报告的 Markdown 版
 
 ## 已知缺口
 
