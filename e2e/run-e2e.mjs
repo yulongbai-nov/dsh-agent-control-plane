@@ -35,6 +35,9 @@ const RESET_STATE = args.includes('--reset-state')
 const REAL_MODEL = args.includes('--real-model')
 const NO_INSTALL = args.includes('--no-install')
 const MOCK_MODEL = args.includes('--mock-model')
+const MOCK_SIMPLE = args.includes('--mock-model-simple')
+// Default mock layer: the official Messages mock server (production protocol).
+const MOCK_PROVIDER = MOCK_MODEL ? (MOCK_SIMPLE ? 'simple' : 'official') : null
 
 const requiredBundles = [
   'dsh-control-plane-session-tree',
@@ -81,20 +84,14 @@ const profileDir = join(DSH_HOME_ROOT, 'profiles', PROFILE)
 // --- profile bootstrap: copy web template, apply isolation patch, install bundles ---
 if (!NO_INSTALL) {
   if (!existsSync(join(profileDir, 'package.json'))) {
-    if (process.env.DSH_E2E_HOME) {
-      // CI: the npm CLI creates the profile from its shipped template.
-      const code = await runCommand(DSH, ['--profile', PROFILE, '--from-default-profile', 'web', '--dump-config'], {
-        stdio: 'ignore',
-        env: { ...process.env, DSH_HOME: DSH_HOME_ROOT, DSH_BIN: DSH },
-      })
-      if (code !== 0) throw new Error('failed to create the profile from the shipped web template')
-      log(`created profile "${PROFILE}" from the shipped web template (npm CLI)`)
-    } else {
-      const web = join(HOME, '.dsh/profiles/web')
-      if (!existsSync(web)) throw new Error(`no web profile template at ${web}`)
-      cpSync(web, profileDir, { recursive: true })
-      log(`created profile "${PROFILE}" from the web template`)
-    }
+    // Official bootstrap for both local and CI: the CLI lays down its shipped template.
+    // Never copy the user's own web profile (it may carry personal customisations).
+    const code = await runCommand(DSH, ['--profile', PROFILE, '--from-default-profile', 'web', '--dump-config'], {
+      stdio: 'ignore',
+      env: { ...process.env, DSH_HOME: DSH_HOME_ROOT, DSH_BIN: DSH },
+    })
+    if (code !== 0) throw new Error('failed to create the profile from the shipped web template')
+    log(`created profile "${PROFILE}" from the shipped web template`)
   }
   const patchPath = join(profileDir, 'cordis.patch.yml')
   const marker = '# --- dsh-agent-control-plane e2e isolation ---'
@@ -138,20 +135,28 @@ if (RESET_STATE) {
 }
 mkdirSync(WORKSPACE, { recursive: true })
 
-// --- optional deterministic model layer: local OpenAI-compatible mock provider ---
+// --- optional deterministic model layer -------------------------------------------------
+// Default: the OFFICIAL Messages mock server (@deepseek-ai/dsh-llm-mock-server), pointed at
+// by $DEEPSEEK_BASE_URL so the production DeepSeek adapter speaks its real protocol.
+// `--mock-model-simple` keeps our dependency-free OpenAI-compatible mock via a pi-ai route.
 let mockProvider = null
 let mockPatchPath = null
 let originalProfilePatch = null
 let mockRecordPath = null
-if (MOCK_MODEL) {
+let officialMockUrl = null
+if (MOCK_PROVIDER) {
   mockRecordPath = join(STATE, 'mock-provider', 'requests.jsonl')
   mkdirSync(dirname(mockRecordPath), { recursive: true })
-  mockProvider = spawn(process.execPath, [join(HARNESS, 'mock-provider/server.mjs'), '--record', mockRecordPath], {
+  const script =
+    MOCK_PROVIDER === 'official'
+      ? join(HARNESS, 'mock-provider/official-server.mjs')
+      : join(HARNESS, 'mock-provider/server.mjs')
+  mockProvider = spawn(process.execPath, [script, '--record', mockRecordPath], {
     stdio: ['ignore', 'pipe', 'inherit'],
   })
   const mockUrl = await new Promise((resolveMock, rejectMock) => {
     let out = ''
-    const timer = setTimeout(() => rejectMock(new Error('mock provider start timeout')), 10_000)
+    const timer = setTimeout(() => rejectMock(new Error('mock provider start timeout')), 15_000)
     mockProvider.stdout.on('data', (d) => {
       out += d
       const m = out.match(/MOCK_PROVIDER_URL=(\S+)/)
@@ -161,20 +166,24 @@ if (MOCK_MODEL) {
       }
     })
   })
-  log('mock model provider:', mockUrl)
-  mockPatchPath = join(profileDir, 'cordis.patch.yml')
-  originalProfilePatch = readFileSync(mockPatchPath, 'utf8')
-  appendFileSync(
-    mockPatchPath,
-    '\n# --- mock model (transient, restored after the run) ---\n' +
-      '- id: llm-pi-ai\n  name: "@deepseek-ai/dsh-llm-pi-ai"\n  config:\n    providers:\n      e2e-mock:\n' +
-      `        api: openai-completions\n        baseURL: ${mockUrl}\n        apiKeyEnv: E2E_MOCK_KEY\n` +
-      '        models:\n          - id: mock-echo\n            contextWindow: 32768\n            maxTokens: 2048\n' +
-      '            reasoningEfforts: false\n' +
-      '- id: agent-default-model\n  name: "@deepseek-ai/dsh-agent-default-model"\n  config:\n' +
-      '    provider: e2e-mock\n    model: mock-echo\n',
-  )
-  log('default model switched to e2e-mock/mock-echo for this run')
+  log(`mock model provider (${MOCK_PROVIDER}):`, mockUrl)
+  if (MOCK_PROVIDER === 'simple') {
+    mockPatchPath = join(profileDir, 'cordis.patch.yml')
+    originalProfilePatch = readFileSync(mockPatchPath, 'utf8')
+    appendFileSync(
+      mockPatchPath,
+      '\n# --- mock model (transient, restored after the run) ---\n' +
+        '- id: llm-pi-ai\n  name: "@deepseek-ai/dsh-llm-pi-ai"\n  config:\n    providers:\n      e2e-mock:\n' +
+        `        api: openai-completions\n        baseURL: ${mockUrl}\n        apiKeyEnv: E2E_MOCK_KEY\n` +
+        '        models:\n          - id: mock-echo\n            contextWindow: 32768\n            maxTokens: 2048\n' +
+        '            reasoningEfforts: false\n' +
+        '- id: agent-default-model\n  name: "@deepseek-ai/dsh-agent-default-model"\n  config:\n' +
+        '    provider: e2e-mock\n    model: mock-echo\n',
+    )
+    log('default model switched to e2e-mock/mock-echo for this run')
+  } else {
+    officialMockUrl = mockUrl
+  }
 }
 
 // --- pre-run isolation snapshot of the user's real DSH home ---
@@ -184,7 +193,12 @@ const userSessionsBefore = listSessionsDirs()
 
 // --- boot the instance ---
 const env = { ...process.env }
-if (MOCK_MODEL) env.E2E_MOCK_KEY = 'dsh-e2e-mock'
+if (MOCK_PROVIDER === 'simple') env.E2E_MOCK_KEY = 'dsh-e2e-mock'
+if (MOCK_PROVIDER === 'official' && officialMockUrl) {
+  // The production adapter resolves its endpoint from this env var; the mock accepts any key.
+  env.DEEPSEEK_BASE_URL = officialMockUrl
+  env.DEEPSEEK_API_KEY = 'mock-key'
+}
 if (process.env.DSH_E2E_HOME) {
   env.DSH_HOME = process.env.DSH_E2E_HOME
   env.DSH_AGENTS_HOME = join(process.env.DSH_E2E_HOME, 'agents')
@@ -253,6 +267,7 @@ try {
         DSH_E2E_SELF_FAIL: process.env.DSH_E2E_SELF_FAIL || '',
         DSH_E2E_RUN_ID: runId,
         DSH_E2E_MOCK_MODEL: MOCK_MODEL ? '1' : '0',
+        DSH_E2E_MOCK_PROVIDER: MOCK_PROVIDER || '',
         DSH_E2E_MOCK_RECORD: mockRecordPath || '',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -314,7 +329,7 @@ try {
   }
   if (mockRecordPath && existsSync(mockRecordPath)) {
     const lines = readFileSync(mockRecordPath, 'utf8').trim().split('\n').filter(Boolean).length
-    results.mockProvider = { record: mockRecordPath, requests: lines }
+    results.mockProvider = { provider: MOCK_PROVIDER, record: mockRecordPath, requests: lines }
     log('mock provider: model requests served =', lines)
   }
 

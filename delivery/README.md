@@ -26,10 +26,14 @@ node delivery/install.mjs --profile desktop --yes
 node delivery/install.mjs --profile e2e --dry-run
 ```
 
-安装器会先把 profile 的 `package.json` / `cordis.patch.yml` / `pnpm-lock.yaml`
-快照到 `.control-plane-backup/<时间戳>/`，再执行
-`dsh plugin --profile <p> add <specs...>`，补登记 `dsh.profile.bundles`，最后写
-`.control-plane-install.json` 回执。
+安装器遵循官方惯例：
+
+1. 缺失 profile 时用 `dsh --profile <p> --from-default-profile web --dump-config` 创建（不复制用户 web profile）；
+2. 快照 profile 的 `package.json` / `cordis.patch.yml` / `pnpm-lock.yaml` 到
+   `$DSH_HOME/backups/control-plane/<profile>/<时间戳>/`（不往 profile 目录塞非 DSH 文件）；
+3. 执行 `dsh plugin --profile <p> add <specs...>`，**不手写** `dsh.profile.bundles`；
+4. 只读校验：依赖存在 + bundle 已登记 + 非 desktop profile 用 `--dump-config` 确认 row 已进入层栈；
+5. 在 profile 写 `.control-plane-install.json` 回执（uninstall 用它找回快照）。
 
 ## 回滚
 
@@ -39,6 +43,7 @@ node delivery/uninstall.mjs --profile e2e
 ```
 
 恢复快照 + `dsh plugin <p> install` 清理依赖，并校验控制面 bundle 已从列表移除。
+快照路径从回执读取；desktop profile 仍建议优先走应用内 **Settings → Plugins**。
 
 ## 打包 / 发布
 

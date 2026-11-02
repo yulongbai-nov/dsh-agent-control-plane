@@ -1,4 +1,4 @@
-# DSH Agent 控制面 · 安装说明（生成于 2026-11-02T17:51:04.186Z）
+# DSH Agent 控制面 · 安装说明（生成于 2026-11-02T20:07:26.570Z）
 
 目标宿主：DeepSeek Harness `0.2.1-rc.5`（已验证的真机版本）。
 
@@ -7,7 +7,7 @@
 在本目录执行：
 
 ```sh
-dsh plugin --profile <profile> add 'file:dsh-control-plane-session-tree-1.0.4-cp.1.tgz' 'github:funk80rus/dsh-agent-teams-model-override#1bbe0891710264a5bc4b517045f785204e6a652c' 'dsh-workflow-map@1.0.0' 'dsh-local-telemetry@0.2.1' 'dshmarket@1.73.8'
+dsh plugin --profile <profile> add 'file:dsh-control-plane-session-tree-1.0.4-cp.2.tgz' 'github:funk80rus/dsh-agent-teams-model-override#1bbe0891710264a5bc4b517045f785204e6a652c' 'dsh-workflow-map@1.0.0' 'dsh-local-telemetry@0.2.1' 'dshmarket@1.73.8'
 ```
 
 （`dsh plugin add` 会自动把每个 bundle 登记到 profile 的 `dsh.profile.bundles` 并安装依赖；
@@ -18,7 +18,7 @@ dsh plugin --profile <profile> add 'file:dsh-control-plane-session-tree-1.0.4-cp
 desktop profile 由 Electron 应用独占管理，建议二选一：
 
 1. **GUI**：应用内 **Settings → Plugins → Add plugin**，依次添加上面每一个 spec
-   （本地 tarball 用本目录 `dsh-control-plane-session-tree-1.0.4-cp.1.tgz` 的绝对路径）。
+   （本地 tarball 用本目录 `dsh-control-plane-session-tree-1.0.4-cp.2.tgz` 的绝对路径）。
 2. **应用完全退出后**执行：
    ```sh
    node delivery/install.mjs --profile desktop --yes

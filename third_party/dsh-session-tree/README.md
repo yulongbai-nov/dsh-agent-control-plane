@@ -27,6 +27,14 @@ dsh plugin --profile <profile> add <本目录或 tarball>
 
 profile 的 `dsh.profile.bundles` 需要包含 `dsh-control-plane-session-tree`（`dsh plugin add` 会自动登记）。
 
+## 包结构（对齐官方插件约定）
+
+- `package.json`：`dsh.bundle.patch` + `dsh.client.platform/inject`；`engines.dsh: ">=0.2.1-rc.5 <0.3.0"`
+  作为安装/启动门禁；`files` 只含运行时（`index.js`、`client.js`、`cordis.patch.yml`、`icon.svg`、`locale`、README/LICENSE）。
+- 构建资产（`client.template.js`、`avatars/`、`scripts/`）留在仓库，不进发布 tarball；`prepack` 会校验 `client.js` 是否最新。
+- `tests/manifest.test.mjs`：exports/files/patch row/locale/头像内嵌/engines 的契约测试（`npm test` 含 `build --check`）。
+- `dsh.client.immediately: true` 是官方字段（rc.5 安装包里有 12 个包使用）；`manifestVersion` 非官方字段，已删除。
+
 ## 上游许可
 
 上游版权与完整 MIT 许可见 [LICENSE](LICENSE)。本副本保留上游版权声明，修改部分同样以 MIT 发布。

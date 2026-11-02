@@ -28,10 +28,12 @@
 ## 3. 真机 E2E 结果
 
 ```
-node e2e/run-e2e.mjs              -> 12 passed, 4 skipped   (零模型调用)
-node e2e/run-e2e.mjs --mock-model -> 12 passed, 4 skipped   (确定性本地 mock 模型，CI 用)
-node e2e/run-e2e.mjs --real-model -> 14 passed              (2 次真实模型调用)
+node e2e/run-e2e.mjs              -> 14 passed, 6 skipped   (零模型调用)
+node e2e/run-e2e.mjs --mock-model -> 16 passed, 4 skipped   (官方 Messages mock，零成本，CI 用)
+node e2e/run-e2e.mjs --real-model -> 17 passed, 3 skipped   (2 次真实模型调用)
 ```
+20 条用例：01 外壳、02 会话树、03 头像、04 插件/市场、05 工作流地图、06 真实模型（3）、
+07 mock 模型、08 视觉/无障碍（3）、09 遥测生命周期、99 取证自检。
 
 | 验证点 | 结果 |
 |---|---|
@@ -65,8 +67,8 @@ node e2e/run-e2e.mjs --real-model -> 14 passed              (2 次真实模型�
 | R14 权限默认 | ⚪ 未变更 | 未改权限配置；`experimental-auto-review` 仍随原 bundle 存在 |
 | R15 workflow 统计 | 🟡 部分 | 遥测已落库；workflow run/source 归因未接 |
 | R16 utility 库 | 🔴 未交付 | 无 registry/晋升/run_utility |
-| R17 视觉与无障碍 | 🟡 部分 | 浅色主题 + 真实截图；深色/locale/键盘/读屏未全量验收 |
-| R18 个人遥测 | 🟡 部分 | 本地 SQLite 存储、默认不采正文、隔离路径已验证；导出/清除/tombstone 未验 |
+| R17 视觉与无障碍 | 🟢 已交付（基础） | 深色/浅色切换、中英 locale、键盘 Enter/Tab 已真机 E2E；屏幕阅读器未验 |
+| R18 个人遥测 | 🟢 已交付（基础） | 本地 SQLite、默认不采正文、导出 JSON 无正文、purge 归零、重建已 E2E |
 
 ## 5. 安装 / 回滚 / 打包
 
@@ -102,9 +104,18 @@ node delivery/pack.mjs   # -> dist/*.tgz + INSTALL.md + manifest.json
   真实 GUI 验证：模型显示 `mock-echo`，零真实调用。
 - **官方测试基建**：上游 `@deepseek-ai/dsh-llm-mock-server` / `llm-replay` / `session-snapshot` 等
   rc.5 已发布；DSH 默认 adapter 走 Messages 协议，建议下一步切换（见 `docs/TEST-INFRA.md` §3）。
-- **CI/CD**：npm 版 DSH 纯 Node 无头可跑（本机实测 12/12），GitHub Actions 工作流在
-  `.github/workflows/e2e.yml`（mock 模型零成本 + 证据 artifact 上传）。
+- **CI/CD（最小版）**：npm 版 DSH 纯 Node 无头可跑（本机实测 12/12）。`.github/workflows/e2e.yml`
+  是 **手动触发**的最小流水线：`static`（build --check / 语法 / 包契约 / mock 自测）、
+  `mock-e2e`（官方 Messages mock，零成本）、`package`（pack + tarball 内容断言）、`all-checks-passed` 聚合。
+  组织方式调研见 `docs/OFFICIAL-CI-AND-PLUGIN-CONVENTIONS.md`；升级为 PR 门禁只需取消注释触发器 + branch protection。
+- **官方 mock 已接入**：默认 `--mock-model` 走 `@deepseek-ai/dsh-llm-mock-server`（Messages 协议，
+  `$DEEPSEEK_BASE_URL` 指到本地 server），GUI 仍显示生产路由 `DeepSeek-V4.1-Flash`，零真实调用。
+- **插件包规范化**：vendored bundle 的 `files` 只留运行物、删除非官方 `manifestVersion`、补
+  `engines.dsh` 与 `tests/manifest.test.mjs`；安装器不再复制用户 web profile、不再手写 bundles，
+  改为官方 `--from-default-profile` + `dsh plugin add` + 只读校验。
 - **失败取证**：截图 / 视频 / GIF / trace 自动归档；GIF 由 ffmpeg 抽帧 + gifenc 合成。
+- **R17 / R18 快赢**：08 视觉/无障碍（深浅色、locale、键盘）+ 09 遥测生命周期（export/purge/重建）
+  已进本地 E2E；R17 剩余屏幕阅读器全量验收，R18 剩余 tombstone 跨重启验收。
 
 ## 7. 已知缺口与建议下一步
 

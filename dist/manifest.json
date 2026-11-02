@@ -1,14 +1,14 @@
 {
   "name": "dsh-agent-control-plane",
   "version": "0.1.0",
-  "builtAt": "2026-11-02T17:51:04.186Z",
+  "builtAt": "2026-11-02T20:07:26.570Z",
   "dsh": "0.2.1-rc.5",
   "artifacts": [
-    "dsh-control-plane-session-tree-1.0.4-cp.1.tgz"
+    "dsh-control-plane-session-tree-1.0.4-cp.2.tgz"
   ],
   "components": [
     {
-      "spec": "file:dsh-control-plane-session-tree-1.0.4-cp.1.tgz",
+      "spec": "file:dsh-control-plane-session-tree-1.0.4-cp.2.tgz",
       "covers": "R7 sidebar session tree; R8 six task avatars"
     },
     {

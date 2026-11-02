@@ -1,64 +1,95 @@
-name: e2e
+name: ci-smoke
 
-# Headless real-GUI E2E for the DSH agent control plane.
+# 最小 CI 基建（2026-11-02，先验证可能性；手动触发，不作为 required check）。
 #
-# Verified locally (2026-11-02) against the npm CLI, not the Electron desktop app:
-#   - `@deepseek-ai/dsh@0.2.1-rc.5` runs on plain Node 24 (no Electron dependency);
-#     `dsh --profile <p> --host 127.0.0.1 --port 0 --no-open` serves the real Web UI.
-#   - The whole flow (profile bootstrap -> plugin install -> mock model -> Chromium)
-#     passes 12/12 with an isolated $DSH_HOME and zero model cost.
+# 设计参照官方 DSH 的 ci.yml 与同类项目（见 docs/OFFICIAL-CI-AND-PLUGIN-CONVENTIONS.md）：
+#   static   —— 构建产物新鲜度 / 语法 / 包契约 / mock 自测，10s 级，PR 门禁候选
+#   mock-e2e —— 真 DSH Web UI + 真 Chromium + 官方 Messages mock（零密钥、零费用）
+#   package  —— delivery/pack.mjs + npm pack --dry-run，验证可发布产物
+#   all-checks-passed —— 聚合门禁（以后接 branch protection）
 #
-# Coverage limit: this runs core + Web GUI. The signed Electron desktop shell
-# cannot run on a Linux runner; desktop-shell fidelity is covered by the local
-# macOS run (`node e2e/run-e2e.mjs --mock-model`) or a self-hosted macOS runner.
+# 本机已验证（2026-11-02）：official mock + 隔离 $DSH_HOME 下 12 passed / 4 skipped。
+# 桌面 Electron 壳无法在 Linux runner 运行，标记 N/A（本机 macOS 验收）。
+#
+# 升级为全量门禁：取消下面 push/pull_request 注释 + branch protection 指向 all-checks-passed。
 
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
+    inputs:
+      real_model:
+        description: '额外跑 2 次真实模型冒烟（需要 DEEPSEEK_API_KEY secret）'
+        type: boolean
+        default: false
+  # push:
+  #   branches: [main]
+  # pull_request:
 
 concurrency:
-  group: e2e-${{ github.ref }}
+  group: ci-smoke-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  e2e-mock:
-    name: E2E (mock model, headless)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      DSH_E2E_HOME: ${{ runner.temp }}/dsh-home
-      DSH_E2E_ROOT: ${{ runner.temp }}/dsh-e2e
-      DSH_TELEMETRY_DISABLED: '1'
-      CI: '1'
+  static:
+    name: Static checks (build freshness, syntax, package contract)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: e2e/package-lock.json
+      - name: Syntax check (Node scripts)
+        run: |
+          for f in e2e/run-e2e.mjs e2e/mock-provider/server.mjs e2e/mock-provider/official-server.mjs \
+                   e2e/mock-provider/self-test.mjs e2e/reporters/*.mjs delivery/*.mjs; do
+            node --check "$f"
+          done
+      - name: Vendored bundle is built from its template
+        run: node third_party/dsh-session-tree/scripts/build.mjs --check
+      - name: Vendored bundle package contract tests
+        run: node --test third_party/dsh-session-tree/tests/*.test.mjs
+      - name: Install E2E dependencies
+        working-directory: e2e
+        run: npm ci
+      - name: Mock provider self-test (record/replay/fault injection)
+        run: node e2e/mock-provider/self-test.mjs
 
+  mock-e2e:
+    name: E2E (official Messages mock, headless)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: [static]
+    env:
+      DSH_E2E_HOME: ${{ runner.temp }}/dsh-home
+      DSH_E2E_ROOT: ${{ runner.temp }}/dsh-e2e
+      DSH_TELEMETRY_DISABLED: '1'
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
       - name: Install DSH CLI and pnpm
         run: |
           npm install -g @deepseek-ai/dsh@0.2.1-rc.5 pnpm@11.28.5
           echo "DSH_E2E_DSH_BIN=$(npm prefix -g)/bin/dsh" >> "$GITHUB_ENV"
           echo "DSH_BIN=$(npm prefix -g)/bin/dsh" >> "$GITHUB_ENV"
-
       - name: Install E2E dependencies
         working-directory: e2e
         run: npm ci
-
-      - name: Install Chromium (headless, no xvfb needed)
+      - name: Install Chromium (headless; no xvfb needed)
         working-directory: e2e
         run: npx playwright install --with-deps chromium
-
-      - name: Run E2E against an isolated profile with the local mock model
+      - name: Run E2E with the official mock model (zero cost)
         run: node e2e/run-e2e.mjs --mock-model
-
-      - name: Upload E2E evidence (screenshots, GIFs, traces, isolation report)
+      - name: Real-model smoke (manual, 2 calls, needs secret)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.real_model && secrets.DEEPSEEK_API_KEY != '' }}
+        run: node e2e/run-e2e.mjs --real-model
+      - name: Upload E2E evidence (screenshots, video/GIF, traces, isolation report)
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -68,12 +99,12 @@ jobs:
           path: |
             ${{ env.DSH_E2E_ROOT }}/artifacts
             ${{ env.DSH_E2E_ROOT }}/runs
-            ${{ env.DSH_E2E_HOME }}/profiles/e2e/cordis.patch.yml
 
-  pack:
+  package:
     name: Package deliverable
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
+    needs: [static]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -81,19 +112,25 @@ jobs:
           node-version: 24
       - name: Build dist artifacts
         run: node delivery/pack.mjs
+      - name: Validate the tarball contents (runtime files only)
+        run: |
+          cd third_party/dsh-session-tree
+          npm pack --dry-run 2>&1 | tee /tmp/pack.txt
+          ! grep -qE 'client\.template\.js|avatars/|scripts/' /tmp/pack.txt
       - uses: actions/upload-artifact@v4
         with:
           name: control-plane-dist
           path: dist/
 
-  # The legacy research test suite is not a CI gate yet: `npm test` currently has
-  # 27 red tests, all inside packages/synthetic-telemetry-ledger (a non-deployed
-  # research spike). Triage them separately before adding this job as required.
-  # legacy-unit:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: actions/setup-node@v4
-  #       with: { node-version: 24 }
-  #     - run: npm ci
-  #     - run: npm test
+  all-checks-passed:
+    name: all-checks-passed
+    if: always()
+    needs: [static, mock-e2e, package]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fail if any required job failed
+        run: |
+          echo "static=${{ needs.static.result }} e2e=${{ needs.mock-e2e.result }} package=${{ needs.package.result }}"
+          test "${{ needs.static.result }}" = "success"
+          test "${{ needs.mock-e2e.result }}" = "success"
+          test "${{ needs.package.result }}" = "success"

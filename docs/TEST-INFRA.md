@@ -9,10 +9,24 @@
 | 层 | 用什么 | 覆盖 | 成本 | 何时跑 |
 |---|---|---|---|---|
 | 无模型层 | 纯 GUI/Host（不触发模型） | 侧栏树、头像、插件加载、工作流入口、安装/回滚 | 0 | 每次提交 |
-| **mock 模型层** | 本地 OpenAI 兼容 mock provider（`e2e/mock-provider`） | 发消息→确定性回复、标题、tool 可见性、错误注入 | 0 | 每次提交 / CI |
+| **mock 模型层** | **官方 Messages mock**（`@deepseek-ai/dsh-llm-mock-server`，默认，覆盖生产协议）+ 自写 OpenAI 兼容 mock（`--mock-model-simple`，轻量/pi-ai 路由） | 发消息→确定性回复、标题、tool 可见性、错误注入 | 0 | 每次提交 / CI |
 | 真实模型层 | 用户真实登录（`--real-model`） | 真实回复、真实 token/缓存、最终验收 | 2 次调用/轮 | 手动 / nightly |
 
-## 2. 本地 mock provider（已实现并验证）
+## 2. mock 模型层（官方 Messages mock 为默认，已接入并验证）
+
+### 2.1 官方 `@deepseek-ai/dsh-llm-mock-server`（默认，`--mock-model`）
+
+- 接入方式：`e2e/mock-provider/official-server.mjs` 调 `startMockLlmServer()`，打印
+  `MOCK_PROVIDER_URL`；`run-e2e.mjs` 把它通过 **`$DEEPSEEK_BASE_URL`** 交给真实 DeepSeek adapter，
+  并设 `DEEPSEEK_API_KEY=mock-key`（mock 不校验 key）。**走生产 Messages 协议**，无需改 profile。
+- 实测：GUI 里模型仍显示生产路由 `DeepSeek-V4.1-Flash`，回复来自 mock（`MOCK_OK:official mock provider`），
+  `Usage 33 tok`，零真实调用；本地与 CI 模式均通过（2026-11-02 全量：`--mock-model` 16 passed / 4 skipped，
+  默认 14 passed / 6 skipped，`--real-model` 17 passed / 3 skipped）。
+- 能力：官方 mock 支持 24 种行为（429/500/stall/断流/坏 chunk/`tool_call_success`…）、请求捕获、
+  随机故障压测（种子可复现）。下一步可用 `tool_call_success` 确定性地驱动 workflow / 团队工具，
+  做 R10/R11/R4/R6 的零模型 E2E。
+
+### 2.2 自写 OpenAI 兼容 mock（`--mock-model-simple`，保留作轻量/自定义协议场景）
 
 实现：`e2e/mock-provider/server.mjs`（`node:http`，一个文件，无依赖）。
 
@@ -26,12 +40,9 @@
   `hash = sha256(model + messages + tool names)`，**永不记录 Authorization**。
 - 回放：`--replay <file.jsonl>`，请求 hash 命中即回放录制响应，可脱离真实 provider 复现。
 - 自测：`node e2e/mock-provider/self-test.mjs` 覆盖模型列表、非流式、SSE、429/500 注入、录制、回放——8 项 PASS。
-- 真实 GUI 验证：`node e2e/run-e2e.mjs --mock-model` → 12 passed / 4 skipped；模型显示 `mock-echo`，
-  mock provider 记录到真实请求（零真实调用）。见 `docs/evidence` 的 `13-mock-model-reply.png`。
-
-**边界（写清楚，避免误读）**：这是 OpenAI-completions 协议，走 pi-ai 自定义路由；
-DSH 默认的 DeepSeek adapter 用的是 **Messages 协议（`/v1/messages`）**，本 mock 不覆盖该协议。
-要覆盖默认 adapter，用下面的官方 `llm-mock-server`。
+- 真实 GUI 验证：`node e2e/run-e2e.mjs --mock-model-simple` → 12 passed / 4 skipped；模型显示 `mock-echo`。
+- 边界：这是 OpenAI-completions 协议，走 pi-ai 自定义路由，不覆盖默认 DeepSeek adapter——
+  覆盖默认协议请用上面的官方 mock。
 
 ## 3. 官方测试基建（可直接复用，已发布到 npm）
 
@@ -50,8 +61,8 @@ DSH 默认的 DeepSeek adapter 用的是 **Messages 协议（`/v1/messages`）**
 另有上游 `vitest.e2e / vitest.expected / vitest.snapshot / vitest.web` 四套配置、`docs/testing.md`、
 `apps/web/tests`（含 `agent-team-panel.e2e.ts`）可照抄结构。
 
-**建议路线**：把 E2E 的 mock 层切到官方 `llm-mock-server`（更接近生产协议、故障种类全、带请求捕获），
-我们的 OpenAI mock 保留给"pi-ai 自定义路由 / 轻量 CI / 不需要 Messages 协议"的场景。
+**已落地（2026-11-02）**：E2E 的默认 mock 层已切到官方 `llm-mock-server`（Messages 协议 + 请求捕获），
+自写 OpenAI mock 降级为 `--mock-model-simple` 备选。
 
 ## 4. 录制回放（两条路）
 
@@ -86,12 +97,13 @@ DSH 默认的 DeepSeek adapter 用的是 **Messages 协议（`/v1/messages`）**
 - 用 `DSH_E2E_HOME=<隔离目录>` + npm CLI 跑完整套件：**12 passed / 4 skipped**，隔离审计通过、零残留进程。
 - 安装插件需要 `pnpm` 在 PATH（`dsh plugin` 会转发 pnpm）；CI 里 `npm i -g pnpm@11.28.5` 即可。
 
-工作流：`.github/workflows/e2e.yml`
+工作流：`.github/workflows/e2e.yml`（文件名保留，内容是最小 smoke，**手动触发**）。
 
-- `e2e-mock` job：ubuntu-latest + Node 24 + `@deepseek-ai/dsh@0.2.1-rc.5` + `pnpm@11.28.5`
+- 最小 job：ubuntu-latest + Node 24 + `@deepseek-ai/dsh@0.2.1-rc.5` + `pnpm@11.28.5`
   + `playwright install --with-deps chromium`（headless 不需要 xvfb）+ `node e2e/run-e2e.mjs --mock-model`。
 - 失败证据（截图/视频/GIF/trace/隔离报告）用 `actions/upload-artifact` 上传，保留 14 天。
-- `pack` job：`node delivery/pack.mjs`，把 `dist/` 作为 artifact（可发布/归档）。
+- 真实模型冒烟是 `workflow_dispatch` 的可选输入，需要 `DEEPSEEK_API_KEY` secret，默认不跑。
+- 升级路径：取消 `push/pull_request` 注释 + 把 job 设为 branch protection required check。
 
 **限制**：Linux runner 只能覆盖 core + Web GUI；签名 Electron 桌面外壳无法在 Linux 跑。
 若必须验收桌面壳，用 self-hosted macOS runner（本机已有安装版）跑同一命令。
@@ -115,8 +127,10 @@ DSH 默认的 DeepSeek adapter 用的是 **Messages 协议（`/v1/messages`）**
 ```sh
 # 离线真实 GUI（零模型调用）
 node e2e/run-e2e.mjs
-# 确定性 mock 模型（零成本，CI 用这个）
+# 确定性 mock 模型（官方 Messages mock，零成本，CI 用这个）
 node e2e/run-e2e.mjs --mock-model
+# 备选：自写 OpenAI 兼容 mock（pi-ai 路由）
+node e2e/run-e2e.mjs --mock-model-simple
 # 真实模型验收（2 次调用）
 node e2e/run-e2e.mjs --real-model
 # 失败取证自检
@@ -130,8 +144,9 @@ DSH_E2E_DSH_BIN=$(npm prefix -g)/bin/dsh node e2e/run-e2e.mjs --mock-model
 
 ## 9. 下一步
 
-1. 接入官方 `llm-mock-server` 覆盖默认 Messages 协议 + 24 种故障，替换/补充现有 OpenAI mock。
-2. mock provider 增加脚本化工具调用（`workflow` / `spawn_teammate_with_model`），用于 workflow 与团队确定性 E2E。
+1. ~~接入官方 `llm-mock-server`~~ ✅ 已完成（默认层；`--mock-model`）。
+2. 用官方 mock 的 `tool_call_success`（`toolName`/`toolArguments`）确定性驱动 `workflow` 与
+   `spawn_teammate_with_model`，做 R10/R11/R4/R6 的零模型 E2E。
 3. 真实流量录制 → 回放进 CI，替代部分真实模型验收。
 4. nightly：self-hosted macOS runner 跑 `--real-model` 桌面壳验收。
 5. 失败证据进 PR 评论（下载链接），并把 `failure.gif` 自动附到 issue。

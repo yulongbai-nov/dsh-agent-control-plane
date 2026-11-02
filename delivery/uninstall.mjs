@@ -19,7 +19,8 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const HOME = homedir()
 // Honour an isolated $DSH_HOME (CI / throwaway test profiles).
 const DSH_HOME_ROOT = process.env.DSH_HOME || join(HOME, '.dsh')
-const DSH = process.env.DSH_BIN || '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh'
+const APP_DSH = '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh'
+const DSH = process.env.DSH_BIN || (existsSync(APP_DSH) ? APP_DSH : 'dsh')
 const argv = process.argv.slice(2)
 const flag = (name, fallback) => {
   const i = argv.indexOf(name)

@@ -8,9 +8,10 @@
 ```sh
 cd e2e
 npm install                    # 首次：安装 playwright 1.64.1（浏览器缓存已在 ~/Library/Caches/ms-playwright）
-node run-e2e.mjs               # 离线套件（12 条，零模型请求）
-node run-e2e.mjs --mock-model  # 追加确定性 mock 模型层（零成本，CI 用这个）
-node run-e2e.mjs --real-model  # 追加 3 条真实模型/遥测用例（约 2 次模型调用）
+node run-e2e.mjs               # 离线套件（14 passed / 6 skipped，零模型请求）
+node run-e2e.mjs --mock-model  # 16 passed / 4 skipped（官方 Messages mock，零成本，CI 用这个）
+node run-e2e.mjs --mock-model-simple  # 备选：自写 OpenAI 兼容 mock（pi-ai 自定义路由）
+node run-e2e.mjs --real-model  # 17 passed / 3 skipped（约 2 次真实模型调用）
 node run-e2e.mjs --reset-state # 清空隔离状态后重跑
 DSH_E2E_SELF_FAIL=1 node run-e2e.mjs  # 取证自检：故意失败一次，验证截图/视频/GIF/trace
 ```
@@ -40,7 +41,9 @@ DSH_E2E_SELF_FAIL=1 node run-e2e.mjs  # 取证自检：故意失败一次，验�
 | `04-plugins` | Plugins 页列出 5 个控制面插件；dshmarket 提供 Plugin Market 入口 |
 | `05-workflow-map` | 侧栏「工作流地图」入口可打开且不崩溃，可回到会话 |
 | `06-real-model` | 真实回复 + token 用量；`spawn_teammate_with_model` 对 agent 可见；遥测 SQLite 有真实事件行 |
-| `07-mock-model` | 本地 OpenAI 兼容 mock provider 的确定性回复，且零真实模型调用（`--mock-model`） |
+| `07-mock-model` | 确定性 mock 模型层回复（默认官方 Messages mock；`--mock-model-simple` 用自写 OpenAI mock），零真实模型调用 |
+| `08-visual-a11y` | R17：深色/浅色主题切换后会话树仍可见；中英 locale 切换文案跟随；键盘 Enter 激活新建会话 / Tab 进树 / Enter 开行菜单 |
+| `09-telemetry-lifecycle` | R18：遥测导出 JSON 不含正文 → purge 归零 → 新消息后 rows 恢复 |
 | `99-self-check` | 仅 `DSH_E2E_SELF_FAIL=1` 时故意失败，用于验证失败取证链路 |
 
 ## 证据

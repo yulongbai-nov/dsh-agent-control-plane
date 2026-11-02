@@ -24,11 +24,10 @@
 | R14 权限默认 | 未改动 | 文档说明（用户已放弃自动审查默认） | ⚪ |
 | R15 workflow 统计 | `dsh-local-telemetry`（部分） | 遥测落库 rows>0 | 🟡 |
 | R16 utility 库 | 无 | — | 🔴 |
-| R17 视觉/无障碍 | 各插件沿用官方 token | 浅色主题截图；深色/locale/键盘待补 | 🟡 |
-| R18 本地遥测 | `dsh-local-telemetry@0.2.1` | 隔离 SQLite 落库/查询；导出/清除待验 | 🟡 |
+| R17 视觉/无障碍 | 各插件沿用官方 token | E2E：深色/浅色、中英 locale、键盘 Enter/Tab | ✅ 基础 |
+| R18 本地遥测 | `dsh-local-telemetry@0.2.1` | E2E：落库、导出无正文、purge 归零、重建 | ✅ 基础 |
 
-**E2E 汇总**：`node e2e/run-e2e.mjs --mock-model` → 12 passed / 3 skipped（零模型调用）；
-`--real-model` → 14 passed（2 次真实调用）；用户数据隔离审计通过。详见 `DELIVERY.md`。
+**E2E 汇总（20 条用例）**：默认 14 passed / 6 skipped（零模型调用）；`--mock-model` 16 passed / 4 skipped（官方 Messages mock，CI）；`--real-model` 17 passed / 3 skipped（2 次真实调用）；用户数据隔离审计通过。详见 `DELIVERY.md`。
 
 ## 本轮（v0.1）交付边界
 

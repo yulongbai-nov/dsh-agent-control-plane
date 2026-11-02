@@ -24,7 +24,10 @@ const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const HOME = homedir()
 // Honour an isolated $DSH_HOME (CI / throwaway test profiles).
 const DSH_HOME_ROOT = process.env.DSH_HOME || join(HOME, '.dsh')
-const DSH = process.env.DSH_BIN || '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh'
+// Official convention: the `dsh` on PATH owns profile/plugin management. Fall back to
+// the installed desktop CLI only when no PATH binary exists (this machine's layout).
+const APP_DSH = '/Applications/DeepSeek Harness.app/Contents/Resources/runtime/cli/bin/dsh'
+const DSH = process.env.DSH_BIN || (existsSync(APP_DSH) ? APP_DSH : 'dsh')
 const argv = process.argv.slice(2)
 const flag = (name, fallback) => {
   const i = argv.indexOf(name)
@@ -53,14 +56,18 @@ const COMPONENTS = [
 const profileDir = join(DSH_HOME_ROOT, 'profiles', PROFILE)
 if (!existsSync(join(profileDir, 'package.json'))) {
   if (PROFILE === 'desktop') fail(`desktop profile not found at ${profileDir}`)
-  const web = join(HOME, '.dsh/profiles/web')
-  if (!existsSync(web)) fail(`no web profile template at ${web}`)
-  console.log(`[install] creating profile "${PROFILE}" from the web template`)
-  cpSync(web, profileDir, { recursive: true })
+  // Official way to bootstrap a profile: let the CLI lay down its shipped template.
+  console.log(`[install] creating profile "${PROFILE}" from the shipped web template`)
+  const boot = spawnSync(DSH, ['--profile', PROFILE, '--from-default-profile', 'web', '--dump-config'], {
+    stdio: 'ignore',
+    env: { ...process.env, DSH_HOME: DSH_HOME_ROOT },
+  })
+  if (boot.status !== 0) fail(`failed to create profile ${PROFILE} from the shipped web template`)
 }
 
 const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-const backupDir = join(profileDir, '.control-plane-backup', stamp)
+// Keep snapshots outside the profile so DSH/plugin-manager owns its directory alone.
+const backupDir = join(DSH_HOME_ROOT, 'backups', 'control-plane', PROFILE, stamp)
 mkdirSync(backupDir, { recursive: true })
 const backedUp = []
 for (const file of ['package.json', 'cordis.patch.yml', 'pnpm-lock.yaml']) {
@@ -91,24 +98,33 @@ if (PROFILE === 'desktop' && !YES) {
 const result = spawnSync(DSH, ['plugin', '--profile', PROFILE, 'add', ...specs], { stdio: 'inherit' })
 if (result.status !== 0) fail(`dsh plugin add exited with ${result.status}`)
 
-// The CLI records bundles in most cases; make the list explicit and idempotent.
+// `dsh plugin add` registers bundles itself; this script stays read-only afterwards.
 const pkgPath = join(profileDir, 'package.json')
 const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'))
-pkg.dsh ??= {}
-pkg.dsh.profile ??= {}
-pkg.dsh.profile.bundles ??= []
-const added = []
-for (const component of COMPONENTS) {
-  if (!pkg.dsh.profile.bundles.includes(component.name)) {
-    pkg.dsh.profile.bundles.push(component.name)
-    added.push(component.name)
-  }
-}
-if (added.length) writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
-console.log(`[install] bundles registered: ${added.join(', ') || '(already present)'}`)
-
+const bundles = pkg.dsh?.profile?.bundles ?? []
 const missingDeps = COMPONENTS.filter((c) => !pkg.dependencies?.[c.name]).map((c) => c.name)
 if (missingDeps.length) fail(`profile package.json is missing dependencies: ${missingDeps.join(', ')}`)
+const missingBundles = COMPONENTS.filter((c) => !bundles.includes(c.name)).map((c) => c.name)
+if (missingBundles.length) {
+  fail(
+    `profile did not register bundles: ${missingBundles.join(', ')}. ` +
+      `The CLI normally appends them on install; inspect 'dsh plugin --profile ${PROFILE} why <pkg>' ` +
+      `or add the package through the app's Plugins page.`,
+  )
+}
+if (PROFILE !== 'desktop') {
+  // Read-only composed-config check that the rows actually reached the layer stack.
+  const dump = spawnSync(DSH, ['--profile', PROFILE, '--dump-config'], {
+    encoding: 'utf8',
+    env: { ...process.env, DSH_HOME: DSH_HOME_ROOT },
+  })
+  if (dump.status !== 0) fail(`dsh --profile ${PROFILE} --dump-config failed`)
+  const missingRows = COMPONENTS.filter((c) => !dump.stdout.includes(c.name)).map((c) => c.name)
+  if (missingRows.length) fail(`composed config misses installed bundles: ${missingRows.join(', ')}`)
+  console.log('[install] verified: dependencies + bundles + composed config rows are present')
+} else {
+  console.log('[install] verified: dependencies + bundles are present (restart the app to load them)')
+}
 
 writeFileSync(
   join(profileDir, '.control-plane-install.json'),
