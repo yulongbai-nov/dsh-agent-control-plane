@@ -12,7 +12,7 @@
 
 替换方案必须从已证明与目标安装版匹配的可构建源码出发，保留官方当前行为及测试：分组/平铺、workspace 层级、固定/手动与时间排序、隐藏归档/恢复和账户位置、blank、增量显示水位、搜索 debounce/abort/归档、焦点和键盘、行菜单/快捷键、权限、locale/主题、slot 声明/重注册和全部生命周期，并在授权隔离 GUI 下验证；绑定 `useSessions`/`useWorkspaces` 及真实目录懒加载，导航保留**直接父**地址和 archived/external 规则。安装/替换官方插件或回滚须用户另行明确授权，当前未进行。若上游提供正式可组合 slot 应优先评估。
 
-已存在的 `packages/session-tree/client.template.js` 有 `catalogOf`、`buildRows`、`navigationTarget`，支持独立主面板的懒展开和直接父地址，但不是官方侧栏、没有全局跨父身份歧义检测，函数绑定其 ModuleLoader 工厂。未来应抽取共享纯逻辑而非复制两套树；本包故意只补研究中的冲突判定，不实现第二套树。
+已存在的 `packages/session-tree/client.template.js` 有 `catalogOf`、`buildRows`、`navigationTarget`，支持独立主面板的懒展开和直接父地址，并对从可见根潜在可达的已缓存目录预扫跨父等身份冲突；这不会获取缺失目录，也不证明全局唯一或授权。它不是官方侧栏，函数绑定其 ModuleLoader 工厂。未来应抽取共享纯逻辑而非复制两套树；本包故意只补研究中的冲突判定，不实现第二套树。
 
 ## 合成协议（非真实认证或授权）
 
