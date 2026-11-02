@@ -81,3 +81,23 @@ test('no result contains source payload or claims verified provenance', () => {
   assert.equal(JSON.stringify(result).includes(privateValue), false);
   assert.equal(JSON.stringify(result).includes('verified'), false);
 });
+
+test('inherited metrics and accessor properties cannot provide evidence', () => {
+  const inherited = Object.create(base());
+  assert.equal(recommend(inherited).verdict, 'unknown');
+  const input = base();
+  let accessed = false;
+  Object.defineProperty(input, 'runs', { get() { accessed = true; return 10; }, enumerable: true });
+  assert.equal(recommend(input).verdict, 'unknown');
+  assert.equal(accessed, false);
+});
+
+test('proxy inputs are rejected without executing traps, including revoked proxies', () => {
+  let traps = 0;
+  const proxy = new Proxy(base(), { getOwnPropertyDescriptor() { traps++; throw new Error('trap'); } });
+  assert.equal(recommend(proxy).verdict, 'unknown');
+  assert.equal(traps, 0);
+  const revoked = Proxy.revocable({}, {});
+  revoked.revoke();
+  assert.equal(recommend(revoked.proxy).verdict, 'unknown');
+});

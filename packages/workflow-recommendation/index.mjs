@@ -1,11 +1,25 @@
+import { types } from 'node:util';
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const advice = (verdict, reason) => ({ verdict, reasons: [reason] });
 const count = value => Number.isSafeInteger(value) && value >= 0;
+const INPUT_FIELDS = ['evidence', 'runs', 'ok', 'failed', 'cancelled', 'unknown', 'distinctSessions', 'argsVariants', 'lastUsedMs', 'nowMs'];
 
 // Pure prototype: completeness is a caller assertion, not independently verified.
 export function recommend(input) {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return advice('unknown', 'missing-input');
-  const { evidence, runs, ok, failed, cancelled, unknown, distinctSessions, argsVariants, lastUsedMs, nowMs } = input;
+  if (!input || typeof input !== 'object' || types.isProxy(input) || Array.isArray(input)) return advice('unknown', 'missing-input');
+  // Aggregate evidence must be explicit data, not inherited state or code run by a getter.
+  const values = Object.create(null);
+  try {
+    for (const field of INPUT_FIELDS) {
+      const descriptor = Object.getOwnPropertyDescriptor(input, field);
+      if (!descriptor || !Object.hasOwn(descriptor, 'value')) return advice('unknown', 'missing-or-invalid-metric');
+      values[field] = descriptor.value;
+    }
+  } catch {
+    return advice('unknown', 'missing-or-invalid-metric');
+  }
+  const { evidence, runs, ok, failed, cancelled, unknown, distinctSessions, argsVariants, lastUsedMs, nowMs } = values;
   if (evidence !== 'caller-asserted-complete') return advice('unknown', 'incomplete-or-untrusted-evidence');
   if (![runs, ok, failed, cancelled, unknown, distinctSessions, argsVariants].every(count) ||
       !Number.isSafeInteger(nowMs) || !Number.isSafeInteger(lastUsedMs)) return advice('unknown', 'missing-or-invalid-metric');
