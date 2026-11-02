@@ -12,7 +12,7 @@
 - [本地遥测内存原型](packages/personal-telemetry/README.md) 仅对合成数据验证 SQLite 数值快照与幂等事务；没有磁盘数据库、真实数据接入或报表，R18 未完成。[晋升建议原型](packages/workflow-recommendation/README.md) 只在调用方断言完整的合成聚合上给条件性建议，不执行晋升，不代表 R15/R16 已完成。
 - [rc.5 隔离内存冒烟](packages/sandbox-smoke/README.md) 加载安装版 Cordis、模块加载器、slot 与会话投影，使用测试替身而非真实 GUI；[GUI 隔离前置检查](packages/sandbox-e2e/README.md) 尚未满足安全门槛。两者及只读版本/标记检查均不能代替端到端验收；团队功能尚未实现。
 
-逐条进展见 [R1–R18 状态表](docs/status.md)，关键实现假设修正在 [设计决策](docs/architecture-decisions.md)。原始规格、mock 与调研在相邻目录 `../dsh-mocks/`；[安装验收](docs/install-and-acceptance.md)与[升级回退](docs/upgrade-smoke.md)目前只是未经演练的未来清单。
+逐条进展见 [R1–R18 状态表](docs/status.md)，关键实现假设修正在 [设计决策](docs/architecture-decisions.md)。原始规格、mock 与调研在相邻目录 `../dsh-mocks/`；[全提交回归与真实 E2E 交接计划](docs/E2E-HANDOFF-PLAN.md)、[安装验收](docs/install-and-acceptance.md)与[升级回退](docs/upgrade-smoke.md)目前只是未经演练的未来清单。
 
 ## 检查
 
