@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DSH Agent 控制面 · E2E 录像</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f6f7f9; --card:#fff; --fg:#1c1f23; --muted:#616a75; --line:#e2e6eb; --ok:#12805c; --bad:#c01e2e; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1216; --card:#171b21; --fg:#e8ebef; --muted:#9aa4b0; --line:#2a3038; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:16px 14px 40px; background:var(--bg); color:var(--fg);
+         font:15px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif; }
+  h1 { font-size:20px; margin:0 0 6px; }
+  .meta { color:var(--muted); font-size:13px; margin-bottom:10px; }
+  .badges { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 18px; }
+  .badges span { background:var(--card); border:1px solid var(--line); border-radius:999px; padding:2px 10px; font-size:12px; }
+  h2 { font-size:15px; color:var(--muted); margin:22px 0 8px; font-weight:600; }
+  .grid { display:grid; grid-template-columns:1fr; gap:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+  .card .head { display:flex; gap:8px; align-items:baseline; }
+  .card h3 { font-size:15px; margin:0; flex:1; }
+  .no { color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+  .badge { font-size:12px; color:var(--muted); white-space:nowrap; }
+  .card p { margin:6px 0 8px; color:var(--muted); font-size:13px; }
+  video { width:100%; border-radius:8px; background:#000; display:block; }
+  .noplay { color:var(--muted); font-size:13px; }
+  .card.passed .badge { color:var(--ok); }
+  .card.failed .badge, .card.timedOut .badge { color:var(--bad); }
+  .card.skipped { opacity:.75; }
+  footer { margin-top:28px; color:var(--muted); font-size:12px; }
+  a { color:#0b6bcb; }
+  @media (min-width:760px) { .grid { grid-template-columns:1fr 1fr; } video { max-height:320px; } }
+</style></head>
+<body>
+<h1>DSH Agent 控制面 · E2E 录像</h1>
+<div class="meta">生成于 2026/11/3 04:13:39 ｜ profile <code>e2e</code> ｜ mock 模型：否 ｜ 用例总耗时 45.9s</div>
+<div class="badges"><span>✅ passed × 23</span><span>⏭️ skipped × 7</span><span>共 30 条</span></div>
+<p class="meta">点视频即播（H.264，iOS/Android 浏览器原生支持）。每条用例上方是它的实际验证内容；跳过项本次未执行。</p>
+<p class="meta">🎨 想看 10 个 workflow 模板的视图：<a href="templates/">Workflow 模板视图</a>（声明式拓扑 + 静态分析状态）。</p>
+<section><h2>外壳</h2><div class="grid">
+<article class="card passed">
+  <div class="head"><span class="no">01</span><h3>打开应用后侧栏显示会话树（R7 常驻侧栏）</h3>
+  <span class="badge">✅ 0.9s</span></div>
+  <p>打开真实 DSH Web UI，侧栏渲染出会话树（Sessions 标题、筛选框、来自 Host 的真实会话行）。验证 R7 常驻侧栏。</p>
+  <video controls playsinline preload="none" poster="../posters/01-case.jpg" src="videos/01-case.mp4"></video>
+</article>
+<article class="card passed">
+  <div class="head"><span class="no">02</span><h3>点击新建会话，主面板出现新会话界面</h3>
+  <span class="badge">✅ 0.9s</span></div>
+  <p>点击「新建会话」，主面板出现输入框与工作区信息；验证会话创建入口可用。</p>
+  <video controls playsinline preload="none" poster="../posters/02-case.jpg" src="videos/02-case.mp4"></video>
+</article>
+<article class="card passed">
+  <div class="head"><span class="no">03</span><h3>页面没有未捕获的 JS 错误</h3>
+  <span class="badge">✅ 2.3s</span></div>
+  <p>打开应用并渲染后，页面无未捕获异常；console 只允许已知无害的 deepseek-account 提示。</p>
+  <video controls playsinline preload="none" poster="../posters/03-case.jpg" src="videos/03-case.mp4"></video>
+</article>
+</div></section>
+<section><h2>会话树</h2><div class="grid">
+<article class="card passed">
+  <div class="head"><span class="no">04</span><h3>会话行「⋯」菜单提供置顶/重命名/Fork/归档与头像入口（R8）</h3>
+  <span class="badge">✅ 0.9s</span></div>
+  <p>会话行「⋯」菜单含置顶/重命名/Fork/归档 + 7 个头像选项（6 类型 + 自动识别）。</p>
+  <video controls playsinline preload="none" poster="../posters/04-case.jpg" src="videos/04-case.mp4"></video>
+</article>
+<article class="card passed">
+  <div class="head"><span class="no">05</span><h3>工作区分组可展开/折叠，会话行来自真实 Host 数据</h3>
+  <span class="badge">✅ 0.9s</span></div>
+  <p>工作区分组行可折叠/展开，aria-expanded 正确，会话行来自真实 Host 数据。</p>
+  <video controls playsinline preload="none" poster="../posters/05-case.jpg" src="videos/05-case.mp4"></video>
+</article>
+<article class="card passed">
+  <div class="head"><span class="no">06</span><h3>筛选框按标题过滤会话</h3>
+  <span class="badge">✅ 1.4s</span></div>
+  <p>筛选框输入不存在标题时会话行清零，清空后恢复。</p>
+  <video controls playsinline preload="none" poster="../posters/06-case.jpg" src="videos/06-case.mp4"></video>
+</article>
+</div></section>
+<section><h2>头像</h2><div class="grid">
+<article class="card passed">
+  <div class="head"><span class="no">07</span><h3>手动指定头像后刷新仍保留（类型与变体都稳定），并可恢复自动识别</h3>
+  <span class="badge">✅ 1.5s</span></div>
+  <p>手动把头像改成「开发」→ 刷新页面仍保留（localStorage 持久）→ 可恢复自动识别。</p>
+  <video controls playsinline preload="none" poster="../posters/07-case.jpg" src="videos/07-case.mp4"></video>
+</article>
+<article class="card passed">
+  <div class="head"><span class="no">08</span><h3>每个会话行渲染角色头像，并带三套变体之一</h3>
+  <span class="badge">✅ 0.9s</span></div>
+  <p>每行渲染角色头像（lead/research/code/write/data/qa），三套画风按会话 id 确定性随机；不同会话风格不同。</p>
+  <video controls playsinline preload="none" poster="../posters/08-case.jpg" src="videos/08-case.mp4"></video>
+</article>
+</div></section>
+<section><h2>插件</h2><div class="grid">
+<article class="card passed">
+  <div class="head"><span class="no">09</span><h3>Plugins 页面列出控制面全部已装插件</h3>
+  <span class="badge">✅ 1.1s</span></div>
+  <p>Plugins 页列出 5 个控制面组件（session-tree、teams-model-override、dshmarket、local-telemetry、workflow-map）。</p>
+  <video controls playsinline preload="none" poster="../posters/09-case.jpg" src="videos/09-case.mp4"></video>
+</article>
+<article class="card passed">
+  <div class="head"><span class="no">10</span><h3>插件市场（dshmarket）在 Plugins 页提供 Plugin Market 入口</h3>
+  <span class="badge">✅ 2.2s</span></div>
+  <p>dshmarket 在 Plugins 页提供 Plugin Market 入口并可点开。</p>
+  <video controls playsinline preload="none" poster="../posters/10-case.jpg" src="videos/10-case.mp4"></video>
+</article>
+</div></section>
+<section><h2>未分类</h2><div class="grid">
+<article class="card passed">
+  <div class="head"><span class="no">11</span><h3>侧栏出现「工作流地图」入口，打开后应用不崩溃且可返回会话</h3>
+  <span class="badge">✅ 3.3s</span></div>
+  <p></p>
+  <video controls playsinline preload="none" poster="../posters/11-case.jpg" src="videos/11-case.mp4"></video>
+</article>
+</div></section>
+<section><h2>真实模型（可选）</h2><div class="grid">
+<article class="card passed">
+  <div class="head"><span class="no">12</span><h3>一条短消息收到真实回复并产生 token 统计（真实登录）</h3>
+  <span class="badge">✅ 2.3s</span></div>
+  <p>用户真实登录：一条短消息收到回复并产生 token 统计（每次 1 次调用，仅手动运行）。</p>
+  <video controls playsinline preload="none" poster="../posters/12-case.jpg" src="videos/12-case.mp4"></video>
+</article>
+<article class="card passed">
+  <div class="head"><span class="no">13</span><h3>团队插件把 spawn_teammate_with_model 暴露给 agent（R1/R6 面）</h3>
+  <span class="badge">✅ 1.1s</span></div>
+  <p>用户真实登录：一条短消息收到回复并产生 token 统计（每次 1 次调用，仅手动运行）。</p>
+  <video controls playsinline preload="none" poster="../posters/13-case.jpg" src="videos/13-case.mp4"></video>
+</article>
+<article class="card passed">
+  <div class="head"><span class="no">14</span><h3>遥测插件把真实会话事件写进隔离目录（R18 面）</h3>
+  <span class="badge">✅ 0.0s</span></div>
+  <p>用户真实登录：一条短消息收到回复并产生 token 统计（每次 1 次调用，仅手动运行）。</p>
+  <p class="noplay">此用例本次未执行（跳过），无录像。</p>
+</article>
+</div></section>
+<section><h2>模型</h2><div class="grid">
+<article class="card skipped">
+  <div class="head"><span class="no">15</span><h3>发送消息后收到 mock provider 的确定性回复，且零真实模型调用</h3>
+  <span class="badge">⏭️ 0.0s</span></div>
+  <p>用官方 Messages mock 作为模型层，发消息收到确定性回复；mock 记录证明零真实调用。</p>
+  <p class="noplay">此用例本次未执行（跳过），无录像。</p>
+</article>
+</div></section>
+<section><h2>R17 视觉</h2><div class="grid">
+<article class="card passed">
+  <div class="head"><span class="no">16</span><h3>中英 locale 切换后侧栏文案随之变化（切回英文）</h3>
+  <span class="badge">✅ 5.6s</span></div>
+  <p>中英切换后侧栏文案跟随（含切回英文）。Linux CI 上跳过，由 macOS 本地验收。</p>
+  <video controls playsinline preload="none" poster="../posters/16-case.jpg" src="videos/16-case.mp4"></video>
+</article>
+<article class="card passed">
+  <div class="head"><span class="no">17</span><h3>深色主题下侧栏会话树仍可见、无崩溃（切回浅色）</h3>
+  <span class="badge">✅ 5.2s</span></div>
+  <p>真实 Settings 切换到深色主题，会话树仍渲染且不崩溃，切回浅色复核主题属性。</p>
+  <video controls playsinline preload="none" poster="../posters/17-case.jpg" src="videos/17-case.mp4"></video>
+</article>
+</div></section>
+<section><h2>R17 交互</h2><div class="grid">
+<article class="card passed">
+  <div class="head"><span class="no">18</span><h3>键盘：Enter 激活新建会话、Tab 进入会话树、Enter 打开行菜单</h3>
+  <span class="badge">✅ 2.6s</span></div>
+  <p>纯键盘操作：Enter 新建会话、Tab 进入会话树、Enter 打开行菜单；并记录树行不可聚焦的产品缺口。</p>
+  <video controls playsinline preload="none" poster="../posters/18-case.jpg" src="videos/18-case.mp4"></video>
+</article>
+</div></section>
+<section><h2>R18 遥测</h2><div class="grid">
+<article class="card skipped">
+  <div class="head"><span class="no">19</span><h3>导出 JSON 不含正文 → purge 归零 → 新消息后 rows 恢复</h3>
+  <span class="badge">⏭️ 0.0s</span></div>
+  <p>导出 JSON（合法且不含 prompt 正文）→ purge 后 rows 归零 → 新消息后 rows 恢复。</p>
+  <p class="noplay">此用例本次未执行（跳过），无录像。</p>
+</article>
+</div></section>
+<section><h2>故障边界</h2><div class="grid">
+<article class="card skipped">
+  <div class="head"><span class="no">20</span><h3>429 限流：重试耗尽后 UI 显示错误状态且不崩溃</h3>
+  <span class="badge">⏭️ 0.0s</span></div>
+  <p>模型层返回 429，真实 Host 重试耗尽后 UI 显示可读错误且不崩溃（opt-in，需要 mock 控制面）。</p>
+  <p class="noplay">此用例本次未执行（跳过），无录像。</p>
+</article>
+<article class="card skipped">
+  <div class="head"><span class="no">21</span><h3>500 服务错误：错误可读，同一实例换新会话后可恢复</h3>
+  <span class="badge">⏭️ 0.0s</span></div>
+  <p>模型层 500 → 错误可读；同实例换新会话后恢复成功（opt-in）。</p>
+  <p class="noplay">此用例本次未执行（跳过），无录像。</p>
+</article>
+</div></section>
+<section><h2>边界</h2><div class="grid">
+<article class="card passed">
+  <div class="head"><span class="no">22</span><h3>快速连续展开/折叠 15 次，树状态与 ARIA 保持一致且无异常</h3>
+  <span class="badge">✅ 2.4s</span></div>
+  <p>连续 15 次快速展开/折叠工作区，ARIA 状态合法、无未捕获异常。</p>
+  <video controls playsinline preload="none" poster="../posters/22-case.jpg" src="videos/22-case.mp4"></video>
+</article>
+<article class="card passed">
+  <div class="head"><span class="no">23</span><h3>筛选框接受正则/emoji 等特殊字符且不崩溃</h3>
+  <span class="badge">✅ 1.8s</span></div>
+  <p>筛选框输入正则元字符、emoji、HTML 片段、超长串均不崩溃，清空后恢复。</p>
+  <video controls playsinline preload="none" poster="../posters/23-case.jpg" src="videos/23-case.mp4"></video>
+</article>
+<article class="card skipped">
+  <div class="head"><span class="no">24</span><h3>超长标题在会话行内被截断，不撑破侧栏</h3>
+  <span class="badge">⏭️ 0.1s</span></div>
+  <p>发送超长标题消息后，会话行文本被截断（ellipsis/clip），不撑破侧栏宽度。</p>
+  <p class="noplay">此用例本次未执行（跳过），无录像。</p>
+</article>
+<article class="card passed">
+  <div class="head"><span class="no">25</span><h3>重命名 → 置顶 → 归档 → 显示已归档 → 取消归档（真实 Host 状态往返）</h3>
+  <span class="badge">✅ 1.5s</span></div>
+  <p>重命名 → 置顶（置顶行排第一）→ 归档（默认隐藏）→ 显示已归档 → 取消归档，真实 Host 状态往返。</p>
+  <video controls playsinline preload="none" poster="../posters/25-case.jpg" src="videos/25-case.mp4"></video>
+</article>
+</div></section>
+<section><h2>韧性</h2><div class="grid">
+<article class="card passed">
+  <div class="head"><span class="no">26</span><h3>窄视口（900×700）下侧栏可展开、树与行菜单仍可用</h3>
+  <span class="badge">✅ 1.5s</span></div>
+  <p>900×700 窄视口下侧栏自动收成图标栏 → 可展开，树与行菜单仍可用。</p>
+  <video controls playsinline preload="none" poster="../posters/26-case.jpg" src="videos/26-case.mp4"></video>
+</article>
+<article class="card passed">
+  <div class="head"><span class="no">27</span><h3>连续开关行菜单 + 反复筛选 20 轮后 UI 未卡死</h3>
+  <span class="badge">✅ 1.3s</span></div>
+  <p>连续 20 轮开关行菜单 + 反复筛选后 UI 未卡死、无未捕获异常。</p>
+  <video controls playsinline preload="none" poster="../posters/27-case.jpg" src="videos/27-case.mp4"></video>
+</article>
+</div></section>
+<section><h2>Workflow</h2><div class="grid">
+<article class="card skipped">
+  <div class="head"><span class="no">28</span><h3>两轮会话渲染出分步流程（Main flow / 步骤计数 / 节点卡）</h3>
+  <span class="badge">⏭️ 0.1s</span></div>
+  <p>真实跑两轮对话后打开工作流地图：Main flow、步骤计数与节点卡真实渲染（R10/R11 视觉）。</p>
+  <p class="noplay">此用例本次未执行（跳过），无录像。</p>
+</article>
+<article class="card passed">
+  <div class="head"><span class="no">29</span><h3>真实模型工具调用后，地图显示 tools/files（可选，2 次调用）</h3>
+  <span class="badge">✅ 4.0s</span></div>
+  <p>真实模型执行一条 bash 工具调用后，地图显示 tools/files 计数（R10/R11 真实数据，可选 2 次调用）。</p>
+  <video controls playsinline preload="none" poster="../posters/29-case.jpg" src="videos/29-case.mp4"></video>
+</article>
+</div></section>
+<section><h2>取证自检</h2><div class="grid">
+<article class="card skipped">
+  <div class="head"><span class="no">30</span><h3>故意失败：验证失败取证链路（截图/视频/GIF/trace）</h3>
+  <span class="badge">⏭️ 0.1s</span></div>
+  <p>仅 DSH_E2E_SELF_FAIL=1 时运行：故意失败，用于验证截图/视频/GIF/trace 取证链路（opt-in）。</p>
+  <p class="noplay">此用例本次未执行（跳过），无录像。</p>
+</article>
+</div></section>
+<footer>
+ 仓库：<a href="https://github.com/yulongbai-nov/dsh-agent-control-plane">dsh-agent-control-plane</a> ·
+  <a href="report.md">Markdown 报告</a> ·
+  <a href="https://github.com/yulongbai-nov/dsh-agent-control-plane/releases/tag/v0.2.0">Release v0.2.0</a>
+</footer>
+</body></html>

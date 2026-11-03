@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DSH Workflow 模板视图</title>
+<style>
+  :root { color-scheme: light dark; --bg:#f6f7f9; --card:#fff; --fg:#1c1f23; --muted:#616a75; --line:#e2e6eb; --accent:#4a6cf7; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f1216; --card:#171b21; --fg:#e8ebef; --muted:#9aa4b0; --line:#2a3038; } }
+  * { box-sizing: border-box; }
+  body { margin:0; padding:18px 14px 50px; background:var(--bg); color:var(--fg);
+         font:15px/1.55 -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif; }
+  h1 { font-size:20px; margin:0 0 6px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+  .template { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:14px; }
+  .template header { display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+  .template h3 { margin:0; font-size:16px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .file { color:var(--muted); font-size:12px; font-family: ui-monospace, monospace; }
+  .when { color:var(--muted); font-size:13px; margin:6px 0 12px; }
+  .flow { display:flex; gap:8px; align-items:stretch; overflow-x:auto; padding-bottom:4px; }
+  .phase { flex:0 0 auto; min-width:170px; background:color-mix(in srgb, var(--card) 80%, var(--accent) 5%); border:1px dashed var(--line); border-radius:10px; padding:8px; }
+  .phase h4 { margin:0 0 6px; font-size:12px; color:var(--muted); text-transform:none; }
+  .phase-body { display:flex; flex-direction:column; gap:6px; }
+  .node { display:flex; align-items:center; gap:6px; background:var(--card); border:1px solid var(--accent); border-radius:8px; padding:5px 8px; font-size:12px; white-space:nowrap; }
+  .node.parallel { border-style:double; }
+  .dot { width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none; }
+  .arrow { color:var(--muted); font-size:12px; text-align:center; }
+  .lane { display:flex; flex-direction:column; gap:2px; }
+  .fanout { color:var(--muted); font-size:11px; margin-top:4px; }
+  .shape { color:var(--muted); font-size:11px; margin-top:6px; }
+  .phase-arrow { display:flex; align-items:center; color:var(--muted); font-size:18px; }
+  .meta { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .badge { font-size:11px; border:1px solid var(--line); border-radius:999px; padding:2px 8px; color:var(--muted); }
+  .badge.ok { color:#12805c; border-color:#12805c; }
+  .badge.warn { color:#9a6700; border-color:#9a6700; }
+  .badge.na { color:#c01e2e; border-color:#c01e2e; }
+  a { color:var(--accent); }
+  footer { color:var(--muted); font-size:12px; margin-top:20px; }
+</style></head><body>
+<h1>DSH Workflow 模板视图</h1>
+<div class="sub">10 个模板的声明式拓扑（阶段 / 并行 / 流水线 / 展开示意）。动态 fan-out 的模板无法被保守静态分析完全展开，
+这里以脚本声明为准，并附静态分析状态。点击手机版报告可看真实运行时的工作流地图录像。</div>
+<article class="template" id="code-audit">
+  <header>
+    <h3>code-audit</h3>
+    <span class="file">code-audit.js</span>
+  </header>
+  <p class="when">多文件代码审计：逐文件查正确性/安全/可维护性，再汇总风险。</p>
+  <div class="flow"><section class="phase"><h4>Audit</h4><div class="phase-body"><div class="lane parallel-map"><div class="node single"><span class="dot"></span>audit #1</div></div><div class="lane parallel-map"><div class="node single"><span class="dot"></span>audit #2</div></div><div class="lane parallel-map"><div class="node single"><span class="dot"></span>audit #3</div></div><div class="fanout">×3（示意）</div></div><div class="shape">并行（按 items 展开）</div></section><div class="phase-arrow">→</div><section class="phase"><h4>Synthesize</h4><div class="phase-body"><div class="node single"><span class="dot"></span>audit summary</div></div><div class="shape">单步</div></section></div>
+  <div class="meta"><span class="badge warn">静态分析：动态展开，仅可提取 1 个节点 / 8 条告警（视图以声明为准）</span><span class="badge note">按 files 数量并行展开；此处示意 3 个文件</span></div>
+</article>
+<article class="template" id="pr-review">
+  <header>
+    <h3>pr-review</h3>
+    <span class="file">pr-review.js</span>
+  </header>
+  <p class="when">PR 多视角评审：正确性、安全、测试三个独立评审，再给合并建议。</p>
+  <div class="flow"><section class="phase"><h4>Review</h4><div class="phase-body"><div class="node parallel"><span class="dot"></span>correctness review</div><div class="node parallel"><span class="dot"></span>security review</div><div class="node parallel"><span class="dot"></span>tests review</div></div><div class="shape">并行（固定分支）</div></section><div class="phase-arrow">→</div><section class="phase"><h4>Verdict</h4><div class="phase-body"><div class="node single"><span class="dot"></span>verdict</div></div><div class="shape">单步</div></section></div>
+  <div class="meta"><span class="badge warn">静态分析：动态展开，仅可提取 1 个节点 / 9 条告警（视图以声明为准）</span></div>
+</article>
+<article class="template" id="multi-angle-research">
+  <header>
+    <h3>multi-angle-research</h3>
+    <span class="file">multi-angle-research.js</span>
+  </header>
+  <p class="when">多角度调研：技术/产品/风险三路并行，最后综合成结论。</p>
+  <div class="flow"><section class="phase"><h4>Research</h4><div class="phase-body"><div class="lane parallel-map"><div class="node single"><span class="dot"></span>#1 research</div></div><div class="lane parallel-map"><div class="node single"><span class="dot"></span>#2 research</div></div><div class="lane parallel-map"><div class="node single"><span class="dot"></span>#3 research</div></div><div class="fanout">×3（示意）</div></div><div class="shape">并行（按 items 展开）</div></section><div class="phase-arrow">→</div><section class="phase"><h4>Synthesis</h4><div class="phase-body"><div class="node single"><span class="dot"></span>synthesis</div></div><div class="shape">单步</div></section></div>
+  <div class="meta"><span class="badge warn">静态分析：动态展开，仅可提取 1 个节点 / 7 条告警（视图以声明为准）</span><span class="badge note">按 angles 数量展开；默认 3 个角度</span></div>
+</article>
+<article class="template" id="per-file-migration">
+  <header>
+    <h3>per-file-migration</h3>
+    <span class="file">per-file-migration.js</span>
+  </header>
+  <p class="when">逐文件迁移/重写：每个文件独立走 计划→修改→验证，互不阻塞。</p>
+  <div class="flow"><section class="phase"><h4>Migrate</h4><div class="phase-body"><div class="lane pipeline-map"><div class="node single"><span class="dot"></span>plan</div><span class="arrow">→</span><div class="node single"><span class="dot"></span>apply</div></div><div class="lane pipeline-map"><div class="node single"><span class="dot"></span>plan</div><span class="arrow">→</span><div class="node single"><span class="dot"></span>apply</div></div><div class="fanout">×2（示意）</div></div><div class="shape">流水线（按 items 并行展开）</div></section><div class="phase-arrow">→</div><section class="phase"><h4>Verify</h4><div class="phase-body"><div class="lane pipeline-map"><div class="node single"><span class="dot"></span>verify</div></div><div class="lane pipeline-map"><div class="node single"><span class="dot"></span>verify</div></div><div class="fanout">×2（示意）</div></div><div class="shape">流水线（按 items 并行展开）</div></section></div>
+  <div class="meta"><span class="badge warn">静态分析：动态展开，仅可提取 3 个节点 / 13 条告警（视图以声明为准）</span><span class="badge note">每个文件一条独立 pipeline（无全局屏障）；此处示意 2 个文件</span></div>
+</article>
+<article class="template" id="test-gap-finder">
+  <header>
+    <h3>test-gap-finder</h3>
+    <span class="file">test-gap-finder.js</span>
+  </header>
+  <p class="when">测试缺口扫描：按模块并行找未覆盖行为，汇总成优先级列表。</p>
+  <div class="flow"><section class="phase"><h4>Scan</h4><div class="phase-body"><div class="lane parallel-map"><div class="node single"><span class="dot"></span>scan #1</div></div><div class="lane parallel-map"><div class="node single"><span class="dot"></span>scan #2</div></div><div class="lane parallel-map"><div class="node single"><span class="dot"></span>scan #3</div></div><div class="fanout">×3（示意）</div></div><div class="shape">并行（按 items 展开）</div></section><div class="phase-arrow">→</div><section class="phase"><h4>Rank</h4><div class="phase-body"><div class="node single"><span class="dot"></span>rank gaps</div></div><div class="shape">单步</div></section></div>
+  <div class="meta"><span class="badge warn">静态分析：动态展开，仅可提取 1 个节点 / 6 条告警（视图以声明为准）</span><span class="badge note">按 modules 数量并行展开</span></div>
+</article>
+<article class="template" id="docs-sync">
+  <header>
+    <h3>docs-sync</h3>
+    <span class="file">docs-sync.js</span>
+  </header>
+  <p class="when">文档同步：逐篇对照代码/README，产出需要更新的段落清单。</p>
+  <div class="flow"><section class="phase"><h4>Compare</h4><div class="phase-body"><div class="lane pipeline-map"><div class="node single"><span class="dot"></span>compare</div><span class="arrow">→</span><div class="node single"><span class="dot"></span>plan</div></div><div class="lane pipeline-map"><div class="node single"><span class="dot"></span>compare</div><span class="arrow">→</span><div class="node single"><span class="dot"></span>plan</div></div><div class="fanout">×2（示意）</div></div><div class="shape">流水线（按 items 并行展开）</div></section><div class="phase-arrow">→</div><section class="phase"><h4>Report</h4><div class="phase-body"><div class="node single"><span class="dot"></span>docs report</div></div><div class="shape">单步</div></section></div>
+  <div class="meta"><span class="badge warn">静态分析：动态展开，仅可提取 3 个节点 / 11 条告警（视图以声明为准）</span><span class="badge note">每篇文档一条 pipeline</span></div>
+</article>
+<article class="template" id="dependency-upgrade">
+  <header>
+    <h3>dependency-upgrade</h3>
+    <span class="file">dependency-upgrade.js</span>
+  </header>
+  <p class="when">依赖升级：审计候选依赖 → 评估破坏面 → 给分步升级计划。</p>
+  <div class="flow"><section class="phase"><h4>Audit</h4><div class="phase-body"><div class="lane parallel-map"><div class="node single"><span class="dot"></span>audit #1</div></div><div class="lane parallel-map"><div class="node single"><span class="dot"></span>audit #2</div></div><div class="lane parallel-map"><div class="node single"><span class="dot"></span>audit #3</div></div><div class="fanout">×3（示意）</div></div><div class="shape">并行（按 items 展开）</div></section><div class="phase-arrow">→</div><section class="phase"><h4>Plan</h4><div class="phase-body"><div class="node single"><span class="dot"></span>upgrade plan</div></div><div class="shape">单步</div></section></div>
+  <div class="meta"><span class="badge warn">静态分析：动态展开，仅可提取 1 个节点 / 6 条告警（视图以声明为准）</span><span class="badge note">按 packages 数量并行展开</span></div>
+</article>
+<article class="template" id="incident-triage">
+  <header>
+    <h3>incident-triage</h3>
+    <span class="file">incident-triage.js</span>
+  </header>
+  <p class="when">故障初筛：收集症状 → 列假设 → 逐条验证 → 输出最可能根因。</p>
+  <div class="flow"><section class="phase"><h4>Collect</h4><div class="phase-body"><div class="node single"><span class="dot"></span>collect facts</div></div><div class="shape">单步</div></section><div class="phase-arrow">→</div><section class="phase"><h4>Hypotheses</h4><div class="phase-body"><div class="node single"><span class="dot"></span>hypotheses</div></div><div class="shape">单步</div></section><div class="phase-arrow">→</div><section class="phase"><h4>Verify</h4><div class="phase-body"><div class="node parallel"><span class="dot"></span>verify #1</div><div class="node parallel"><span class="dot"></span>verify #2</div><div class="node parallel"><span class="dot"></span>verify #3</div></div><div class="shape">并行（固定分支）</div></section></div>
+  <div class="meta"><span class="badge warn">静态分析：动态展开，仅可提取 2 个节点 / 5 条告警（视图以声明为准）</span></div>
+</article>
+<article class="template" id="content-pipeline">
+  <header>
+    <h3>content-pipeline</h3>
+    <span class="file">content-pipeline.js</span>
+  </header>
+  <p class="when">内容生产流水线：研究 → 初稿 → 编辑润色，阶段间无屏障。</p>
+  <div class="flow"><section class="phase"><h4>Research</h4><div class="phase-body"><div class="node single"><span class="dot"></span>research</div></div><div class="shape">单步</div></section><div class="phase-arrow">→</div><section class="phase"><h4>Draft</h4><div class="phase-body"><div class="node single"><span class="dot"></span>draft</div></div><div class="shape">单步</div></section><div class="phase-arrow">→</div><section class="phase"><h4>Edit</h4><div class="phase-body"><div class="node single"><span class="dot"></span>edit</div></div><div class="shape">单步</div></section></div>
+  <div class="meta"><span class="badge warn">静态分析：动态展开，仅可提取 3 个节点 / 4 条告警（视图以声明为准）</span></div>
+</article>
+<article class="template" id="structured-extraction">
+  <header>
+    <h3>structured-extraction</h3>
+    <span class="file">structured-extraction.js</span>
+  </header>
+  <p class="when">结构化抽取：多个来源并行抽成同一 JSON schema，再合并去重。</p>
+  <div class="flow"><section class="phase"><h4>Extract</h4><div class="phase-body"><div class="lane parallel-map"><div class="node single"><span class="dot"></span>extract #1</div></div><div class="lane parallel-map"><div class="node single"><span class="dot"></span>extract #2</div></div><div class="lane parallel-map"><div class="node single"><span class="dot"></span>extract #3</div></div><div class="fanout">×3（示意）</div></div><div class="shape">并行（按 items 展开）</div></section><div class="phase-arrow">→</div><section class="phase"><h4>Merge</h4><div class="phase-body"><div class="node single"><span class="dot"></span>merge</div></div><div class="shape">单步</div></section></div>
+  <div class="meta"><span class="badge warn">静态分析：动态展开，仅可提取 1 个节点 / 8 条告警（视图以声明为准）</span><span class="badge note">按 sources 数量并行展开</span></div>
+</article>
+<footer>
+  模板源文件：<a href="https://github.com/yulongbai-nov/dsh-agent-control-plane/tree/main/workflow-templates/templates">workflow-templates/templates</a> ·
+  真实运行视图：<a href="../">E2E 录像</a> ·
+  官方 hook 契约：<code>agent / parallel / pipeline / phase / log / args</code>
+</footer>
+</body></html>
