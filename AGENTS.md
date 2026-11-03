@@ -75,3 +75,4 @@ node delivery/pack.mjs   # -> dist/*.tgz + INSTALL.md + manifest.json
 - [ ] 没有真实模型调用、没有触碰 desktop profile / 用户会话
 - [ ] 文档同步（README/DELIVERY/CHANGELOG/E2E 用例说明 `e2e/test-cases.mjs`）
 - [ ] 走 PR 流程（分支 + PR + CI 绿 + 人类合并）
+- [ ] 如发布录像：`delivery/build-pages.mjs` + `delivery/publish-pages.mjs`（手机端 Pages）

@@ -82,7 +82,11 @@ dist/                           pack.mjs 生成的可发布产物（gitignored�
 ## E2E 报告与录像
 
 每次运行生成：`artifacts/latest/report/report.html`（带每个用例的 webm 录像 + 用例说明）与 `report.md`/`summary.json`。
-发布版把完整报告打包成 GitHub Release 附件 `e2e-report-<version>.zip`；README 里链接最近一次 Release。
+发布版把完整报告打包成 GitHub Release 附件 `e2e-report-<version>.zip`。
+
+**手机直接看录像**：<https://yulongbai-nov.github.io/dsh-agent-control-plane/> —— 每个用例一张卡片，
+内嵌 H.264 MP4 播放器（iOS/Android 原生支持），点即播；用 `delivery/build-pages.mjs` 生成、
+`delivery/publish-pages.mjs` 发布到 `gh-pages`。
 
 ## 文档
 
