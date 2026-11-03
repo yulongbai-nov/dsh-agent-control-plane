@@ -113,6 +113,16 @@
   实测产出：`failure.png` (1440×900)、`failure.webm` (67 KB)、`failure.gif` (480×300, 42 帧, 327 KB)、
   `trace.zip` (~1 MB)。
 
+## 8.1 手机观看（GitHub Pages）
+
+```sh
+FFMPEG_PATH=/path/to/ffmpeg node delivery/build-pages.mjs   # webm -> H.264 MP4 + poster，生成 dist/pages/
+node delivery/publish-pages.mjs                            # 发布 gh-pages 并启用 Pages
+```
+
+站点：<https://yulongbai-nov.github.io/dsh-agent-control-plane/>（按用例分卡片，点开即播，移动端优先）。
+`ffmpeg` 需要 libx264（macOS 可用 `npm i ffmpeg-static` 的静态二进制，无需 Homebrew）。
+
 ## 9. 命令速查
 
 ```sh
