@@ -93,7 +93,8 @@ dist/                           pack.mjs 生成的可发布产物（gitignored�
 `workflow-templates/` 提供 10 个可复用的 DSH workflow 脚本（多文件审计、PR 三视角评审、多角度调研、
 逐文件迁移、测试缺口扫描、文档同步、依赖升级、故障初筛、内容流水线、结构化抽取），
 只使用官方 hooks（`agent/parallel/pipeline/phase/log/args`），带校验测试。详见
-[workflow-templates/README.md](workflow-templates/README.md)。
+[workflow-templates/README.md](workflow-templates/README.md)；
+**每个模板的拓扑视图**：<https://yulongbai-nov.github.io/dsh-agent-control-plane/templates/>。
 
 ## 文档
 

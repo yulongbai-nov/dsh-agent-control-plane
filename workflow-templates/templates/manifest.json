@@ -6,61 +6,266 @@
       "file": "code-audit.js",
       "name": "code-audit",
       "whenToUse": "多文件代码审计：逐文件查正确性/安全/可维护性，再汇总风险。",
-      "phases": ["Audit", "Synthesize"]
+      "phases": [
+        "Audit",
+        "Synthesize"
+      ],
+      "topology": {
+        "note": "按 files 数量并行展开；此处示意 3 个文件",
+        "phases": [
+          {
+            "title": "Audit",
+            "shape": "parallel-map",
+            "template": "audit {file}",
+            "sample": 3
+          },
+          {
+            "title": "Synthesize",
+            "shape": "single",
+            "template": "audit summary"
+          }
+        ]
+      }
     },
     {
       "file": "pr-review.js",
       "name": "pr-review",
       "whenToUse": "PR 多视角评审：正确性、安全、测试三个独立评审，再给合并建议。",
-      "phases": ["Review", "Verdict"]
+      "phases": [
+        "Review",
+        "Verdict"
+      ],
+      "topology": {
+        "phases": [
+          {
+            "title": "Review",
+            "shape": "parallel",
+            "nodes": [
+              "correctness review",
+              "security review",
+              "tests review"
+            ]
+          },
+          {
+            "title": "Verdict",
+            "shape": "single",
+            "template": "verdict"
+          }
+        ]
+      }
     },
     {
       "file": "multi-angle-research.js",
       "name": "multi-angle-research",
       "whenToUse": "多角度调研：技术/产品/风险三路并行，最后综合成结论。",
-      "phases": ["Research", "Synthesis"]
+      "phases": [
+        "Research",
+        "Synthesis"
+      ],
+      "topology": {
+        "note": "按 angles 数量展开；默认 3 个角度",
+        "phases": [
+          {
+            "title": "Research",
+            "shape": "parallel-map",
+            "template": "{angle} research",
+            "sample": 3
+          },
+          {
+            "title": "Synthesis",
+            "shape": "single",
+            "template": "synthesis"
+          }
+        ]
+      }
     },
     {
       "file": "per-file-migration.js",
       "name": "per-file-migration",
       "whenToUse": "逐文件迁移/重写：每个文件独立走 计划→修改→验证，互不阻塞。",
-      "phases": ["Migrate", "Verify"]
+      "phases": [
+        "Migrate",
+        "Verify"
+      ],
+      "topology": {
+        "note": "每个文件一条独立 pipeline（无全局屏障）；此处示意 2 个文件",
+        "phases": [
+          {
+            "title": "Migrate",
+            "shape": "pipeline-map",
+            "template": "plan → apply",
+            "sample": 2
+          },
+          {
+            "title": "Verify",
+            "shape": "pipeline-map",
+            "template": "verify",
+            "sample": 2
+          }
+        ]
+      }
     },
     {
       "file": "test-gap-finder.js",
       "name": "test-gap-finder",
       "whenToUse": "测试缺口扫描：按模块并行找未覆盖行为，汇总成优先级列表。",
-      "phases": ["Scan", "Rank"]
+      "phases": [
+        "Scan",
+        "Rank"
+      ],
+      "topology": {
+        "note": "按 modules 数量并行展开",
+        "phases": [
+          {
+            "title": "Scan",
+            "shape": "parallel-map",
+            "template": "scan {module}",
+            "sample": 3
+          },
+          {
+            "title": "Rank",
+            "shape": "single",
+            "template": "rank gaps"
+          }
+        ]
+      }
     },
     {
       "file": "docs-sync.js",
       "name": "docs-sync",
       "whenToUse": "文档同步：逐篇对照代码/README，产出需要更新的段落清单。",
-      "phases": ["Compare", "Report"]
+      "phases": [
+        "Compare",
+        "Report"
+      ],
+      "topology": {
+        "note": "每篇文档一条 pipeline",
+        "phases": [
+          {
+            "title": "Compare",
+            "shape": "pipeline-map",
+            "template": "compare → plan",
+            "sample": 2
+          },
+          {
+            "title": "Report",
+            "shape": "single",
+            "template": "docs report"
+          }
+        ]
+      }
     },
     {
       "file": "dependency-upgrade.js",
       "name": "dependency-upgrade",
       "whenToUse": "依赖升级：审计候选依赖 → 评估破坏面 → 给分步升级计划。",
-      "phases": ["Audit", "Plan"]
+      "phases": [
+        "Audit",
+        "Plan"
+      ],
+      "topology": {
+        "note": "按 packages 数量并行展开",
+        "phases": [
+          {
+            "title": "Audit",
+            "shape": "parallel-map",
+            "template": "audit {package}",
+            "sample": 3
+          },
+          {
+            "title": "Plan",
+            "shape": "single",
+            "template": "upgrade plan"
+          }
+        ]
+      }
     },
     {
       "file": "incident-triage.js",
       "name": "incident-triage",
       "whenToUse": "故障初筛：收集症状 → 列假设 → 逐条验证 → 输出最可能根因。",
-      "phases": ["Collect", "Hypotheses", "Verify"]
+      "phases": [
+        "Collect",
+        "Hypotheses",
+        "Verify"
+      ],
+      "topology": {
+        "phases": [
+          {
+            "title": "Collect",
+            "shape": "single",
+            "template": "collect facts"
+          },
+          {
+            "title": "Hypotheses",
+            "shape": "single",
+            "template": "hypotheses"
+          },
+          {
+            "title": "Verify",
+            "shape": "parallel",
+            "nodes": [
+              "verify #1",
+              "verify #2",
+              "verify #3"
+            ]
+          }
+        ]
+      }
     },
     {
       "file": "content-pipeline.js",
       "name": "content-pipeline",
       "whenToUse": "内容生产流水线：研究 → 初稿 → 编辑润色，阶段间无屏障。",
-      "phases": ["Research", "Draft", "Edit"]
+      "phases": [
+        "Research",
+        "Draft",
+        "Edit"
+      ],
+      "topology": {
+        "phases": [
+          {
+            "title": "Research",
+            "shape": "single",
+            "template": "research"
+          },
+          {
+            "title": "Draft",
+            "shape": "single",
+            "template": "draft"
+          },
+          {
+            "title": "Edit",
+            "shape": "single",
+            "template": "edit"
+          }
+        ]
+      }
     },
     {
       "file": "structured-extraction.js",
       "name": "structured-extraction",
       "whenToUse": "结构化抽取：多个来源并行抽成同一 JSON schema，再合并去重。",
-      "phases": ["Extract", "Merge"]
+      "phases": [
+        "Extract",
+        "Merge"
+      ],
+      "topology": {
+        "note": "按 sources 数量并行展开",
+        "phases": [
+          {
+            "title": "Extract",
+            "shape": "parallel-map",
+            "template": "extract {source}",
+            "sample": 3
+          },
+          {
+            "title": "Merge",
+            "shape": "single",
+            "template": "merge"
+          }
+        ]
+      }
     }
   ]
 }
