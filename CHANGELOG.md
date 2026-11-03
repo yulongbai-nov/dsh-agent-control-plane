@@ -2,6 +2,13 @@
 
 本项目从交付前的调研仓库（`docs/HISTORY.md`）整理为可发布的插件套件。格式参考 Keep a Changelog。
 
+## [0.2.2] — 2026-11-03
+
+### Added
+- **模板拓扑视图**：`workflow-templates/render-views.mjs` 把 10 个模板渲染成阶段/并行/流水线视图，
+  发布在 Pages `/templates/`；声明式拓扑（动态 fan-out 不假装已知数量）+ 静态分析状态徽章。
+- `npm run views:render`；Release 附件 `template-views-0.2.2.zip`。
+
 ## [0.2.1] — 2026-11-03
 
 ### Added

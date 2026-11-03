@@ -122,6 +122,7 @@ const html = `<!doctype html>
 <div class="meta">生成于 ${generated} ｜ profile <code>${escapeHtml(summary.profile)}</code> ｜ mock 模型：${summary.mockProvider ? '是（零成本）' : '否'} ｜ 用例总耗时 ${(totalDuration / 1000).toFixed(1)}s</div>
 <div class="badges">${Object.entries(counts).map(([status, count]) => `<span>${ICON[status] || status} ${status} × ${count}</span>`).join('')}<span>共 ${rows.length} 条</span></div>
 <p class="meta">点视频即播（H.264，iOS/Android 浏览器原生支持）。每条用例上方是它的实际验证内容；跳过项本次未执行。</p>
+<p class="meta">🎨 想看 10 个 workflow 模板的视图：<a href="templates/">Workflow 模板视图</a>（声明式拓扑 + 静态分析状态）。</p>
 ${cards}
 <footer>
  仓库：<a href="https://github.com/yulongbai-nov/dsh-agent-control-plane">dsh-agent-control-plane</a> ·

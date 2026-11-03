@@ -18,7 +18,8 @@
     "e2e:mock": "node e2e/run-e2e.mjs --mock-model",
     "pack:report": "node delivery/pack-report.mjs",
     "pages:build": "node delivery/build-pages.mjs",
-    "pages:publish": "node delivery/publish-pages.mjs"
+    "pages:publish": "node delivery/publish-pages.mjs",
+    "views:render": "node workflow-templates/render-views.mjs"
   },
   "devDependencies": {
     "acorn": "8.19.0"

@@ -39,6 +39,15 @@
 
 3. **复制到自己的项目**：模板之间互不依赖，单文件即可用；按需改 prompt 与 `schema`。
 
+## 视图（每个模板长什么样）
+
+- 在线看：<https://yulongbai-nov.github.io/dsh-agent-control-plane/templates/>（10 个模板的阶段、并行分支、
+  流水线、展开示意 + 静态分析状态）。
+- 本地生成：`NODE_PATH="$HOME/.dsh/profiles/desktop/node_modules" node workflow-templates/render-views.mjs`
+  → `dist/pages/templates/index.html`（用浏览器打开）。
+- 说明：模板用 `items.map(...)` 动态展开，官方保守静态分析不会假装知道数量；页面以脚本里的声明拓扑为准，
+  并标注静态分析能提取多少节点/多少告警。真实运行时视图（工作流地图）见 E2E 报告里的录像。
+
 ## 约定与限制
 
 - 只使用官方契约里的 hook；脚本里出现 fs/网络/Node API 会被本仓库的测试拒绝（见 `test/templates.test.mjs`）。
