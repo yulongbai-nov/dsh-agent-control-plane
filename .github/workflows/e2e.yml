@@ -60,6 +60,8 @@ jobs:
         run: node third_party/dsh-session-tree/scripts/build.mjs --check
       - name: Vendored bundle package contract tests
         run: node --test third_party/dsh-session-tree/tests/*.test.mjs
+      - name: Workflow template library tests
+        run: node --test workflow-templates/test/*.test.mjs
       - name: Install E2E dependencies
         working-directory: e2e
         run: npm ci

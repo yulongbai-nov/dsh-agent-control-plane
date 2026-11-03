@@ -1,6 +1,6 @@
 {
   "name": "dsh-control-plane-session-tree",
-  "version": "1.0.4-cp.2",
+  "version": "1.0.4-cp.3",
   "type": "module",
   "description": "Left-sidebar session tree with six task-type avatars for DeepSeek Harness (vendor of @orphiczhou/dsh-session-tree, MIT)",
   "license": "MIT",

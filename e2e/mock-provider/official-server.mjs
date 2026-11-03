@@ -24,9 +24,13 @@ const flag = (name, fallback) => {
 const PORT = Number(flag('--port', '0'))
 const RECORD = flag('--record', null)
 const INITIAL_SEQUENCE = flag('--sequence', 'success').split(',').map((s) => s.trim()).filter(Boolean)
+const cliOverrides = {}
+if (flag('--tool-name', null)) cliOverrides.toolName = flag('--tool-name', null)
+if (flag('--tool-arguments', null)) cliOverrides.toolArguments = flag('--tool-arguments', null)
 
 const SUCCESS_TEXT = 'MOCK_OK:official mock provider'
 let currentServer = null
+let overrides = { ...cliOverrides }
 const start = (sequence) =>
   startMockLlmServer({
     host: '127.0.0.1',
@@ -35,6 +39,9 @@ const start = (sequence) =>
     sequence,
     repeatLast: true,
     successText: SUCCESS_TEXT,
+    // Scriptable tool call (used by the workflow-visual E2E): emit a tool call that
+    // the real Host executes, so the session gets tool/file events to visualize.
+    ...overrides,
     onEvent: () => {
       // Keep the capture fresh for assertions running while DSH is alive.
       if (currentServer) flush()
@@ -64,9 +71,10 @@ const flush = () => {
 // A test can POST /sequence to change what the next accepted requests do without
 // restarting DSH (whose base URL is fixed at launch).
 let sequence = ['success']
-const restart = async (nextSequence) => {
+const restart = async (nextSequence, nextOverrides) => {
   flush()
   await server.close()
+  overrides = nextOverrides || {}
   let lastError
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
@@ -96,7 +104,11 @@ const control = createServer((req, res) => {
       try {
         const body = JSON.parse(raw || '{}')
         const next = Array.isArray(body.sequence) && body.sequence.length ? body.sequence : ['success']
-        await restart(next)
+        const nextOverrides = {}
+        if (typeof body.toolName === 'string' && body.toolName) nextOverrides.toolName = body.toolName
+        if (typeof body.toolArguments === 'string' && body.toolArguments) nextOverrides.toolArguments = body.toolArguments
+        if (typeof body.successText === 'string' && body.successText) nextOverrides.successText = body.successText
+        await restart(next, nextOverrides)
         res.writeHead(200, { 'content-type': 'application/json' })
         res.end(JSON.stringify({ ok: true, sequence: next }))
       } catch (error) {

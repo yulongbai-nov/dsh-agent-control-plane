@@ -27,10 +27,18 @@ test('cordis.patch 的 row name 等于包名', () => {
   assert.ok(patch.includes('id: session-tree'), 'stable row id')
 })
 
-test('client.js 内嵌六类头像 data URL', () => {
+test('client.js 内嵌六类头像 × 三套变体 data URL', () => {
   const client = read('client.js')
+  const start = client.indexOf('const AVATAR_SRC = ')
+  assert.ok(start >= 0, 'AVATAR_SRC assignment missing')
+  const lineEnd = client.indexOf('\n', start)
+  const json = client.slice(start + 'const AVATAR_SRC = '.length, lineEnd).trim().replace(/;\s*$/, '')
+  const embedded = JSON.parse(json)
   for (const type of ['lead', 'research', 'code', 'write', 'data', 'qa']) {
-    assert.ok(client.includes(`"${type}":"data:image/`), `avatar ${type} not embedded`)
+    assert.ok(embedded[type], `avatar ${type} missing`)
+    for (const variant of ['a', 'b', 'c']) {
+      assert.match(embedded[type][variant] || '', /^data:image\/(png|jpeg);base64,/, `${type}/${variant} missing`)
+    }
   }
 })
 

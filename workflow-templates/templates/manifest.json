@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "hostContract": "dsh-tool-workflow 0.2.1-rc.5 (hooks: agent/parallel/pipeline/phase/log/args)",
+  "templates": [
+    {
+      "file": "code-audit.js",
+      "name": "code-audit",
+      "whenToUse": "多文件代码审计：逐文件查正确性/安全/可维护性，再汇总风险。",
+      "phases": ["Audit", "Synthesize"]
+    },
+    {
+      "file": "pr-review.js",
+      "name": "pr-review",
+      "whenToUse": "PR 多视角评审：正确性、安全、测试三个独立评审，再给合并建议。",
+      "phases": ["Review", "Verdict"]
+    },
+    {
+      "file": "multi-angle-research.js",
+      "name": "multi-angle-research",
+      "whenToUse": "多角度调研：技术/产品/风险三路并行，最后综合成结论。",
+      "phases": ["Research", "Synthesis"]
+    },
+    {
+      "file": "per-file-migration.js",
+      "name": "per-file-migration",
+      "whenToUse": "逐文件迁移/重写：每个文件独立走 计划→修改→验证，互不阻塞。",
+      "phases": ["Migrate", "Verify"]
+    },
+    {
+      "file": "test-gap-finder.js",
+      "name": "test-gap-finder",
+      "whenToUse": "测试缺口扫描：按模块并行找未覆盖行为，汇总成优先级列表。",
+      "phases": ["Scan", "Rank"]
+    },
+    {
+      "file": "docs-sync.js",
+      "name": "docs-sync",
+      "whenToUse": "文档同步：逐篇对照代码/README，产出需要更新的段落清单。",
+      "phases": ["Compare", "Report"]
+    },
+    {
+      "file": "dependency-upgrade.js",
+      "name": "dependency-upgrade",
+      "whenToUse": "依赖升级：审计候选依赖 → 评估破坏面 → 给分步升级计划。",
+      "phases": ["Audit", "Plan"]
+    },
+    {
+      "file": "incident-triage.js",
+      "name": "incident-triage",
+      "whenToUse": "故障初筛：收集症状 → 列假设 → 逐条验证 → 输出最可能根因。",
+      "phases": ["Collect", "Hypotheses", "Verify"]
+    },
+    {
+      "file": "content-pipeline.js",
+      "name": "content-pipeline",
+      "whenToUse": "内容生产流水线：研究 → 初稿 → 编辑润色，阶段间无屏障。",
+      "phases": ["Research", "Draft", "Edit"]
+    },
+    {
+      "file": "structured-extraction.js",
+      "name": "structured-extraction",
+      "whenToUse": "结构化抽取：多个来源并行抽成同一 JSON schema，再合并去重。",
+      "phases": ["Extract", "Merge"]
+    }
+  ]
+}

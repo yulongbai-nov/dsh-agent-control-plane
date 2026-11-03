@@ -82,8 +82,16 @@ window.__ModuleLoader__.load({
       for (const rule of AVATAR_RULES) if (rule[0].test(text)) return rule[1]
       return 'lead'
     }
-    function avatarSrc(type) {
-      return (AVATAR_SRC && (AVATAR_SRC[type] || AVATAR_SRC.lead)) || ''
+    // Each role ships three art variants; a session deterministically picks one
+    // from its id so different sessions look different while staying stable.
+    function avatarVariant(id) {
+      let hash = 0
+      for (const ch of String(id)) hash = (hash * 31 + ch.codePointAt(0)) >>> 0
+      return ['a', 'b', 'c'][hash % 3]
+    }
+    function avatarSrc(type, variant) {
+      const set = (AVATAR_SRC && (AVATAR_SRC[type] || AVATAR_SRC.lead)) || {}
+      return set[variant] || set.a || ''
     }
     const EMPTY_ARR = []
 
@@ -1297,7 +1305,7 @@ window.__ModuleLoader__.load({
                 },
               },
               h('span', { className: 'st-menu-check' }, avatarFor(row) === type ? '\u2713' : ''),
-              h('img', { className: 'st-avatar', src: avatarSrc(type), alt: '', 'aria-hidden': 'true', draggable: false }),
+              h('img', { className: 'st-avatar', src: avatarSrc(type, 'a'), alt: '', 'aria-hidden': 'true', draggable: false }),
               h('span', null, t('avatar_' + type)),
             ),
           ),
@@ -1408,8 +1416,9 @@ window.__ModuleLoader__.load({
                 }),
                 h('img', {
                   className: 'st-avatar',
-                  src: avatarSrc(avatarFor(row)),
+                  src: avatarSrc(avatarFor(row), avatarVariant(row.id)),
                   'data-avatar-type': avatarFor(row),
+                  'data-avatar-variant': avatarVariant(row.id),
                   alt: '',
                   'aria-hidden': 'true',
                   draggable: false,
