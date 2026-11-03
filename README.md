@@ -10,7 +10,7 @@
 |---|---|
 | 宿主 | DeepSeek Harness **0.2.1-rc.5**（桌面 / web） |
 | 形态 | 外部 profile 插件套件（bundle + client 插件） |
-| E2E | 真实 DSH + 真实 Chromium，**28 条**行为用例，官方 Messages mock 驱动，零模型成本 |
+| E2E | 真实 DSH + 真实 Chromium，**30 条**行为用例（含工作流地图视觉、头像三套画风），官方 Messages mock 驱动，零模型成本 |
 | CI | GitHub Actions 无头流水线（Linux，core + Web GUI；桌面壳 macOS 本地验收） |
 | 许可 | MIT |
 
@@ -21,7 +21,7 @@
 | R7 常驻侧栏会话树 | `third_party/dsh-session-tree`（vendor + 头像层） | ✅ 真机 E2E |
 | R8 六类任务头像 | 同上（推断 / 手动覆盖 / localStorage 持久） | ✅ 真机 E2E |
 | R1/R3/R5/R6 团队 | `dsh-agent-teams-model-override`（pinned） | ✅ 工具可见性实测；完整嵌套链路待深化 |
-| R10/R11 workflow | `dsh-workflow-map` | 🟡 入口与安全打开已验证 |
+| R10/R11 workflow | `dsh-workflow-map` | 🟢 真机视觉已验证（Main flow / 节点 / 工具计数）；模板库见 `workflow-templates/` |
 | R13 安装/升级/回滚 | `delivery/` + `dshmarket` | ✅ 安装→回滚闭环实测 |
 | R17 视觉/无障碍 | 深浅色 / locale / 键盘 | ✅ 基础版（真机 E2E） |
 | R18 本地遥测 | `dsh-local-telemetry` | ✅ 基础版（导出/purge/重建，真机 E2E） |
@@ -87,6 +87,13 @@ dist/                           pack.mjs 生成的可发布产物（gitignored�
 **手机直接看录像**：<https://yulongbai-nov.github.io/dsh-agent-control-plane/> —— 每个用例一张卡片，
 内嵌 H.264 MP4 播放器（iOS/Android 原生支持），点即播；用 `delivery/build-pages.mjs` 生成、
 `delivery/publish-pages.mjs` 发布到 `gh-pages`。
+
+## Workflow 模板库
+
+`workflow-templates/` 提供 10 个可复用的 DSH workflow 脚本（多文件审计、PR 三视角评审、多角度调研、
+逐文件迁移、测试缺口扫描、文档同步、依赖升级、故障初筛、内容流水线、结构化抽取），
+只使用官方 hooks（`agent/parallel/pipeline/phase/log/args`），带校验测试。详见
+[workflow-templates/README.md](workflow-templates/README.md)。
 
 ## 文档
 

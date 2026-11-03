@@ -37,8 +37,8 @@ export const TEST_CASES = [
   },
   {
     group: '头像',
-    match: /每个会话行渲染头像/,
-    what: '每个会话行渲染头像图片，带合法 data-avatar-type（lead/research/code/write/data/qa）。',
+    match: /每个会话行渲染角色头像/,
+    what: '每行渲染角色头像（lead/research/code/write/data/qa），三套画风按会话 id 确定性随机；不同会话风格不同。',
   },
   {
     group: '头像',
@@ -57,8 +57,18 @@ export const TEST_CASES = [
   },
   {
     group: 'Workflow',
-    match: /工作流地图/,
-    what: '侧栏出现「工作流地图」入口；打开不崩溃，并可回会话（给 R10/R11 提供入口级保障）。',
+    match: /两轮会话渲染出分步流程/,
+    what: '真实跑两轮对话后打开工作流地图：Main flow、步骤计数与节点卡真实渲染（R10/R11 视觉）。',
+  },
+  {
+    group: 'Workflow',
+    match: /真实模型工具调用后/,
+    what: '真实模型执行一条 bash 工具调用后，地图显示 tools/files 计数（R10/R11 真实数据，可选 2 次调用）。',
+  },
+  {
+    group: 'Workflow',
+    match: /工作流地图入口/,
+    what: '侧栏「工作流地图」入口存在、打开不崩溃、可以回到会话（入口级保障）。',
   },
   {
     group: '模型',
