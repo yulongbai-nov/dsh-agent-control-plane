@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="zh-CN"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflow DAG · 自动布局 / 自由布局 / 曼哈顿走线 mock</title>
+<style>
+  :root { color-scheme:light dark; --bg:#f5f6f8; --panel:#fff; --fg:#171a1f; --muted:#667085; --line:#e4e7ec;
+    --accent:#4f6bed; --ok:#12b76a; --bad:#f04438; --warn:#f79009; --chip:#f2f4f7; --lane:#eef2ff; --grid:#e9ecf2;
+    --edge:#98a2b3; --file:#7c5cff; --loop:#7c5cff; }
+  @media (prefers-color-scheme:dark) { :root { --bg:#0b0d12; --panel:#141821; --fg:#e8ebf2; --muted:#8f9aab;
+    --line:#232a37; --accent:#7d94ff; --ok:#32d583; --bad:#f97066; --warn:#fdb022; --chip:#1a202b;
+    --lane:#101827; --grid:#1a2130; --edge:#5b6676; --file:#a78bfa; --loop:#a78bfa; } }
+  body.dark { --bg:#0b0d12; --panel:#141821; --fg:#e8ebf2; --muted:#8f9aab; --line:#232a37; --accent:#7d94ff;
+    --ok:#32d583; --bad:#f97066; --warn:#fdb022; --chip:#1a202b; --lane:#101827; --grid:#1a2130; --edge:#5b6676;
+    --file:#a78bfa; --loop:#a78bfa; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:13px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",sans-serif; }
+  .app { max-width:1280px; margin:0 auto; padding:12px 14px 18px; }
+  header { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  .title { font-weight:650; font-size:14px; }
+  .title small { color:var(--muted); font-weight:400; margin-left:6px; }
+  .spacer { flex:1; }
+  .ctl { border:1px solid var(--line); background:var(--panel); color:var(--fg); border-radius:8px; padding:4px 10px;
+    font-size:12px; cursor:pointer; }
+  .ctl.on { border-color:var(--accent); color:var(--accent); background:color-mix(in srgb,var(--accent) 8%,var(--panel)); }
+  .ctl.primary { border-color:var(--accent); color:#fff; background:var(--accent); }
+  .badge { font-size:11px; border:1px solid var(--line); border-radius:999px; padding:1px 8px; color:var(--muted); }
+  .strip { display:flex; gap:12px; align-items:center; background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:7px 11px; margin-bottom:10px; font-size:12px; color:var(--muted); }
+  .strip b { color:var(--fg); font-weight:600; }
+  .legend { display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin-top:8px; font-size:11px; color:var(--muted); }
+  .legend i { display:inline-block; width:18px; height:0; border-top:2px solid var(--edge); margin-right:5px; vertical-align:middle; }
+  .legend i.data { border-color:var(--accent); }
+  .legend i.cond { border-top-style:dashed; border-color:var(--warn); }
+  .legend i.loop { border-color:var(--loop); }
+  .legend i.file { border-top-style:dotted; border-color:var(--file); }
+  .legend i.hop { width:10px; height:10px; border-radius:50%; border:1.5px solid var(--edge); background:var(--panel); }
+  .canvas { position:relative; height:740px; border:1px solid var(--line); border-radius:14px; overflow:hidden;
+    background:radial-gradient(900px 420px at 15% 0%,color-mix(in srgb,var(--accent) 6%,transparent),transparent 70%),var(--panel); }
+  .canvas::before { content:""; position:absolute; inset:0;
+    background-image:radial-gradient(var(--grid) 1px,transparent 1px); background-size:22px 22px; }
+  .lanes { position:absolute; inset:0; pointer-events:none; transition:opacity .25s; }
+  body.implicit .lane { background:transparent !important; border:none !important; }
+  body.implicit .lane .cap b { display:none; }
+  .lane { position:absolute; top:58px; bottom:18px; border-radius:12px; background:var(--lane);
+    border:1px dashed color-mix(in srgb,var(--line) 75%,transparent); }
+  .lane .cap { position:absolute; top:-22px; left:6px; font-size:10px; letter-spacing:.06em; color:var(--muted); text-transform:uppercase; white-space:nowrap; }
+  .lane .cap b { color:var(--fg); font-weight:600; }
+  svg.edges { position:absolute; inset:0; width:100%; height:100%; }
+  .edge { fill:none; stroke:var(--accent); stroke-width:1.7; stroke-linejoin:round; transition:opacity .15s; }
+  .edge.cond { stroke:var(--warn); stroke-dasharray:5 5; }
+  .edge.loop { stroke:var(--loop); stroke-dasharray:7 6; }
+  .edge.file { stroke:var(--file); stroke-dasharray:1.5 4; stroke-width:1.3; }
+  .edge.active { filter:drop-shadow(0 0 4px color-mix(in srgb,var(--accent) 60%,transparent)); }
+  .edges.hovering .edge { opacity:.18; }
+  .edges.hovering .edge.hl { opacity:1; stroke-width:2.6; }
+  .arrow { fill:var(--accent); }
+  .arrow.cond { fill:var(--warn); } .arrow.loop { fill:var(--loop); } .arrow.file { fill:var(--file); }
+  .nodes { position:absolute; inset:0; }
+  .node { position:absolute; width:170px; background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    padding:7px 9px; box-shadow:0 6px 18px -14px rgba(16,24,40,.4); user-select:none;
+    transition:left .45s cubic-bezier(.2,.8,.2,1), top .45s cubic-bezier(.2,.8,.2,1), box-shadow .2s, border-color .2s; }
+  body.free .node { cursor:grab; }
+  body.free .node.dragging { cursor:grabbing; transition:none; box-shadow:0 16px 40px -18px rgba(16,24,40,.5); z-index:5; }
+  .node .n-head { display:flex; gap:6px; align-items:center; }
+  .node .n-ico { width:18px; height:18px; border-radius:5px; display:grid; place-items:center; font-size:10px;
+    background:color-mix(in srgb,var(--accent) 13%,transparent); color:var(--accent); flex:none; }
+  .node .n-name { font-weight:600; font-size:12px; line-height:1.2; }
+  .node .n-sub { color:var(--muted); font-size:10.5px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .node .n-chips { display:flex; gap:3px; flex-wrap:wrap; margin-top:5px; }
+  .node .chip { font-size:9.5px; border-radius:4px; padding:0 4px; background:var(--chip); color:var(--muted); }
+  .node .chip.file { color:var(--file); } .node .chip.tool { color:var(--warn); }
+  .node.input { border-style:dashed; width:130px; }
+  .node.res { width:150px; border-style:dashed; }
+  .node.res .n-name { font-family:ui-monospace,Menlo,monospace; font-size:11px; font-weight:500; }
+  .node .port { position:absolute; width:6px; height:6px; border-radius:50%; background:var(--line); }
+  .node:hover { border-color:var(--accent); }
+  .foot { margin-top:8px; color:var(--muted); font-size:11px; }
+</style></head>
+<body>
+<div class="app">
+  <header>
+    <div class="title">review-demo <small>DAG 运行视图 · 自动/自由布局</small></div>
+    <span class="badge" id="modeBadge">自动布局</span>
+    <span class="spacer"></span>
+    <button class="ctl primary" id="autoBtn">⚡ 自动布局</button>
+    <button class="ctl" id="freeBtn">✋ 自由布局</button>
+    <button class="ctl" id="shuffleBtn">🎲 打乱</button>
+    <button class="ctl on" id="phaseBtn">显示 phase</button>
+    <button class="ctl" id="themeBtn">深色</button>
+  </header>
+  <div class="strip">
+    <span>布局：<b>phase 泳道（列）+ 泳道内重心排序（减少交叉）</b></span>
+    <span>交叉：<b id="crossCount">0</b> 处</span>
+    <span>边：<b id="edgeCount">0</b> 条</span>
+    <span id="hint">拖节点 → 边实时重算；点「自动布局」飞回泳道</span>
+  </div>
+  <div class="canvas" id="canvas">
+    <div class="lanes" id="lanes"></div>
+    <svg class="edges" id="edges"></svg>
+    <div class="nodes" id="nodes"></div>
+  </div>
+  <div class="legend">
+    <span><i class="data"></i>数据流 / 交接</span>
+    <span><i class="cond"></i>条件边（仅 fail 走）</span>
+    <span><i class="loop"></i>回边（修复 → 复审）</span>
+    <span><i class="file"></i>资源读写</span>
+    <span><i class="hop"></i>跨线桥（交叉处画圆弧，不共点）</span>
+    <span>悬停任一边可高亮整条链路</span>
+  </div>
+  <div class="foot">真机实现：ELK layered 自动布局（phase 列约束 + 正交边路由 + 交叉最小化），剩余交叉用跨线桥；自由布局用拖拽坐标，运行时只是重算路由。动画纯 CSS/SVG，尊重 reduced-motion。</div>
+</div>
+<script>
+const LANES = [
+  { id: 'p1', title: '收集', x: 34, w: 232 },
+  { id: 'p2', title: '审查', x: 286, w: 262 },
+  { id: 'p3', title: '判定', x: 568, w: 196 },
+  { id: 'p4', title: '修复', x: 784, w: 196 },
+  { id: 'p5', title: '结论', x: 1000, w: 210 },
+];
+const NODE_W = 170, NODE_H_EST = 92, TOP = 84, BOTTOM = 560;
+const NODES = [
+  { id: 'goal', kind: 'input', lane: 0, title: '评审目标', sub: '输入 · 执行前问用户', chips: [] },
+  { id: 'collect', kind: 'step', lane: 0, title: '收集变更上下文', sub: 'git diff → 变更清单', chips: [{ t: 'file', v: 'context.md' }, { t: 'tool', v: 'bash' }] },
+  { id: 'r1', kind: 'step', lane: 1, title: '审查 · 正确性', sub: '边界 / 异常路径', chips: [{ t: 'tool', v: 'read' }] },
+  { id: 'r2', kind: 'step', lane: 1, title: '审查 · 安全', sub: '注入 / 越权 / 泄漏', chips: [{ t: 'tool', v: 'read' }] },
+  { id: 'r3', kind: 'step', lane: 1, title: '审查 · 测试', sub: '行为覆盖 / 回归', chips: [{ t: 'tool', v: 'read' }] },
+  { id: 'verdict', kind: 'step', lane: 2, title: '汇总判定', sub: 'VERDICT: pass / fail', chips: [{ t: 'file', v: 'review.md' }] },
+  { id: 'rubric', kind: 'res', lane: 1, title: '评审标准', sub: '只读 · text', chips: [] },
+  { id: 'fix', kind: 'step', lane: 3, title: '按理由修复', sub: '仅 fail 分支', chips: [{ t: 'tool', v: 'edit' }] },
+  { id: 'finalize', kind: 'step', lane: 4, title: '给出最终结论', sub: 'pass 后汇总', chips: [{ t: 'file', v: 'verdict.md' }] },
+  { id: 'context', kind: 'res', lane: 0, title: 'context.md', sub: '产出 → 审查读', chips: [] },
+  { id: 'reviewmd', kind: 'res', lane: 2, title: 'review.md', sub: '产出 → 修复/结论读', chips: [] },
+  { id: 'verdictmd', kind: 'res', lane: 4, title: 'verdict.md', sub: '终点产出', chips: [] },
+];
+const EDGES = [
+  { from: 'goal', to: 'collect', kind: 'data' },
+  { from: 'collect', to: 'r1', kind: 'data' },
+  { from: 'collect', to: 'r2', kind: 'data' },
+  { from: 'collect', to: 'r3', kind: 'data' },
+  { from: 'r1', to: 'verdict', kind: 'data' },
+  { from: 'r2', to: 'verdict', kind: 'data' },
+  { from: 'r3', to: 'verdict', kind: 'data' },
+  { from: 'rubric', to: 'verdict', kind: 'data' },
+  { from: 'verdict', to: 'fix', kind: 'cond', label: 'fail' },
+  { from: 'fix', to: 'verdict', kind: 'loop', label: '回边' },
+  { from: 'verdict', to: 'finalize', kind: 'data', label: 'pass' },
+  { from: 'collect', to: 'context', kind: 'file' },
+  { from: 'context', to: 'r1', kind: 'file' },
+  { from: 'context', to: 'r2', kind: 'file' },
+  { from: 'context', to: 'r3', kind: 'file' },
+  { from: 'verdict', to: 'reviewmd', kind: 'file' },
+  { from: 'reviewmd', to: 'fix', kind: 'file' },
+  { from: 'reviewmd', to: 'finalize', kind: 'file' },
+  { from: 'finalize', to: 'verdictmd', kind: 'file' },
+];
+
+const $ = (id) => document.getElementById(id);
+const pos = new Map();      // id -> {x,y}
+const els = new Map();      // id -> element
+let layout = [];
+
+function byId(id) { return NODES.find((n) => n.id === id); }
+function nodeW(n) { return n.kind === 'input' ? 130 : n.kind === 'res' ? 150 : 170; }
+function nodeH(n) { return n.kind === 'res' ? 62 : n.kind === 'input' ? 70 : 88; }
+
+// ---- auto layout: phase lanes + barycenter rows ----
+function computeAuto() {
+  const lanes = LANES.map((l, i) => ({ ...l, i, nodes: NODES.filter((n) => n.lane === i && n.kind !== 'res') }));
+  const res = NODES.filter((n) => n.kind === 'res');
+  // barycenter sweeps to order each lane (reduce crossings)
+  const order = new Map();
+  lanes.forEach((l) => l.nodes.forEach((n, i) => order.set(n.id, i)));
+  // global topological rank (longest path over step edges) keeps reviewers before 判定
+  const stepIds = NODES.filter((n) => n.kind === 'step').map((n) => n.id);
+  const rank = new Map(stepIds.map((id) => [id, 0]));
+  for (let it = 0; it < 50; it++) {
+    let changed = false;
+    for (const e of EDGES) {
+      if (!rank.has(e.from) || !rank.has(e.to)) continue;
+      const next = rank.get(e.from) + 1;
+      if (next > rank.get(e.to)) { rank.set(e.to, next); changed = true; }
+    }
+    if (!changed) break;
+  }
+  for (let sweep = 0; sweep < 4; sweep++) {
+    for (const l of lanes) {
+      l.nodes.sort((a, b) => {
+        const rankDiff = (rank.get(a.id) || 0) - (rank.get(b.id) || 0);
+        if (rankDiff) return rankDiff;
+        const bary = (n) => {
+          const vals = EDGES.filter((e) => (e.to === n.id && byId(e.from)?.lane !== l.i) || (e.from === n.id && byId(e.to)?.lane !== l.i))
+            .map((e) => order.get(e.from === n.id ? e.to : e.from)).filter((v) => v != null);
+          return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : order.get(n.id);
+        };
+        return bary(a) - bary(b) || order.get(a.id) - order.get(b.id);
+      });
+      l.nodes.forEach((n, i) => order.set(n.id, i));
+    }
+  }
+  const out = new Map();
+  for (const l of lanes) {
+    const gapY = Math.min(26, (BOTTOM - TOP) / Math.max(1, l.nodes.length));
+    l.nodes.forEach((n, i) => {
+      const x = l.x + (l.w - nodeW(n)) / 2;
+      const y = TOP + i * (nodeH(n) + 22) + (l.nodes.length < 3 ? 70 : 0);
+      out.set(n.id, { x, y });
+    });
+    // resources sit in a bottom band under their lane
+    const laneRes = res.filter((r) => r.lane === l.i);
+    laneRes.forEach((r, i) => out.set(r.id, { x: l.x + (l.w - nodeW(r)) / 2, y: Math.min(660, BOTTOM + 24 + i * 68) }));
+  }
+  // resources with no same-lane step (context is lane 0, fine); fallback
+  res.forEach((r) => { if (!out.has(r.id)) out.set(r.id, { x: LANES[r.lane].x + 20, y: BOTTOM + 30 }); });
+  return out;
+}
+
+// ---- orthogonal routing ----
+function route(e, P, offset = 0) {
+  const a = byId(e.from), b = byId(e.to);
+  const pa = P.get(e.from), pb = P.get(e.to);
+  const aw = nodeW(a), bw = nodeW(b);
+  const ah = nodeH(a), bh = nodeH(b);
+  const pts = [];
+  const laneA = LANES[a.lane], laneB = LANES[b.lane];
+  if (e.kind === 'file') {
+    // write: step bottom -> res top; read: res top -> step bottom (use file lane)
+    if (a.kind === 'res') {
+      const sx = pa.x + aw / 2, sy = pa.y;
+      const tx = pb.x + bw / 2, ty = pb.y + bh;
+      const midY = sy - 18;
+      return [{ x: sx, y: sy }, { x: sx, y: midY }, { x: tx, y: midY }, { x: tx, y: ty }];
+    }
+    const sx = pa.x + aw / 2, sy = pa.y + ah;
+    const tx = pb.x + bw / 2, ty = pb.y;
+    const midY = ty - 18;
+    return [{ x: sx, y: sy }, { x: sx, y: midY }, { x: tx, y: midY }, { x: tx, y: ty }];
+  }
+  if (e.kind === 'loop') {
+    // back edge: keep below the lanes so it never cuts through cards
+    const sx = pa.x + aw / 2, sy = pa.y + ah;
+    const tx = pb.x + bw / 2, ty = pb.y + bh;
+    const y = Math.max(sy, ty) + 34;
+    return [{ x: sx, y: sy }, { x: sx, y }, { x: tx, y }, { x: tx, y: ty }];
+  }
+  const sx = pa.x + aw, sy = pa.y + ah / 2;
+  const tx = pb.x, ty = pb.y + bh / 2;
+  // forward: route through channel between lanes, offset parallel verticals
+  const gapA = laneA.x + laneA.w, gapB = laneB.x;
+  const channel = a.lane === b.lane ? laneA.x + laneA.w - 14 : (gapA + gapB) / 2;
+  const midX = channel + offset;
+  return [{ x: sx, y: sy }, { x: midX, y: sy }, { x: midX, y: ty }, { x: tx, y: ty }];
+}
+
+function segsOf(pts) {
+  const segs = [];
+  for (let i = 0; i < pts.length - 1; i++) segs.push([pts[i], pts[i + 1]]);
+  return segs;
+}
+
+// ---- hops for crossings on horizontal segments ----
+function crossingsOf(polys) {
+  const out = [];
+  for (let i = 0; i < polys.length; i++) {
+    for (let j = i + 1; j < polys.length; j++) {
+      for (const [a1, a2] of segsOf(polys[i].pts)) {
+        for (const [b1, b2] of segsOf(polys[j].pts)) {
+          const ah = a1.y === a2.y, av = a1.x === a2.x;
+          const bh = b1.y === b2.y, bv = b1.x === b2.x;
+          if (ah && bv) {
+            const y = a1.y, x = b1.x;
+            if (inSpan(x, a1.x, a2.x) && inSpan(y, b1.y, b2.y)) out.push({ poly: i, seg: [a1, a2], x, y });
+          } else if (av && bh) {
+            const x = a1.x, y = b1.y;
+            if (inSpan(y, a1.y, a2.y) && inSpan(x, b1.x, b2.x)) out.push({ poly: j, seg: [b1, b2], x, y });
+          }
+        }
+      }
+    }
+  }
+  return out;
+}
+function inSpan(v, a, b) { return v >= Math.min(a, b) + 2 && v <= Math.max(a, b) - 2; }
+
+function pathFor(edge, poly, hops) {
+  // build path; for each horizontal segment insert arcs at hop crossings
+  const pts = poly.pts;
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  const byKey = new Map();
+  for (const h of hops) byKey.set(`${edge.i}:${h.segIndex}`, [...(byKey.get(`${edge.i}:${h.segIndex}`) || []), h]);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1];
+    if (a.y === b.y) {
+      const hs = (byKey.get(`${i}`) || []).sort((x, y) => x.x - y.x);
+      let cur = a.x;
+      const dir = Math.sign(b.x - a.x);
+      for (const h of hs) {
+        const r = 5;
+        d += ` L ${h.x - dir * r} ${a.y} A ${r} ${r} 0 0 ${dir > 0 ? 1 : 0} ${h.x + dir * r} ${a.y}`;
+        cur = h.x + dir * r;
+      }
+      d += ` L ${b.x} ${b.y}`;
+    } else {
+      d += ` L ${b.x} ${b.y}`;
+    }
+  }
+  return d;
+}
+
+function arrowFor(pt, prev, kind) {
+  const dx = pt.x - prev.x, dy = pt.y - prev.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx / len, uy = dy / len;
+  const size = 7;
+  const p1 = { x: pt.x - ux * size - uy * size * 0.6, y: pt.y - uy * size + ux * size * 0.6 };
+  const p2 = { x: pt.x - ux * size + uy * size * 0.6, y: pt.y - uy * size - ux * size * 0.6 };
+  return { p1, p2, pt, kind };
+}
+
+function render() {
+  const P = new Map(); for (const n of NODES) P.set(n.id, pos.get(n.id));
+  // nodes
+  const nodesEl = $('nodes');
+  for (const n of NODES) {
+    let el = els.get(n.id);
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'node ' + (n.kind === 'input' ? 'input' : n.kind === 'res' ? 'res' : '');
+      el.dataset.id = n.id;
+      el.innerHTML = `<div class="n-head"><span class="n-ico">${n.kind === 'res' ? '▤' : n.kind === 'input' ? '?' : '▸'}</span><span class="n-name">${n.title}</span></div>
+        <div class="n-sub">${n.sub}</div>
+        ${n.chips?.length ? `<div class="n-chips">${n.chips.map((c) => `<span class="chip ${c.t}">${c.v}</span>`).join('')}</div>` : ''}`;
+      el.addEventListener('pointerdown', (ev) => startDrag(ev, n));
+      nodesEl.appendChild(el); els.set(n.id, el);
+    }
+    el.style.left = P.get(n.id).x + 'px'; el.style.top = P.get(n.id).y + 'px';
+    // keep input/res widths synced
+    if (n.kind === 'res') el.style.width = '150px'; else if (n.kind === 'input') el.style.width = '130px';
+  }
+  // edges
+  const svg = $('edges');
+  svg.innerHTML = '';
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  for (const kind of ['data', 'cond', 'loop', 'file']) {
+    const m = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    m.setAttribute('id', 'arr-' + kind); m.setAttribute('viewBox', '0 0 10 10');
+    m.setAttribute('refX', '8'); m.setAttribute('refY', '5'); m.setAttribute('markerWidth', '5'); m.setAttribute('markerHeight', '5');
+    m.setAttribute('orient', 'auto-start-reverse');
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z'); p.setAttribute('class', 'arrow ' + kind);
+    m.appendChild(p); defs.appendChild(m);
+  }
+  svg.appendChild(defs);
+  const groups = new Map();
+  for (const e of EDGES) {
+    const a = byId(e.from), b = byId(e.to);
+    const key = e.kind === 'loop' ? 'loop' : e.kind === 'file' ? 'file-' + a.lane : a.lane + '>' + b.lane;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(e);
+  }
+  const offsetOf = new Map();
+  for (const list of groups.values()) {
+    list.sort((x, y) => (P.get(x.from).y + P.get(x.to).y) - (P.get(y.from).y + P.get(y.to).y));
+    list.forEach((e, i) => offsetOf.set(e.from + '>' + e.to, (i - (list.length - 1) / 2) * 14));
+  }
+  const polys = EDGES.map((e, i) => ({ e, i, pts: route(e, P, offsetOf.get(e.from + '>' + e.to) || 0) }));
+  const hops = crossingsOf(polys);
+  $('crossCount').textContent = hops.length;
+  $('edgeCount').textContent = EDGES.length;
+  for (const h of hops) {
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('cx', h.x); c.setAttribute('cy', h.y); c.setAttribute('r', '4.6');
+    c.setAttribute('fill', 'var(--panel)'); c.setAttribute('stroke', 'color-mix(in srgb, var(--edge) 60%, transparent)');
+    c.setAttribute('stroke-width', '1');
+    svg.appendChild(c);
+  }
+  for (const { e, i, pts } of polys) {
+    const d = pathFor({ i }, { pts }, hops.filter((h) => h.poly === i));
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('class', 'edge ' + e.kind + ' active');
+    path.setAttribute('marker-end', `url(#arr-${e.kind})`);
+    path.addEventListener('pointerenter', () => { svg.classList.add('hovering'); path.classList.add('hl'); });
+    path.addEventListener('pointerleave', () => { svg.classList.remove('hovering'); path.classList.remove('hl'); });
+    svg.appendChild(path);
+  }
+}
+
+function startDrag(ev, n) {
+  if (!document.body.classList.contains('free')) return;
+  ev.preventDefault();
+  const el = els.get(n.id); el.classList.add('dragging');
+  const start = pos.get(n.id);
+  const sx = ev.clientX, sy = ev.clientY;
+  const move = (e) => {
+    pos.set(n.id, { x: Math.max(8, start.x + e.clientX - sx), y: Math.max(44, start.y + e.clientY - sy) });
+    el.style.left = pos.get(n.id).x + 'px'; el.style.top = pos.get(n.id).y + 'px';
+    redrawEdges();
+  };
+  const up = () => { el.classList.remove('dragging'); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+  window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+}
+function redrawEdges() { render(); }
+
+function renderLanes() {
+  const lanes = $('lanes'); lanes.innerHTML = '';
+  LANES.forEach((l, i) => {
+    const el = document.createElement('div'); el.className = 'lane';
+    el.style.left = (l.x) + 'px'; el.style.width = (l.w) + 'px';
+    el.innerHTML = `<span class="cap"><b>phase ${i + 1}</b> · ${l.title}</span>`;
+    lanes.appendChild(el);
+  });
+}
+
+function setAuto() {
+  document.body.classList.remove('free');
+  $('modeBadge').textContent = '自动布局';
+  $('freeBtn').classList.remove('on'); $('autoBtn').classList.add('on');
+  const next = computeAuto();
+  for (const [id, p] of next) pos.set(id, p);
+  render();
+}
+function setFree() {
+  document.body.classList.add('free');
+  $('modeBadge').textContent = '自由布局 · 拖节点';
+  $('freeBtn').classList.add('on'); $('autoBtn').classList.remove('on');
+}
+function shuffle() {
+  setFree();
+  for (const n of NODES) {
+    const l = LANES[n.lane];
+    pos.set(n.id, { x: l.x + 20 + Math.random() * (l.w - nodeW(n) - 40), y: 70 + Math.random() * 480 });
+  }
+  render();
+  $('modeBadge').textContent = '自由布局 · 已打乱';
+}
+
+$('autoBtn').onclick = setAuto;
+$('freeBtn').onclick = setFree;
+$('shuffleBtn').onclick = shuffle;
+$('phaseBtn').onclick = () => { document.body.classList.toggle('implicit'); $('phaseBtn').classList.toggle('on'); };
+$('themeBtn').onclick = () => document.body.classList.toggle('dark');
+
+renderLanes();
+setAuto();
+window.__dag = { setAuto, shuffle, setFree };
+</script>
+</body></html>
