@@ -5,6 +5,7 @@
 | [../DELIVERY.md](../DELIVERY.md) | **交付状态真源**：组件、R1–R18 覆盖矩阵、真机 E2E 证据、安装/回滚/打包、已知缺口 |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | 组件、插件模型、测试分层、隔离模型 |
 | [TEST-INFRA.md](TEST-INFRA.md) | 官方 mock 模型、录制回放、CI、失败取证、每个用例录像 |
+| [WORKFLOW-AUTHORING-RESEARCH.md](WORKFLOW-AUTHORING-RESEARCH.md) | n8n 式 workflow authoring 路线调研（本地优先 vs n8n bridge、库选型、推荐顺序） |
 | [E2E-REPORT.md](E2E-REPORT.md) | 最近一次 E2E 报告：每个用例的说明/结果/录像（Release 附件） |
 | [OFFICIAL-CI-AND-PLUGIN-CONVENTIONS.md](OFFICIAL-CI-AND-PLUGIN-CONVENTIONS.md) | 官方 DSH CI 组织、同类项目模式、官方插件包约定 |
 | [CONSISTENCY-AUDIT-2026-11-02.md](CONSISTENCY-AUDIT-2026-11-02.md) | spec/status/README/handoff 与交付现状的一致性审计 |
