@@ -1,5 +1,8 @@
 # 原型 / 设计 mock
 
+> 2026-11-04 更新：视觉层方案已取消（只保留官方运行树 + workflow-lite 画布）。
+> 这里的 mock 作为设计存档保留，不进入实现路线。
+
 静态 HTML，无运行代码；用于确认交互与视觉后再决定实现方案。
 
 - [`inline-workflow-card.html`](inline-workflow-card.html)：消息流内嵌工作流运行卡（折叠摘要 / 展开步骤 / 失败自动展开 / 跳画布）。
